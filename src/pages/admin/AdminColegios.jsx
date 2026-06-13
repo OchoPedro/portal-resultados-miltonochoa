@@ -535,6 +535,58 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
   )
 }
 
+// ── MENÚ ACCIONES DESPLEGABLE ─────────────────────────────────
+const AccionesMenu = ({ onEditar, onEstudiantes, onToggle, activo, onBorrarResultados, onEliminar }) => {
+  const [open, setOpen] = useState(false)
+  const ref = useRef()
+
+  useEffect(() => {
+    const handleClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  const items = [
+    { label:'✏️ Editar', onClick: onEditar, color: C.text },
+    { label:'👥 Estudiantes', onClick: onEstudiantes, color: C.green },
+    { label: activo ? '🔴 Desactivar' : '🟢 Activar', onClick: onToggle, color: activo ? C.amber : C.green },
+    { label:'🗑️ Borrar resultados', onClick: onBorrarResultados, color: C.red },
+    { label:'❌ Eliminar colegio', onClick: onEliminar, color: C.red },
+  ]
+
+  return (
+    <div ref={ref} style={{ position:'relative', display:'inline-block' }}>
+      <button onClick={() => setOpen(!open)} style={{
+        padding:'6px 14px', background:C.navy, color:C.white,
+        border:'none', borderRadius:6, fontFamily:'Inter', fontSize:11,
+        fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', gap:6,
+      }}>
+        Acciones <span style={{ fontSize:10 }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{
+          position:'absolute', right:0, top:'calc(100% + 4px)', zIndex:1000,
+          background:C.white, borderRadius:8, boxShadow:'0 8px 24px rgba(0,0,0,0.15)',
+          border:`1px solid ${C.grayLt}`, minWidth:180, overflow:'hidden',
+        }}>
+          {items.map((item, i) => (
+            <button key={i} onClick={() => { item.onClick(); setOpen(false) }} style={{
+              width:'100%', textAlign:'left', padding:'10px 16px',
+              background:'transparent', border:'none', borderBottom: i < items.length-1 ? `1px solid ${C.bg2}` : 'none',
+              fontFamily:'Inter', fontSize:12, color: item.color, cursor:'pointer',
+              transition:'background 0.15s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = C.bg}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── MAIN ─────────────────────────────────────────────────────
 export default function AdminColegios({ onUpdate }) {
   const [colegios, setColegios] = useState([])
@@ -623,7 +675,7 @@ export default function AdminColegios({ onUpdate }) {
             <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter' }}>
               <thead>
                 <tr style={{ borderBottom:`2px solid ${C.bg2}` }}>
-                  {['Nombre','Ubicación','Contacto Principal','Usuario','Estado','Acciones'].map(h=>(
+                  {['Nombre','Departamento','Municipio','Usuario','Clave','Estado','Acciones'].map(h=>(
                     <th key={h} style={{ textAlign:'left', padding:'10px 12px', fontSize:10,
                       color:C.gray, fontWeight:600, textTransform:'uppercase',
                       letterSpacing:'0.05em', whiteSpace:'nowrap' }}>{h}</th>
@@ -631,41 +683,29 @@ export default function AdminColegios({ onUpdate }) {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((c,i)=>{
-                  const contactoPpal = c.contactos?.[0] || {nombre:c.contacto_nombre, email:c.contacto_email}
-                  return (
-                    <tr key={i} style={{ borderBottom:`1px solid ${C.bg2}`,
-                      background:i%2===0?`${C.bg}80`:'transparent' }}>
-                      <td style={{ padding:'12px' }}>
-                        <div style={{ fontSize:13, color:C.text, fontWeight:600 }}>{c.nombre}</div>
-                        <div style={{ fontSize:11, color:C.gray }}>{c.departamento_nombre}</div>
-                      </td>
-                      <td style={{ padding:'12px', fontSize:12, color:C.gray }}>
-                        {c.municipio||'—'}
-                        {c.barrio && <div style={{ fontSize:11 }}>{c.barrio}</div>}
-                      </td>
-                      <td style={{ padding:'12px' }}>
-                        <div style={{ fontSize:12, color:C.text }}>{contactoPpal?.nombre||'—'}</div>
-                        <div style={{ fontSize:11, color:C.gray }}>{contactoPpal?.email||''}</div>
-                      </td>
-                      <td style={{ padding:'12px', fontSize:12, color:C.navy, fontWeight:600 }}>{c.usuario}</td>
-                      <td style={{ padding:'12px' }}>
-                        <Badge color={c.activo?C.green:C.red}>{c.activo?'Activo':'Inactivo'}</Badge>
-                      </td>
-                      <td style={{ padding:'12px' }}>
-                        <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
-                          <Btn onClick={()=>setModalColegio(c)} small outline color={C.navy}>Editar</Btn>
-                          <Btn onClick={()=>setModalEst(c)} small color={C.green}>Estudiantes</Btn>
-                          <Btn onClick={()=>handleToggle(c)} small outline color={c.activo?C.amber:C.green}>
-                            {c.activo?'Desactivar':'Activar'}
-                          </Btn>
-                          <Btn onClick={()=>handleDeleteResultados(c)} small outline color={C.red}>Borrar resultados</Btn>
-                          <Btn onClick={()=>handleDeleteColegio(c)} small color={C.red}>Eliminar</Btn>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
+                {filtered.map((c,i)=>(
+                  <tr key={i} style={{ borderBottom:`1px solid ${C.bg2}`,
+                    background:i%2===0?`${C.bg}80`:'transparent' }}>
+                    <td style={{ padding:'12px', fontSize:13, color:C.text, fontWeight:600 }}>{c.nombre}</td>
+                    <td style={{ padding:'12px', fontSize:12, color:C.gray }}>{c.departamento_nombre||'—'}</td>
+                    <td style={{ padding:'12px', fontSize:12, color:C.gray }}>{c.municipio||'—'}</td>
+                    <td style={{ padding:'12px', fontSize:12, color:C.navy, fontWeight:600 }}>{c.usuario}</td>
+                    <td style={{ padding:'12px', fontSize:12, color:C.gray }}>{c.password_hash}</td>
+                    <td style={{ padding:'12px' }}>
+                      <Badge color={c.activo?C.green:C.red}>{c.activo?'Activo':'Inactivo'}</Badge>
+                    </td>
+                    <td style={{ padding:'12px' }}>
+                      <AccionesMenu
+                        onEditar={()=>setModalColegio(c)}
+                        onEstudiantes={()=>setModalEst(c)}
+                        onToggle={()=>handleToggle(c)}
+                        activo={c.activo}
+                        onBorrarResultados={()=>handleDeleteResultados(c)}
+                        onEliminar={()=>handleDeleteColegio(c)}
+                      />
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
