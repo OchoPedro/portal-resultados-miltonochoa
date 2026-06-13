@@ -260,28 +260,20 @@ export default function ColegioDashboard({session, onLogout}) {
     </div>
   )
 
-  if (!students.length) return (
-    <div style={{display:'flex', minHeight:'100vh', background:C.bg}}>
-      <div style={{width:220, background:C.navy, minHeight:'100vh', display:'flex',
-        flexDirection:'column', justifyContent:'flex-end', padding:'20px'}}>
-        <button onClick={onLogout} style={{width:'100%', padding:'8px', borderRadius:7,
-          border:'1px solid rgba(255,255,255,0.15)', background:'transparent',
-          color:'rgba(255,255,255,0.5)', fontFamily:'Inter', fontSize:11, cursor:'pointer'}}>
-          Cerrar sesión
-        </button>
-      </div>
-      <main style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center',
-        flexDirection:'column', gap:12}}>
-        <div style={{fontSize:48}}>🏫</div>
-        <div style={{fontFamily:'Playfair Display, serif', fontSize:22, color:C.navy}}>
+  const EmptyState = ({msg='Los resultados aparecerán aquí cuando AAMO los cargue.'}) => (
+    <Card>
+      <div style={{textAlign:'center', padding:60, display:'flex', flexDirection:'column',
+        alignItems:'center', gap:16}}>
+        <div style={{fontSize:48}}>📋</div>
+        <div style={{fontFamily:'Playfair Display, serif', fontSize:20, color:C.navy}}>
           Sin resultados disponibles
         </div>
-        <div style={{fontFamily:'Inter', fontSize:14, color:C.gray}}>
-          Los resultados aparecerán aquí cuando AAMO los cargue.
-        </div>
-      </main>
-    </div>
+        <div style={{fontFamily:'Inter', fontSize:13, color:C.gray, maxWidth:360}}>{msg}</div>
+      </div>
+    </Card>
   )
+
+  // No early return — always show layout
 
   return (
     <div style={{display:'flex', minHeight:'100vh', background:C.bg}}>
@@ -355,17 +347,18 @@ export default function ColegioDashboard({session, onLogout}) {
 
         {/* KPIs */}
         <div style={{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:28}}>
-          <KpiCard label="Prom. Global" value={promGlobal} sub={`Prueba ${prueba?.codigo}`} color={C.navy}/>
-          <KpiCard label="Estudiantes" value={students.length} sub="Evaluados" color={C.navy}/>
+          <KpiCard label="Prom. Global" value={promGlobal||'—'} sub={`Prueba ${prueba?.codigo||'—'}`} color={C.navy}/>
+          <KpiCard label="Estudiantes" value={students.length||'—'} sub="Evaluados" color={C.navy}/>
           <KpiCard label="Mejor puntaje" value={maxStudent?.puntaje_global||'—'}
-            sub={maxStudent?.estudiantes?.nombre?.split(' ').slice(0,2).join(' ')} color={C.green}/>
-          <KpiCard label="Oport. mejora" value={oportunidades.length} sub="Preguntas críticas" color={C.red}/>
+            sub={maxStudent?.estudiantes?.nombre?.split(' ').slice(0,2).join(' ')||'Sin datos'} color={C.green}/>
+          <KpiCard label="Oport. mejora" value={oportunidades.length||'—'} sub="Preguntas críticas" color={C.red}/>
         </div>
 
         <TabBar tabs={tabs} active={tab} onChange={setTab}/>
 
         {/* ══ TABLERO ══════════════════════════════════════════ */}
         {tab==='tablero' && (
+          students.length === 0 ? <EmptyState/> :
           <div style={{display:'grid', gap:16}}>
             <Card>
               <CardTitle sub="Comparativo de promedios por área">Tablero de Gestión</CardTitle>
@@ -463,6 +456,7 @@ export default function ColegioDashboard({session, onLogout}) {
 
         {/* ══ ÁREAS ════════════════════════════════════════════ */}
         {tab==='areas' && (
+          students.length === 0 ? <EmptyState/> :
           <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:16}}>
             <Card>
               <CardTitle sub="Perfil del colegio por área">Radar — Desempeño por Área</CardTitle>
@@ -509,6 +503,7 @@ export default function ColegioDashboard({session, onLogout}) {
 
         {/* ══ NIVELES ══════════════════════════════════════════ */}
         {tab==='niveles' && (
+          students.length === 0 ? <EmptyState/> :
           <div style={{display:'grid', gap:16}}>
             <Card>
               <CardTitle sub="% de estudiantes por nivel de desempeño y área">
@@ -560,6 +555,7 @@ export default function ColegioDashboard({session, onLogout}) {
 
         {/* ══ DESVIACIÓN ═══════════════════════════════════════ */}
         {tab==='desviacion' && (
+          students.length === 0 ? <EmptyState/> :
           <div style={{display:'grid', gap:16}}>
             <Card>
               <CardTitle sub="Promedio por materia con color semáforo">Desviación por Materias</CardTitle>
@@ -719,6 +715,7 @@ export default function ColegioDashboard({session, onLogout}) {
 
         {/* ══ RANKING ══════════════════════════════════════════ */}
         {tab==='ranking' && (
+          students.length === 0 ? <EmptyState/> :
           <Card>
             <CardTitle sub={`${students.length} estudiantes ordenados por puntaje global`}>
               Ranking Completo
