@@ -284,7 +284,48 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
   const [uploading, setUploading] = useState(false)
   const [preview, setPreview] = useState([])
   const [msg, setMsg] = useState('')
+  const [editando, setEditando] = useState(null) // id del estudiante en edición
+  const [editForm, setEditForm] = useState({})
   const fileRef = useRef()
+
+  useEffect(() => { loadEstudiantes() }, [])
+
+  const loadEstudiantes = async () => {
+    setLoading(true)
+    const { data } = await supabase.from('estudiantes')
+      .select('*').eq('colegio_id', colegio.id).order('nombre')
+    setEstudiantes(data || [])
+    setLoading(false)
+  }
+
+  const startEdit = (e) => {
+    setEditando(e.id)
+    setEditForm({ nombre: e.nombre, grado: e.grado, salon: e.salon,
+      usuario: e.usuario, password_hash: e.password_hash })
+  }
+
+  const cancelEdit = () => { setEditando(null); setEditForm({}) }
+
+  const saveEdit = async (id) => {
+    const { error } = await supabase.from('estudiantes').update({
+      nombre: editForm.nombre,
+      grado: editForm.grado,
+      salon: editForm.salon,
+      usuario: editForm.usuario,
+      password_hash: editForm.password_hash,
+    }).eq('id', id)
+    if (error) { alert('Error al guardar: ' + error.message); return }
+    setEditando(null)
+    setMsg('✅ Estudiante actualizado correctamente.')
+    await loadEstudiantes()
+    onSave()
+  }
+
+  const inputStyle = {
+    padding:'4px 8px', border:`1px solid ${C.grayLt}`, borderRadius:4,
+    fontFamily:'Inter', fontSize:12, color:C.text, background:C.white,
+    outline:'none', width:'100%',
+  }
 
   useEffect(() => { loadEstudiantes() }, [])
 
@@ -357,6 +398,26 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
     XLSX.writeFile(wb, 'plantilla_estudiantes.xlsx')
   }
 
+  const [editando, setEditando] = useState(null) // estudiante en edición
+
+  const handleToggleEstudiante = async (est) => {
+    await supabase.from('estudiantes').update({ activo: !est.activo }).eq('id', est.id)
+    await loadEstudiantes()
+  }
+
+  const handleEditSave = async () => {
+    if (!editando) return
+    await supabase.from('estudiantes').update({
+      nombre: editando.nombre,
+      grado: editando.grado,
+      salon: editando.salon,
+      usuario: editando.usuario,
+      password_hash: editando.password_hash,
+    }).eq('id', editando.id)
+    setEditando(null)
+    await loadEstudiantes()
+  }
+
   const handleDelete = async (id) => {
     if (!confirm('¿Eliminar este estudiante?')) return
     await supabase.from('estudiantes').delete().eq('id', id)
@@ -402,7 +463,7 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
               <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter' }}>
                 <thead>
                   <tr style={{ borderBottom:`2px solid ${C.bg2}` }}>
-                    {['Nombre','Grado','Salón','Usuario','Contraseña',''].map(h=>(
+                    {['Nombre','Grado','Salón','Usuario','Contraseña','Estado','Acciones'].map(h=>(
                       <th key={h} style={{ textAlign:'left', padding:'8px 10px', fontSize:10,
                         color:C.gray, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em' }}>{h}</th>
                     ))}
@@ -411,15 +472,69 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
                 <tbody>
                   {estudiantes.map((e,i)=>(
                     <tr key={i} style={{ borderBottom:`1px solid ${C.bg2}`,
-                      background:i%2===0?`${C.bg}80`:'transparent' }}>
-                      <td style={{ padding:'10px', fontSize:13, color:C.text, fontWeight:500 }}>{e.nombre}</td>
-                      <td style={{ padding:'10px', fontSize:12, color:C.gray }}>{e.grado}</td>
-                      <td style={{ padding:'10px', fontSize:12, color:C.gray }}>{e.salon}</td>
-                      <td style={{ padding:'10px', fontSize:12, color:C.navy, fontWeight:500 }}>{e.usuario}</td>
-                      <td style={{ padding:'10px', fontSize:12, color:C.gray }}>{e.password_hash}</td>
-                      <td style={{ padding:'10px' }}>
-                        <Btn onClick={()=>handleDelete(e.id)} small outline color={C.red}>Eliminar</Btn>
-                      </td>
+                      background: !e.activo ? '#FEF2F2' : i%2===0?`${C.bg}80`:'transparent' }}>
+                      {editando?.id === e.id ? (
+                        // Modo edición
+                        <>
+                          <td style={{ padding:'6px' }}>
+                            <input value={editando.nombre} onChange={ev=>setEditando({...editando,nombre:ev.target.value})}
+                              style={{ width:'100%', padding:'5px 8px', border:`1px solid ${C.grayLt}`,
+                                borderRadius:4, fontFamily:'Inter', fontSize:12 }}/>
+                          </td>
+                          <td style={{ padding:'6px' }}>
+                            <input value={editando.grado} onChange={ev=>setEditando({...editando,grado:ev.target.value})}
+                              style={{ width:50, padding:'5px 8px', border:`1px solid ${C.grayLt}`,
+                                borderRadius:4, fontFamily:'Inter', fontSize:12 }}/>
+                          </td>
+                          <td style={{ padding:'6px' }}>
+                            <input value={editando.salon} onChange={ev=>setEditando({...editando,salon:ev.target.value})}
+                              style={{ width:50, padding:'5px 8px', border:`1px solid ${C.grayLt}`,
+                                borderRadius:4, fontFamily:'Inter', fontSize:12 }}/>
+                          </td>
+                          <td style={{ padding:'6px' }}>
+                            <input value={editando.usuario} onChange={ev=>setEditando({...editando,usuario:ev.target.value})}
+                              style={{ width:'100%', padding:'5px 8px', border:`1px solid ${C.grayLt}`,
+                                borderRadius:4, fontFamily:'Inter', fontSize:12 }}/>
+                          </td>
+                          <td style={{ padding:'6px' }}>
+                            <input value={editando.password_hash} onChange={ev=>setEditando({...editando,password_hash:ev.target.value})}
+                              style={{ width:'100%', padding:'5px 8px', border:`1px solid ${C.grayLt}`,
+                                borderRadius:4, fontFamily:'Inter', fontSize:12 }}/>
+                          </td>
+                          <td style={{ padding:'6px' }}>
+                            <Badge color={e.activo?C.green:C.red}>{e.activo?'Activo':'Inactivo'}</Badge>
+                          </td>
+                          <td style={{ padding:'6px' }}>
+                            <div style={{ display:'flex', gap:4 }}>
+                              <Btn onClick={handleEditSave} small color={C.green}>Guardar</Btn>
+                              <Btn onClick={()=>setEditando(null)} small outline color={C.gray}>Cancelar</Btn>
+                            </div>
+                          </td>
+                        </>
+                      ) : (
+                        // Modo vista
+                        <>
+                          <td style={{ padding:'10px', fontSize:13, color:e.activo?C.text:C.gray,
+                            fontWeight:500, textDecoration:e.activo?'none':'line-through' }}>{e.nombre}</td>
+                          <td style={{ padding:'10px', fontSize:12, color:C.gray }}>{e.grado}</td>
+                          <td style={{ padding:'10px', fontSize:12, color:C.gray }}>{e.salon}</td>
+                          <td style={{ padding:'10px', fontSize:12, color:C.navy, fontWeight:500 }}>{e.usuario}</td>
+                          <td style={{ padding:'10px', fontSize:12, color:C.gray }}>{e.password_hash}</td>
+                          <td style={{ padding:'10px' }}>
+                            <Badge color={e.activo?C.green:C.red}>{e.activo?'Activo':'Inactivo'}</Badge>
+                          </td>
+                          <td style={{ padding:'10px' }}>
+                            <div style={{ display:'flex', gap:4 }}>
+                              <Btn onClick={()=>setEditando({...e})} small outline color={C.navy}>Editar</Btn>
+                              <Btn onClick={()=>handleToggleEstudiante(e)} small outline
+                                color={e.activo?C.amber:C.green}>
+                                {e.activo?'Inactivar':'Activar'}
+                              </Btn>
+                              <Btn onClick={()=>handleDelete(e.id)} small outline color={C.red}>Eliminar</Btn>
+                            </div>
+                          </td>
+                        </>
+                      )}
                     </tr>
                   ))}
                 </tbody>
