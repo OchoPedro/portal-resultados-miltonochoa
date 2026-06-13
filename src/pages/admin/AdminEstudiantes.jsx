@@ -111,6 +111,7 @@ export default function AdminEstudiantes({ onUpdate }) {
 
     for (const archivo of archivosValidos) {
       let creados = 0, omitidos = 0
+      const errores = []
       for (const est of archivo.estudiantes) {
         const { usuario, password } = generateCredentials(est.nombre, est.documento)
         const { error } = await supabase.from('estudiantes').insert({
@@ -122,13 +123,18 @@ export default function AdminEstudiantes({ onUpdate }) {
           password_hash: password,
           activo:        true,
         })
-        if (error) omitidos++; else creados++
+        if (error) {
+          console.error('Error insertando:', est.nombre, error)
+          omitidos++
+          errores.push(`${est.nombre}: ${error.message}`)
+        } else creados++
       }
       res.push({
         archivo: archivo.nombre,
         colegio: archivo.colegio.nombre,
         creados,
         omitidos,
+        errores,
       })
     }
 
@@ -329,6 +335,14 @@ export default function AdminEstudiantes({ onUpdate }) {
                 {r.omitidos > 0 && <Badge color={C.amber}>{r.omitidos} omitidos</Badge>}
               </div>
             </div>
+            {r.errores?.length > 0 && (
+              <div style={{ marginTop:8, padding:'8px 12px', background:'#FEF2F2',
+                border:'1px solid #FECACA', borderRadius:6, fontSize:11,
+                color:C.red, fontFamily:'Inter' }}>
+                {r.errores.slice(0,3).map((e,i) => <div key={i}>⚠️ {e}</div>)}
+                {r.errores.length > 3 && <div>...y {r.errores.length-3} más</div>}
+              </div>
+            )}
           ))}
           <div style={{ marginTop:16, padding:'12px 16px', background:'#F0FFF4',
             border:'1px solid #BBF7D0', borderRadius:8, fontFamily:'Inter',
