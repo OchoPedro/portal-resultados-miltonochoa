@@ -474,6 +474,106 @@ function PlantelMencion({ colegioId, pruebas }) {
   )
 }
 
+// ── RECOMENDACIONES — SOLO LECTURA ───────────────────────────
+function RecomendacionesClaude({ session, prueba }) {
+  const [analisis, setAnalisis] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      if (!session?.id || !prueba?.id) { setLoading(false); return }
+      const { data } = await supabase.from('analisis_ia')
+        .select('*')
+        .eq('colegio_id', session.id)
+        .eq('prueba_id', prueba.id)
+        .eq('publicado', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+      setAnalisis(data || null)
+      setLoading(false)
+    }
+    load()
+  }, [session?.id, prueba?.id])
+
+  const formatText = (text) => text.split('\n').map((line, i) => {
+    if (line.match(/^\d\./)) return (
+      <div key={i} style={{fontFamily:'Playfair Display, serif', fontSize:16,
+        color:C.navy, fontWeight:600, marginTop:20, marginBottom:8}}>{line}</div>
+    )
+    if (line.startsWith('- ') || line.startsWith('• ')) return (
+      <div key={i} style={{fontFamily:'Inter', fontSize:13, color:C.text,
+        lineHeight:1.8, paddingLeft:16, marginBottom:4, display:'flex', gap:8}}>
+        <span style={{color:C.green, flexShrink:0}}>▸</span>
+        <span>{line.replace(/^[-•]\s*/,'')}</span>
+      </div>
+    )
+    if (line.trim()) return (
+      <p key={i} style={{fontFamily:'Inter', fontSize:13, color:C.gray,
+        lineHeight:1.9, marginBottom:8}}>{line}</p>
+    )
+    return <div key={i} style={{height:4}}/>
+  })
+
+  return (
+    <div style={{display:'grid', gap:16}}>
+      {/* Header */}
+      <div style={{background:`linear-gradient(135deg, ${C.navy} 0%, #1A3560 100%)`,
+        borderRadius:16, padding:'32px 40px', position:'relative', overflow:'hidden'}}>
+        <div style={{position:'absolute', top:-20, right:-20, fontSize:120, opacity:0.06}}>🤖</div>
+        <div style={{fontSize:10, color:'rgba(255,255,255,0.45)', fontFamily:'Inter',
+          letterSpacing:'0.2em', textTransform:'uppercase', marginBottom:10}}>
+          Consultoría Inteligente — Powered by Claude AI
+        </div>
+        <div style={{fontSize:26, fontFamily:'Playfair Display, serif', color:'#FFFFFF', marginBottom:8}}>
+          Análisis y Recomendaciones
+        </div>
+        <div style={{fontSize:13, color:'rgba(255,255,255,0.6)', fontFamily:'Inter', lineHeight:1.7, maxWidth:600}}>
+          Recomendaciones pedagógicas personalizadas generadas por inteligencia artificial
+          y publicadas por el equipo de Asesorías Académicas Milton Ochoa.
+        </div>
+      </div>
+
+      {loading ? (
+        <Card>
+          <div style={{textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter'}}>
+            Cargando análisis...
+          </div>
+        </Card>
+      ) : !analisis ? (
+        <Card>
+          <div style={{textAlign:'center', padding:60, display:'flex', flexDirection:'column',
+            alignItems:'center', gap:16}}>
+            <div style={{fontSize:48}}>📋</div>
+            <div style={{fontFamily:'Playfair Display, serif', fontSize:20, color:C.navy}}>
+              Análisis en preparación
+            </div>
+            <div style={{fontFamily:'Inter', fontSize:13, color:C.gray, maxWidth:380, textAlign:'center'}}>
+              El equipo de Milton Ochoa está preparando el análisis de resultados
+              para su institución. Estará disponible próximamente.
+            </div>
+          </div>
+        </Card>
+      ) : (
+        <Card>
+          <div style={{marginBottom:20, paddingBottom:12, borderBottom:`1px solid ${C.bg2}`}}>
+            <div style={{fontSize:11, fontWeight:600, color:C.navy, letterSpacing:'0.08em',
+              textTransform:'uppercase'}}>Informe de Recomendaciones Pedagógicas</div>
+            <div style={{fontSize:11, color:C.gray, fontFamily:'Inter', marginTop:3}}>
+              Publicado por Asesorías Académicas Milton Ochoa ·{' '}
+              {new Date(analisis.created_at).toLocaleDateString('es-CO', {
+                year:'numeric', month:'long', day:'numeric', timeZone:'America/Bogota'
+              })}
+            </div>
+          </div>
+          <div>{formatText(analisis.contenido)}</div>
+        </Card>
+      )}
+    </div>
+  )
+}
+
 // ── MAIN DASHBOARD ───────────────────────────────────────────
 export default function ColegioDashboard({session, onLogout}) {
   const [tab, setTab] = useState('carta')
@@ -1402,21 +1502,29 @@ export default function ColegioDashboard({session, onLogout}) {
           </Card>
         )}
 
-        {/* ══ SECCIONES CONSULTORÍA ════════════════════════════ */}
-        {['recomendaciones','portafolio','valor'].includes(tab) && (
+        {/* ══ CONSULTORÍA — RECOMENDACIONES ═══════════════════ */}
+        {tab==='recomendaciones' && (
+          <RecomendacionesClaude session={session} prueba={prueba}/>
+        )}
+
+        {/* ══ CONSULTORÍA — PORTAFOLIO ════════════════════════ */}
+        {tab==='portafolio' && (
           <Card>
-            <div style={{textAlign:'center', padding:60, display:'flex', flexDirection:'column',
-              alignItems:'center', gap:16}}>
-              <div style={{fontSize:48}}>
-                {tab==='recomendaciones'?'📌':tab==='portafolio'?'📁':'⭐'}
-              </div>
-              <div style={{fontFamily:'Playfair Display, serif', fontSize:22, color:C.navy}}>
-                {tab==='recomendaciones'?'Recomendaciones':
-                 tab==='portafolio'?'Portafolio':'Valor Agregado'}
-              </div>
-              <div style={{fontFamily:'Inter', fontSize:13, color:C.gray, maxWidth:360}}>
-                Esta sección estará disponible próximamente.
-              </div>
+            <div style={{textAlign:'center', padding:60, display:'flex', flexDirection:'column', alignItems:'center', gap:16}}>
+              <div style={{fontSize:48}}>📁</div>
+              <div style={{fontFamily:'Playfair Display, serif', fontSize:22, color:C.navy}}>Portafolio</div>
+              <div style={{fontFamily:'Inter', fontSize:13, color:C.gray, maxWidth:360}}>Esta sección estará disponible próximamente.</div>
+            </div>
+          </Card>
+        )}
+
+        {/* ══ CONSULTORÍA — VALOR AGREGADO ════════════════════ */}
+        {tab==='valor' && (
+          <Card>
+            <div style={{textAlign:'center', padding:60, display:'flex', flexDirection:'column', alignItems:'center', gap:16}}>
+              <div style={{fontSize:48}}>⭐</div>
+              <div style={{fontFamily:'Playfair Display, serif', fontSize:22, color:C.navy}}>Valor Agregado</div>
+              <div style={{fontFamily:'Inter', fontSize:13, color:C.gray, maxWidth:360}}>Esta sección estará disponible próximamente.</div>
             </div>
           </Card>
         )}
