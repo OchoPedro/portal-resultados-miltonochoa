@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
 const C = {
-  navy: '#0A1F3D', green: '#2D9B6F', greenLt: '#3AB882',
+  navy: '#0A1F3D', green: '#2D9B6F',
   bg: '#F8F9FB', bg2: '#EFF1F5', white: '#FFFFFF',
   text: '#1A1A2E', gray: '#6B7280', grayLt: '#D1D5DB', red: '#E05252',
 }
@@ -14,21 +14,7 @@ export default function Login({ onLogin }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // Auto-login si vienen parámetros en la URL
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const role = params.get('role')
-    const u = params.get('u')
-    const p = params.get('p')
-    if (role && u && p) {
-      // Limpiar URL para no exponer credenciales en el historial
-      window.history.replaceState({}, document.title, window.location.pathname)
-      setTab(role === 'colegio' ? 'colegio' : 'estudiante')
-      doLogin(role, u, p)
-    }
-  }, [])
-
-  const doLogin = async (roleFinal, u, p) => {
+  const doLogin = useCallback(async (roleFinal, u, p) => {
     setLoading(true)
     setError('')
     try {
@@ -59,7 +45,20 @@ export default function Login({ onLogin }) {
       setError('Error de conexión. Intenta de nuevo.')
       setLoading(false)
     }
-  }
+  }, [onLogin])
+
+  // Auto-login desde parámetros URL (viene de la homepage)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const role = params.get('role')
+    const u = params.get('u')
+    const p = params.get('p')
+    if (role && u && p) {
+      window.history.replaceState({}, document.title, window.location.pathname)
+      setTab(role === 'colegio' ? 'colegio' : 'estudiante')
+      doLogin(role, u, p)
+    }
+  }, [doLogin])
 
   const handleLogin = (e) => {
     e.preventDefault()
@@ -67,7 +66,7 @@ export default function Login({ onLogin }) {
   }
 
   if (loading) return (
-    <div style={{ minHeight: '100vh', background: '#0A1F3D', display: 'flex',
+    <div style={{ minHeight: '100vh', background: C.navy, display: 'flex',
       alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
       <div style={{ width: 40, height: 40, border: '3px solid rgba(255,255,255,0.1)',
         borderTop: '3px solid #2D9B6F', borderRadius: '50%',
