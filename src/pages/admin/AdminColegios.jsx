@@ -163,10 +163,6 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
         password_hash: form.password_hash,
         activo: true,
       }
-      if (!colegio) {
-        const { count } = await supabase.from('colegios').select('*', {count:'exact', head:true})
-        payload.codigo = 7000 + (count || 0) + 1
-      }
       const { error: err } = colegio
         ? await supabase.from('colegios').update(payload).eq('id', colegio.id)
         : await supabase.from('colegios').insert(payload)
@@ -336,7 +332,7 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
     for (const row of preview) {
       const { usuario, password } = generateCredentials(row.nombre, row.documento)
       const { error } = await supabase.from('estudiantes').insert({
-        colegio_id: colegio.id, codigo: parseInt(row.documento)||0,
+        colegio_id: colegio.id,
         nombre: row.nombre, grado: row.grado, salon: row.salon,
         usuario, password_hash: password, activo: true,
       })
@@ -589,7 +585,7 @@ export default function AdminColegios({ onUpdate }) {
           <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter' }}>
             <thead>
               <tr style={{ borderBottom:`2px solid ${C.bg2}` }}>
-                {['Código','Nombre','Ubicación','Contacto Principal','Usuario','Estado','Acciones'].map(h=>(
+                {['Nombre','Ubicación','Contacto Principal','Usuario','Estado','Acciones'].map(h=>(
                   <th key={h} style={{ textAlign:'left', padding:'10px 12px', fontSize:10,
                     color:C.gray, fontWeight:600, textTransform:'uppercase',
                     letterSpacing:'0.05em', whiteSpace:'nowrap' }}>{h}</th>
@@ -602,7 +598,6 @@ export default function AdminColegios({ onUpdate }) {
                 return (
                   <tr key={i} style={{ borderBottom:`1px solid ${C.bg2}`,
                     background:i%2===0?`${C.bg}80`:'transparent' }}>
-                    <td style={{ padding:'12px', fontSize:13, color:C.gray }}>{c.codigo}</td>
                     <td style={{ padding:'12px' }}>
                       <div style={{ fontSize:13, color:C.text, fontWeight:600 }}>{c.nombre}</div>
                       <div style={{ fontSize:11, color:C.gray }}>{c.departamento_nombre}</div>
