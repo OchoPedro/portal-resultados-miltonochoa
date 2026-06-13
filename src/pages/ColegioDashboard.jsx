@@ -131,6 +131,11 @@ export default function ColegioDashboard({session, onLogout}) {
   const loadAll = async () => {
     setLoading(true)
     try {
+      // Registrar última sesión del colegio (hora Colombia)
+      await supabase.from('colegios').update({
+        ultima_sesion: new Date().toLocaleString('sv-SE', {timeZone:'America/Bogota'}).replace(' ','T')
+      }).eq('id', session.id)
+
       // Cargar todas las pruebas activas
       const { data: pruebasData } = await supabase
         .from('pruebas').select('*').eq('activa', true)
@@ -422,9 +427,15 @@ export default function ColegioDashboard({session, onLogout}) {
         <div style={{marginBottom:28}}>
           <div style={{fontSize:11, color:C.green, letterSpacing:'0.12em',
             textTransform:'uppercase', fontFamily:'Inter', marginBottom:6}}>
-            {new Date().toLocaleDateString('es-CO', {weekday:'long', year:'numeric', month:'long', day:'numeric'})}
+            {new Date().toLocaleDateString('es-CO', {
+              weekday:'long', year:'numeric', month:'long', day:'numeric',
+              timeZone:'America/Bogota'
+            })}
             {' · '}
-            {new Date().toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'})}
+            {new Date().toLocaleTimeString('es-CO', {
+              hour:'2-digit', minute:'2-digit',
+              timeZone:'America/Bogota'
+            })}
           </div>
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:12}}>
             <div>
