@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
+import { useState, useEffect, useRef } from 'react'
+import { supabase } from '../../lib/supabase'
 import * as XLSX from 'xlsx'
+import { COLOMBIA } from '../../lib/colombia'
 
 const C = {
   navy:'#0A1F3D', green:'#2D9B6F', greenLt:'#3AB882',
