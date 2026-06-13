@@ -13,7 +13,7 @@ export default function Login({ onLogin }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const doLogin = useCallback(async (u, p) => {
+  const doLogin = useCallback(async (u, p, autoLogin = false) => {
     setLoading(true)
     setError('')
     try {
@@ -27,11 +27,11 @@ export default function Login({ onLogin }) {
 
       if (admin) {
         if (admin.password_hash !== p) {
-          setError('Contraseña incorrecta.')
+          if (autoLogin) { window.location.href = 'https://miltonochoa-web.vercel.app'; return }
+          setError('Contraseña incorrecta. Redirigiendo...')
           setTimeout(() => { window.location.href = 'https://miltonochoa-web.vercel.app' }, 2000)
           setLoading(false); return
         }
-        // Registrar última sesión
         await supabase.from('administradores').update({
           ultima_sesion: new Date().toLocaleString('sv-SE', {timeZone:'America/Bogota'}).replace(' ','T')
         }).eq('id', admin.id)
@@ -41,15 +41,12 @@ export default function Login({ onLogin }) {
 
       // 2. Buscar en colegios
       const { data: colegio } = await supabase
-        .from('colegios')
-        .select('*')
-        .eq('usuario', u.trim())
-        .eq('activo', true)
-        .single()
+        .from('colegios').select('*').eq('usuario', u.trim()).eq('activo', true).single()
 
       if (colegio) {
         if (colegio.password_hash !== p) {
-          setError('Contraseña incorrecta.')
+          if (autoLogin) { window.location.href = 'https://miltonochoa-web.vercel.app'; return }
+          setError('Contraseña incorrecta. Redirigiendo...')
           setTimeout(() => { window.location.href = 'https://miltonochoa-web.vercel.app' }, 2000)
           setLoading(false); return
         }
@@ -62,15 +59,12 @@ export default function Login({ onLogin }) {
 
       // 3. Buscar en estudiantes
       const { data: estudiante } = await supabase
-        .from('estudiantes')
-        .select('*, colegios(nombre, ciudad)')
-        .eq('usuario', u.trim())
-        .eq('activo', true)
-        .single()
+        .from('estudiantes').select('*, colegios(nombre, ciudad)').eq('usuario', u.trim()).eq('activo', true).single()
 
       if (estudiante) {
         if (estudiante.password_hash !== p) {
-          setError('Contraseña incorrecta.')
+          if (autoLogin) { window.location.href = 'https://miltonochoa-web.vercel.app'; return }
+          setError('Contraseña incorrecta. Redirigiendo...')
           setTimeout(() => { window.location.href = 'https://miltonochoa-web.vercel.app' }, 2000)
           setLoading(false); return
         }
@@ -82,10 +76,9 @@ export default function Login({ onLogin }) {
       }
 
       // No encontrado en ninguna tabla
-      setError('Usuario no encontrado.')
-      setTimeout(() => {
-        window.location.href = 'https://miltonochoa-web.vercel.app'
-      }, 2000)
+      if (autoLogin) { window.location.href = 'https://miltonochoa-web.vercel.app'; return }
+      setError('Usuario no encontrado. Redirigiendo...')
+      setTimeout(() => { window.location.href = 'https://miltonochoa-web.vercel.app' }, 2000)
 
     } catch(e) {
       setError('Error de conexión. Intenta de nuevo.')
@@ -101,13 +94,13 @@ export default function Login({ onLogin }) {
     const p = params.get('p')
     if (u && p) {
       window.history.replaceState({}, document.title, window.location.pathname)
-      doLogin(u, p)
+      doLogin(u, p, true) // true = autoLogin, redirige inmediatamente si falla
     }
   }, [doLogin])
 
   const handleLogin = (e) => {
     e.preventDefault()
-    doLogin(usuario, password)
+    doLogin(usuario, password, false)
   }
 
   if (loading) return (
