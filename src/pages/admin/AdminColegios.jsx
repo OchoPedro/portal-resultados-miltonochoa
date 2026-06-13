@@ -538,35 +538,38 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
 // ── MENÚ ACCIONES DESPLEGABLE ─────────────────────────────────
 const AccionesMenu = ({ onEditar, onEstudiantes, onToggle, activo, onBorrarResultados, onEliminar }) => {
   const [open, setOpen] = useState(false)
-  const [openUp, setOpenUp] = useState(false)
-  const ref = useRef()
+  const [pos, setPos] = useState({ top:0, left:0 })
   const btnRef = useRef()
 
   useEffect(() => {
-    const handleClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', handleClick)
+    const handleClick = () => setOpen(false)
+    if (open) document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
+  }, [open])
 
-  const handleOpen = () => {
+  const handleOpen = (e) => {
+    e.stopPropagation()
     if (!open && btnRef.current) {
       const rect = btnRef.current.getBoundingClientRect()
-      const spaceBelow = window.innerHeight - rect.bottom
-      setOpenUp(spaceBelow < 220)
+      const menuH = 220
+      const top = rect.bottom + menuH > window.innerHeight
+        ? rect.top - menuH
+        : rect.bottom + 4
+      setPos({ top, left: rect.right - 180 })
     }
     setOpen(!open)
   }
 
   const items = [
-    { label:'✏️ Editar', onClick: onEditar, color: C.text },
-    { label:'👥 Estudiantes', onClick: onEstudiantes, color: C.green },
+    { label:'✏️ Editar',            onClick: onEditar,           color: C.text  },
+    { label:'👥 Estudiantes',        onClick: onEstudiantes,      color: C.green },
     { label: activo ? '🔴 Desactivar' : '🟢 Activar', onClick: onToggle, color: activo ? C.amber : C.green },
-    { label:'🗑️ Borrar resultados', onClick: onBorrarResultados, color: C.red },
-    { label:'❌ Eliminar colegio', onClick: onEliminar, color: C.red },
+    { label:'🗑️ Borrar resultados',  onClick: onBorrarResultados, color: C.red   },
+    { label:'❌ Eliminar colegio',   onClick: onEliminar,         color: C.red   },
   ]
 
   return (
-    <div ref={ref} style={{ position:'relative', display:'inline-block' }}>
+    <>
       <button ref={btnRef} onClick={handleOpen} style={{
         padding:'6px 14px', background:C.navy, color:C.white,
         border:'none', borderRadius:6, fontFamily:'Inter', fontSize:11,
@@ -575,10 +578,9 @@ const AccionesMenu = ({ onEditar, onEstudiantes, onToggle, activo, onBorrarResul
         Acciones <span style={{ fontSize:10 }}>{open ? '▲' : '▼'}</span>
       </button>
       {open && (
-        <div style={{
-          position:'absolute', right:0, zIndex:1000,
-          ...(openUp ? { bottom:'calc(100% + 4px)' } : { top:'calc(100% + 4px)' }),
-          background:C.white, borderRadius:8, boxShadow:'0 8px 24px rgba(0,0,0,0.15)',
+        <div onMouseDown={e=>e.stopPropagation()} style={{
+          position:'fixed', top: pos.top, left: pos.left, zIndex:9999,
+          background:C.white, borderRadius:8, boxShadow:'0 8px 32px rgba(0,0,0,0.18)',
           border:`1px solid ${C.grayLt}`, minWidth:180, overflow:'hidden',
         }}>
           {items.map((item, i) => (
@@ -595,7 +597,7 @@ const AccionesMenu = ({ onEditar, onEstudiantes, onToggle, activo, onBorrarResul
           ))}
         </div>
       )}
-    </div>
+    </>
   )
 }
 
