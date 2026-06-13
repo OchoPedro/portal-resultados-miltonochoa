@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
-import { useState, useEffect, useRef } from 'react'
-import { supabase } from '../../lib/supabase'
 import * as XLSX from 'xlsx'
 import { COLOMBIA } from '../../lib/colombia'
 
