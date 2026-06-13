@@ -351,45 +351,7 @@ export default function ColegioDashboard({session, onLogout}) {
           <div style={{fontSize:10, color:'rgba(255,255,255,0.4)', fontFamily:'Inter',
             letterSpacing:'0.12em', textTransform:'uppercase'}}>Portal de Resultados</div>
         </div>
-        <div style={{flex:1, padding:'12px'}}>
-          {/* Filtros */}
-          <FilterSelect
-            label="Prueba"
-            value={selectedPrueba?.tipo || ''}
-            onChange={val => {
-              const p = allPruebas.find(p => p.tipo === val)
-              if (p) setSelectedPrueba(p)
-            }}
-            options={[...new Set(allPruebas.map(p => p.tipo))].map(t => ({
-              value: t,
-              label: t.charAt(0).toUpperCase() + t.slice(1)
-            }))}
-          />
-          <FilterSelect
-            label="Referencia"
-            value={selectedPrueba?.codigo || ''}
-            onChange={val => {
-              const p = allPruebas.find(p => p.codigo === val)
-              if (p) setSelectedPrueba(p)
-            }}
-            options={allPruebas
-              .filter(p => !selectedPrueba || p.tipo === selectedPrueba.tipo)
-              .map(p => ({value: p.codigo, label: p.codigo}))}
-          />
-          <FilterSelect
-            label="Grado"
-            value={selectedGrado}
-            onChange={val => { setSelectedGrado(val); setSelectedSalon('Todos') }}
-            options={gradosDisponibles.map(g => ({value:g, label:g==='Todos'?'Todos los grados':g}))}
-          />
-          <FilterSelect
-            label="Salón"
-            value={selectedSalon}
-            onChange={setSelectedSalon}
-            options={salonesDisponibles.map(s => ({value:s, label:s==='Todos'?'Todos los salones':`Salón ${s}`}))}
-          />
-
-          <div style={{height:1, background:'rgba(255,255,255,0.08)', margin:'16px 0'}}/>
+        <div style={{flex:1, padding:'12px', overflowY:'auto'}}>
 
           {/* Menú jerárquico */}
           {[
@@ -413,7 +375,8 @@ export default function ColegioDashboard({session, onLogout}) {
                 {id:'competencias', label:'Competencias'},
                 {id:'mejora',       label:'Oportunidades'},
                 {id:'ranking',      label:'Ranking'},
-              ]
+              ],
+              filters: true,
             },
             {
               id: 'consultoria', label: 'Consultoría', icon: '💡',
@@ -443,6 +406,46 @@ export default function ColegioDashboard({session, onLogout}) {
               {/* Sub-items */}
               {menuSection === section.id && (
                 <div style={{paddingLeft:8}}>
+                  {/* Filtros solo para Herramientas */}
+                  {section.filters && (
+                    <div style={{padding:'8px 4px 4px'}}>
+                      <FilterSelect
+                        label="Prueba"
+                        value={selectedPrueba?.tipo || ''}
+                        onChange={val => {
+                          const p = allPruebas.find(p => p.tipo === val)
+                          if (p) setSelectedPrueba(p)
+                        }}
+                        options={[...new Set(allPruebas.map(p => p.tipo))].map(t => ({
+                          value: t, label: t.charAt(0).toUpperCase() + t.slice(1)
+                        }))}
+                      />
+                      <FilterSelect
+                        label="Referencia"
+                        value={selectedPrueba?.codigo || ''}
+                        onChange={val => {
+                          const p = allPruebas.find(p => p.codigo === val)
+                          if (p) setSelectedPrueba(p)
+                        }}
+                        options={allPruebas
+                          .filter(p => !selectedPrueba || p.tipo === selectedPrueba.tipo)
+                          .map(p => ({value: p.codigo, label: p.codigo}))}
+                      />
+                      <FilterSelect
+                        label="Grado"
+                        value={selectedGrado}
+                        onChange={val => { setSelectedGrado(val); setSelectedSalon('Todos') }}
+                        options={gradosDisponibles.map(g => ({value:g, label:g==='Todos'?'Todos los grados':g}))}
+                      />
+                      <FilterSelect
+                        label="Salón"
+                        value={selectedSalon}
+                        onChange={setSelectedSalon}
+                        options={salonesDisponibles.map(s => ({value:s, label:s==='Todos'?'Todos los salones':`Salón ${s}`}))}
+                      />
+                      <div style={{height:1, background:'rgba(255,255,255,0.08)', margin:'8px 0 12px'}}/>
+                    </div>
+                  )}
                   {section.items.map(item => (
                     <button key={item.id} onClick={() => setTab(item.id)} style={{
                       width:'100%', textAlign:'left', padding:'7px 12px', borderRadius:6,
@@ -501,7 +504,8 @@ export default function ColegioDashboard({session, onLogout}) {
           </div>
         </div>
 
-        {/* KPIs */}
+        {/* KPIs — solo para herramientas */}
+        {['tablero','areas','niveles','desviacion','competencias','mejora','ranking'].includes(tab) && (
         <div style={{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:28}}>
           <KpiCard label="Prom. Global" value={promGlobal||'—'} sub={`Prueba ${prueba?.codigo||'—'}`} color={C.navy}/>
           <KpiCard label="Estudiantes" value={students.length||'—'} sub="Evaluados" color={C.navy}/>
@@ -509,6 +513,7 @@ export default function ColegioDashboard({session, onLogout}) {
             sub={maxStudent?.estudiantes?.nombre?.split(' ').slice(0,2).join(' ')||'Sin datos'} color={C.green}/>
           <KpiCard label="Oport. mejora" value={oportunidades.length||'—'} sub="Preguntas críticas" color={C.red}/>
         </div>
+        )}
 
         <TabBar tabs={tabs} active={tab} onChange={setTab}/>
 
