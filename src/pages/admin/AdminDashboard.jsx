@@ -4,6 +4,7 @@ import AdminColegios from './AdminColegios'
 import AdminEstudiantes from './AdminEstudiantes'
 import AdminPruebas from './AdminPruebas'
 import AdminAdmins from './AdminAdmins'
+import AdminAnalisis from './AdminAnalisis'
 
 const C = {
   navy:'#0A1F3D', green:'#2D9B6F', greenLt:'#3AB882',
@@ -16,6 +17,7 @@ const MENU = [
   { id:'colegios',     label:'Colegios',        icon:'🏫', desc:'Gestión de instituciones' },
   { id:'estudiantes',  label:'Estudiantes',      icon:'👥', desc:'Carga masiva de estudiantes' },
   { id:'pruebas',      label:'Pruebas',          icon:'📋', desc:'Tipos y referencias' },
+  { id:'analisis',     label:'Análisis IA',      icon:'🤖', desc:'Recomendaciones con Claude' },
   { id:'admins',       label:'Administradores',  icon:'👤', desc:'Usuarios admin' },
 ]
 
@@ -133,6 +135,7 @@ export default function AdminDashboard({ session, onLogout }) {
         {section==='colegios'    && <AdminColegios    onUpdate={loadStats} />}
         {section==='estudiantes' && <AdminEstudiantes onUpdate={loadStats} />}
         {section==='pruebas'     && <AdminPruebas     onUpdate={loadStats} />}
+        {section==='analisis'    && <AdminAnalisis />}
         {section==='admins'      && <AdminAdmins      session={session}    onUpdate={loadStats} />}
       </main>
     </div>
