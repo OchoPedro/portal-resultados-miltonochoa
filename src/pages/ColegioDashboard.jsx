@@ -1,13 +1,12 @@
-import { useState, useEffect } from 'react'
-import { supabase } from '../lib/supabase'
+import { useState } from 'react'
 import {
   C, getColor, getLevel, avg,
-  Card, CardTitle, Badge, KpiCard, TabBar, Sidebar
+  Card, CardTitle, Badge, KpiCard, Sidebar
 } from '../components/ui'
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
-  LineChart, Line, Cell, ComposedChart, ErrorBar
+  Cell
 } from 'recharts'
 
 // ── DATOS REALES ─────────────────────────────────────────────
@@ -181,7 +180,7 @@ const CustomTooltip = ({active, payload, label}) => {
   )
 }
 
-// ── TAB BAR ──────────────────────────────────────────────────
+// ── LEYENDA NIVELES ──────────────────────────────────────────
 const TabBar = ({tabs, active, onChange}) => (
   <div style={{display:'flex', gap:4, marginBottom:24, background:C.bg2,
     padding:4, borderRadius:10, flexWrap:'wrap'}}>
@@ -197,40 +196,6 @@ const TabBar = ({tabs, active, onChange}) => (
     ))}
   </div>
 )
-
-// ── CARD ─────────────────────────────────────────────────────
-const Card = ({children, style={}}) => (
-  <div style={{background:C.white, borderRadius:12, padding:24,
-    boxShadow:'0 1px 4px rgba(10,31,61,0.07), 0 4px 16px rgba(10,31,61,0.05)',
-    border:`1px solid ${C.grayLt}`, ...style}}>{children}</div>
-)
-
-const CardTitle = ({children, sub}) => (
-  <div style={{marginBottom:20, paddingBottom:12, borderBottom:`1px solid ${C.bg2}`}}>
-    <div style={{fontSize:11, fontWeight:600, color:C.navy, letterSpacing:'0.08em',
-      textTransform:'uppercase', fontFamily:'Inter'}}>{children}</div>
-    {sub && <div style={{fontSize:11, color:C.gray, fontFamily:'Inter', marginTop:3}}>{sub}</div>}
-  </div>
-)
-
-const Badge = ({color, children}) => (
-  <span style={{background:color+'18', color, border:`1px solid ${color}40`,
-    padding:'2px 8px', borderRadius:20, fontSize:11, fontWeight:500, whiteSpace:'nowrap'}}>
-    {children}
-  </span>
-)
-
-const KpiCard = ({label, value, sub, color=C.navy}) => (
-  <Card style={{textAlign:'center'}}>
-    <div style={{fontSize:10, color:C.gray, fontFamily:'Inter', textTransform:'uppercase',
-      letterSpacing:'0.1em', marginBottom:8}}>{label}</div>
-    <div style={{fontSize:32, fontFamily:'Playfair Display, serif', color,
-      fontWeight:700, lineHeight:1, marginBottom:6}}>{value}</div>
-    {sub && <div style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>{sub}</div>}
-  </Card>
-)
-
-// ── LEYENDA NIVELES ──────────────────────────────────────────
 const LeyendaNiveles = () => (
   <div style={{display:'flex', gap:8, flexWrap:'wrap', marginTop:12}}>
     {[
