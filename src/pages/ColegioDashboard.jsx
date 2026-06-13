@@ -885,7 +885,7 @@ export default function ColegioDashboard({session, onLogout}) {
                   {session?.nombre}
                 </h1>
                 <div style={{fontSize:13, color:C.gray, fontFamily:'Inter'}}>
-                  {session?.ciudad} · Código {session?.codigo} · {students.length} estudiantes evaluados
+                  {session?.ciudad} · {students.length} estudiantes evaluados
                 </div>
               </div>
             </div>
