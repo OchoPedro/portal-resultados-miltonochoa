@@ -9,7 +9,6 @@ export default function App() {
 
   const handleLogin = ({ role, data }) => setSession({ role, data })
   const handleLogout = () => {
-    setSession(null)
     window.location.href = 'https://miltonochoa-web.vercel.app'
   }
 
