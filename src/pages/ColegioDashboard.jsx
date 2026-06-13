@@ -60,6 +60,24 @@ const CustomTooltip = ({active, payload, label}) => {
   )
 }
 
+const FilterSelect = ({label, value, onChange, options}) => (
+  <div style={{marginBottom:12}}>
+    <div style={{fontSize:9, color:'rgba(255,255,255,0.35)', fontFamily:'Inter',
+      letterSpacing:'0.15em', textTransform:'uppercase', marginBottom:6}}>{label}</div>
+    <select value={value} onChange={e=>onChange(e.target.value)} style={{
+      width:'100%', padding:'8px 10px', background:'rgba(255,255,255,0.08)',
+      border:'1px solid rgba(255,255,255,0.15)', color:C.white,
+      fontFamily:'Inter', fontSize:12, borderRadius:6, cursor:'pointer',
+      outline:'none', appearance:'none',
+    }}>
+      {options.map((o,i) => (
+        <option key={i} value={o.value||o}
+          style={{background:C.navy, color:C.white}}>{o.label||o}</option>
+      ))}
+    </select>
+  </div>
+)
+
 const Loading = () => (
   <div style={{display:'flex', alignItems:'center', justifyContent:'center', padding:80, flexDirection:'column', gap:16}}>
     <div style={{width:36, height:36, border:'3px solid rgba(10,31,61,0.1)',
@@ -75,8 +93,14 @@ export default function ColegioDashboard({session, onLogout}) {
   const [loading, setLoading] = useState(true)
   const [prueba, setPrueba] = useState(null)
 
+  // Filter states
+  const [allPruebas, setAllPruebas] = useState([])
+  const [selectedPrueba, setSelectedPrueba] = useState(null)
+  const [selectedGrado, setSelectedGrado] = useState('Todos')
+  const [selectedSalon, setSelectedSalon] = useState('Todos')
+
   // Data states
-  const [students, setStudents] = useState([])
+  const [allStudents, setAllStudents] = useState([])
   const [tableroComp, setTableroComp] = useState([])
   const [tableroSalon, setTableroSalon] = useState([])
   const [competencias, setCompetencias] = useState([])
@@ -84,48 +108,84 @@ export default function ColegioDashboard({session, onLogout}) {
 
   useEffect(() => { loadAll() }, [])
 
+  // Filtered students based on selectors
+  const students = allStudents.filter(s => {
+    if (selectedGrado !== 'Todos' && s.estudiantes?.grado !== selectedGrado) return false
+    if (selectedSalon !== 'Todos' && s.estudiantes?.salon !== selectedSalon) return false
+    return true
+  })
+
+  // Derived filter options from loaded data
+  const gradosDisponibles = ['Todos', ...new Set(allStudents.map(s => s.estudiantes?.grado).filter(Boolean)).values()]
+  const salonesDisponibles = ['Todos', ...new Set(
+    allStudents
+      .filter(s => selectedGrado === 'Todos' || s.estudiantes?.grado === selectedGrado)
+      .map(s => s.estudiantes?.salon).filter(Boolean)
+  ).values()]
+
+  // Reload when prueba changes
+  useEffect(() => {
+    if (selectedPrueba) loadForPrueba(selectedPrueba)
+  }, [selectedPrueba])
+
   const loadAll = async () => {
     setLoading(true)
     try {
-      // 1. Prueba más reciente
-      const { data: pruebaData } = await supabase
+      // Cargar todas las pruebas activas
+      const { data: pruebasData } = await supabase
         .from('pruebas').select('*').eq('activa', true)
-        .order('created_at', {ascending: false}).limit(1).single()
-      if (!pruebaData) { setLoading(false); return }
-      setPrueba(pruebaData)
-      const pid = pruebaData.id
+        .order('created_at', {ascending: false})
+      setAllPruebas(pruebasData || [])
 
-      // 2. Colegio id
+      if (!pruebasData?.length) { setLoading(false); return }
+
+      // Seleccionar la más reciente por defecto
+      const primera = pruebasData[0]
+      setSelectedPrueba(primera)
+      setPrueba(primera)
+      await loadForPrueba(primera)
+
+    } catch(e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadForPrueba = async (pruebaSelec) => {
+    setLoading(true)
+    try {
+      const pid = pruebaSelec.id
       const cid = session.id
+      setPrueba(pruebaSelec)
 
-      // 3. Resultados estudiantes
+      // Resultados estudiantes
       const { data: res } = await supabase
         .from('resultados_estudiante')
-        .select('*, estudiantes(nombre, salon)')
+        .select('*, estudiantes(nombre, salon, grado)')
         .eq('colegio_id', cid).eq('prueba_id', pid)
         .order('puntaje_global', {ascending: false})
-      setStudents(res || [])
+      setAllStudents(res || [])
+      setSelectedGrado('Todos')
+      setSelectedSalon('Todos')
 
-      // 4. Comparativos gestión
+      // Comparativos gestión
       const { data: comp } = await supabase
-        .from('comparativos_gestion')
-        .select('*').eq('prueba_id', pid)
+        .from('comparativos_gestion').select('*').eq('prueba_id', pid)
       setTableroComp(comp || [])
 
-      // 5. Comparativos salón
+      // Comparativos salón
       const { data: salon } = await supabase
         .from('comparativos_salon')
-        .select('*').eq('colegio_id', cid).eq('prueba_id', pid)
-        .order('salon')
+        .select('*').eq('colegio_id', cid).eq('prueba_id', pid).order('salon')
       setTableroSalon(salon || [])
 
-      // 6. Competencias (promedio por competencia)
+      // Competencias
       const { data: comps } = await supabase
         .from('notas_competencia')
         .select('competencia, nota')
         .in('estudiante_id', (res||[]).map(r => r.estudiante_id))
         .eq('prueba_id', pid)
-      // Agrupar por competencia
       if (comps) {
         const grouped = {}
         comps.forEach(c => {
@@ -139,13 +199,11 @@ export default function ColegioDashboard({session, onLogout}) {
         setCompetencias(compArr)
       }
 
-      // 7. Oportunidades de mejora
+      // Oportunidades
       const { data: opor } = await supabase
-        .from('analisis_preguntas')
-        .select('*')
+        .from('analisis_preguntas').select('*')
         .eq('colegio_id', cid).eq('prueba_id', pid)
-        .eq('oportunidad_mejora', true)
-        .order('pct_colegio')
+        .eq('oportunidad_mejora', true).order('pct_colegio')
       setOportunidades(opor || [])
 
     } catch(e) {
@@ -288,17 +346,64 @@ export default function ColegioDashboard({session, onLogout}) {
             letterSpacing:'0.12em', textTransform:'uppercase'}}>Portal de Resultados</div>
         </div>
         <div style={{flex:1, padding:'12px'}}>
+          {/* Filtros */}
+          <FilterSelect
+            label="Prueba"
+            value={selectedPrueba?.tipo || ''}
+            onChange={val => {
+              const p = allPruebas.find(p => p.tipo === val)
+              if (p) setSelectedPrueba(p)
+            }}
+            options={[...new Set(allPruebas.map(p => p.tipo))].map(t => ({
+              value: t,
+              label: t.charAt(0).toUpperCase() + t.slice(1)
+            }))}
+          />
+          <FilterSelect
+            label="Referencia"
+            value={selectedPrueba?.codigo || ''}
+            onChange={val => {
+              const p = allPruebas.find(p => p.codigo === val)
+              if (p) setSelectedPrueba(p)
+            }}
+            options={allPruebas
+              .filter(p => !selectedPrueba || p.tipo === selectedPrueba.tipo)
+              .map(p => ({value: p.codigo, label: p.codigo}))}
+          />
+          <FilterSelect
+            label="Grado"
+            value={selectedGrado}
+            onChange={val => { setSelectedGrado(val); setSelectedSalon('Todos') }}
+            options={gradosDisponibles.map(g => ({value:g, label:g==='Todos'?'Todos los grados':g}))}
+          />
+          <FilterSelect
+            label="Salón"
+            value={selectedSalon}
+            onChange={setSelectedSalon}
+            options={salonesDisponibles.map(s => ({value:s, label:s==='Todos'?'Todos los salones':`Salón ${s}`}))}
+          />
+
+          <div style={{height:1, background:'rgba(255,255,255,0.08)', margin:'12px 0'}}/>
+
+          {/* Resumen filtrado */}
           <div style={{background:'rgba(45,155,111,0.15)', border:'1px solid rgba(45,155,111,0.3)',
             borderRadius:8, padding:'10px 12px', marginBottom:12}}>
             <div style={{fontSize:11, color:'#3AB882', fontFamily:'Inter', fontWeight:600, marginBottom:2}}>
               {session?.nombre}
             </div>
             <div style={{fontSize:10, color:'rgba(255,255,255,0.4)', fontFamily:'Inter'}}>
-              {session?.ciudad} · {prueba?.codigo}
+              {selectedPrueba?.codigo || '—'} · {selectedGrado === 'Todos' ? 'Todos los grados' : `Grado ${selectedGrado}`}
             </div>
             <div style={{marginTop:8, fontSize:16, fontFamily:'Playfair Display, serif',
-              color:C.white, fontWeight:700}}>Prom: {promGlobal}</div>
+              color:C.white, fontWeight:700}}>Prom: {promGlobal||'—'}</div>
+            <div style={{fontSize:10, color:'rgba(255,255,255,0.4)', fontFamily:'Inter', marginTop:2}}>
+              {students.length} estudiante{students.length!==1?'s':''}
+            </div>
           </div>
+
+          <div style={{height:1, background:'rgba(255,255,255,0.08)', margin:'12px 0'}}/>
+
+          {/* Menú tabs */}
           {tabs.map(t => (
             <button key={t.id} onClick={()=>setTab(t.id)} style={{
               width:'100%', textAlign:'left', padding:'9px 12px', borderRadius:8,
