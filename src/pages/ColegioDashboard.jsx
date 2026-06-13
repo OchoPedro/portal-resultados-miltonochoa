@@ -383,27 +383,13 @@ export default function ColegioDashboard({session, onLogout}) {
             options={salonesDisponibles.map(s => ({value:s, label:s==='Todos'?'Todos los salones':`Salón ${s}`}))}
           />
 
-          <div style={{height:1, background:'rgba(255,255,255,0.08)', margin:'12px 0'}}/>
+          <div style={{height:1, background:'rgba(255,255,255,0.08)', margin:'16px 0'}}/>
 
-          {/* Resumen filtrado */}
-          <div style={{background:'rgba(45,155,111,0.15)', border:'1px solid rgba(45,155,111,0.3)',
-            borderRadius:8, padding:'10px 12px', marginBottom:12}}>
-            <div style={{fontSize:11, color:'#3AB882', fontFamily:'Inter', fontWeight:600, marginBottom:2}}>
-              {session?.nombre}
-            </div>
-            <div style={{fontSize:10, color:'rgba(255,255,255,0.4)', fontFamily:'Inter'}}>
-              {selectedPrueba?.codigo || '—'} · {selectedGrado === 'Todos' ? 'Todos los grados' : `Grado ${selectedGrado}`}
-            </div>
-            <div style={{marginTop:8, fontSize:16, fontFamily:'Playfair Display, serif',
-              color:C.white, fontWeight:700}}>Prom: {promGlobal||'—'}</div>
-            <div style={{fontSize:10, color:'rgba(255,255,255,0.4)', fontFamily:'Inter', marginTop:2}}>
-              {students.length} estudiante{students.length!==1?'s':''}
-            </div>
+          {/* Menú de reportes */}
+          <div style={{fontSize:9, color:'rgba(255,255,255,0.35)', fontFamily:'Inter',
+            letterSpacing:'0.15em', textTransform:'uppercase', marginBottom:8, paddingLeft:4}}>
+            Reportes
           </div>
-
-          <div style={{height:1, background:'rgba(255,255,255,0.08)', margin:'12px 0'}}/>
-
-          {/* Menú tabs */}
           {tabs.map(t => (
             <button key={t.id} onClick={()=>setTab(t.id)} style={{
               width:'100%', textAlign:'left', padding:'9px 12px', borderRadius:8,
@@ -434,9 +420,11 @@ export default function ColegioDashboard({session, onLogout}) {
       <main style={{flex:1, padding:'36px 40px', overflowY:'auto'}}>
         {/* HEADER */}
         <div style={{marginBottom:28}}>
-          <div style={{fontSize:11, color:C.green, letterSpacing:'0.15em',
+          <div style={{fontSize:11, color:C.green, letterSpacing:'0.12em',
             textTransform:'uppercase', fontFamily:'Inter', marginBottom:6}}>
-            {prueba?.nombre} · {prueba?.fecha}
+            {new Date().toLocaleDateString('es-CO', {weekday:'long', year:'numeric', month:'long', day:'numeric'})}
+            {' · '}
+            {new Date().toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'})}
           </div>
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:12}}>
             <div>
