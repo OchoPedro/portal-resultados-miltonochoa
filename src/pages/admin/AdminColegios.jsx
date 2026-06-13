@@ -418,12 +418,44 @@ export default function AdminColegios({ onUpdate }) {
 
   const handleSave = () => { loadColegios(); onUpdate() }
 
+  const handleDeleteResultados = async (colegio) => {
+    if (!confirm(`¿Eliminar TODOS los resultados de "${colegio.nombre}"?\nEsto no se puede deshacer.`)) return
+    try {
+      // Borrar en orden respetando relaciones
+      const estIds = (await supabase.from('estudiantes').select('id').eq('colegio_id', colegio.id)).data?.map(e => e.id) || []
+      if (estIds.length) await supabase.from('notas_competencia').delete().in('estudiante_id', estIds)
+      await supabase.from('comparativos_gestion').delete().eq('prueba_id', colegio.id)
+      await supabase.from('comparativos_salon').delete().eq('colegio_id', colegio.id)
+      await supabase.from('analisis_preguntas').delete().eq('colegio_id', colegio.id)
+      await supabase.from('resultados_estudiante').delete().eq('colegio_id', colegio.id)
+      alert('✅ Resultados eliminados correctamente.')
+      loadColegios(); onUpdate()
+    } catch(e) {
+      alert('Error al eliminar: ' + e.message)
+    }
+  }
+
+  const handleDeleteColegio = async (colegio) => {
+    if (!confirm(`⚠️ ¿Eliminar COMPLETAMENTE el colegio "${colegio.nombre}"?\nSe eliminarán también todos sus estudiantes y resultados.\nEsta acción NO se puede deshacer.`)) return
+    try {
+      const estIds = (await supabase.from('estudiantes').select('id').eq('colegio_id', colegio.id)).data?.map(e => e.id) || []
+      if (estIds.length) await supabase.from('notas_competencia').delete().in('estudiante_id', estIds)
+      await supabase.from('comparativos_salon').delete().eq('colegio_id', colegio.id)
+      await supabase.from('analisis_preguntas').delete().eq('colegio_id', colegio.id)
+      await supabase.from('resultados_estudiante').delete().eq('colegio_id', colegio.id)
+      await supabase.from('estudiantes').delete().eq('colegio_id', colegio.id)
+      await supabase.from('colegios').delete().eq('id', colegio.id)
+      alert('✅ Colegio eliminado correctamente.')
+      loadColegios(); onUpdate()
+    } catch(e) {
+      alert('Error al eliminar: ' + e.message)
+    }
+  }
+
   const handleToggle = async (colegio) => {
     await supabase.from('colegios').update({ activo: !colegio.activo }).eq('id', colegio.id)
     loadColegios()
   }
-
-  const filtered = colegios.filter(c =>
     c.nombre?.toLowerCase().includes(search.toLowerCase()) ||
     c.municipio?.toLowerCase().includes(search.toLowerCase())
   )
@@ -480,12 +512,17 @@ export default function AdminColegios({ onUpdate }) {
                     <Badge color={c.activo?C.green:C.red}>{c.activo?'Activo':'Inactivo'}</Badge>
                   </td>
                   <td style={{ padding:'12px' }}>
-                    <div style={{ display:'flex', gap:6 }}>
+                    <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                       <Btn onClick={() => setModalColegio(c)} small outline color={C.navy}>Editar</Btn>
                       <Btn onClick={() => setModalEst(c)} small color={C.green}>Estudiantes</Btn>
-                      <Btn onClick={() => handleToggle(c)} small outline
-                        color={c.activo?C.red:C.green}>
+                      <Btn onClick={() => handleToggle(c)} small outline color={c.activo?C.amber:C.green}>
                         {c.activo?'Desactivar':'Activar'}
+                      </Btn>
+                      <Btn onClick={() => handleDeleteResultados(c)} small outline color={C.red}>
+                        Borrar resultados
+                      </Btn>
+                      <Btn onClick={() => handleDeleteColegio(c)} small color={C.red}>
+                        Eliminar
                       </Btn>
                     </div>
                   </td>
