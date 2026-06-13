@@ -878,16 +878,18 @@ export default function ColegioDashboard({session, onLogout}) {
               timeZone:'America/Bogota'
             })}
           </div>
-          <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:12}}>
-            <div>
-              <h1 style={{fontSize:26, fontFamily:'Playfair Display, serif', color:C.navy, marginBottom:4}}>
-                {session?.nombre}
-              </h1>
-              <div style={{fontSize:13, color:C.gray, fontFamily:'Inter'}}>
-                {session?.ciudad} · Código {session?.codigo} · {students.length} estudiantes evaluados
+          {['tablero','areas','niveles','desviacion','competencias','mejora','ranking'].includes(tab) && (
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:12}}>
+              <div>
+                <h1 style={{fontSize:26, fontFamily:'Playfair Display, serif', color:C.navy, marginBottom:4}}>
+                  {session?.nombre}
+                </h1>
+                <div style={{fontSize:13, color:C.gray, fontFamily:'Inter'}}>
+                  {session?.ciudad} · Código {session?.codigo} · {students.length} estudiantes evaluados
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* KPIs — solo para herramientas */}
