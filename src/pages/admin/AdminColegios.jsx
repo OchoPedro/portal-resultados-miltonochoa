@@ -50,13 +50,13 @@ const Select = ({label, value, onChange, options, required=false, placeholder='S
 
 const Btn = ({children, onClick, color=C.navy, outline=false, small=false, disabled=false}) => (
   <button onClick={onClick} disabled={disabled} style={{
-    padding: small ? '6px 14px' : '10px 20px',
+    padding: small ? '5px 12px' : '10px 20px',
     background: outline ? 'transparent' : color,
     color: outline ? color : C.white,
     border: `1px solid ${color}`, borderRadius:6,
-    fontFamily:'Inter', fontSize:12, fontWeight:600,
+    fontFamily:'Inter', fontSize:11, fontWeight:600,
     cursor: disabled ? 'not-allowed' : 'pointer',
-    opacity: disabled ? 0.6 : 1, letterSpacing:'0.05em',
+    opacity: disabled ? 0.6 : 1, letterSpacing:'0.04em', whiteSpace:'nowrap',
   }}>{children}</button>
 )
 
@@ -71,15 +71,12 @@ const SectionTitle = ({children}) => (
     borderBottom:`1px solid ${C.bg2}` }}>{children}</div>
 )
 
-// ── GENERAR USUARIO AUTOMÁTICO ────────────────────────────────
+// ── GENERAR USUARIO ───────────────────────────────────────────
 const generarUsuario = async (departamento, municipio) => {
   const dep = departamento.normalize('NFD').replace(/[\u0300-\u036f]/g,'').substring(0,2).toUpperCase()
   const mun = municipio.normalize('NFD').replace(/[\u0300-\u036f]/g,'').substring(0,2).toUpperCase()
   const prefijo = dep + mun
-
-  // Buscar cuántos colegios existen ya con ese prefijo
-  const { data } = await supabase.from('colegios')
-    .select('usuario').like('usuario', `${prefijo}%`)
+  const { data } = await supabase.from('colegios').select('usuario').like('usuario', `${prefijo}%`)
   const siguiente = (data?.length || 0) + 1
   return `${prefijo}${String(siguiente).padStart(4,'0')}`
 }
@@ -87,10 +84,9 @@ const generarUsuario = async (departamento, municipio) => {
 // ── MODAL COLEGIO ─────────────────────────────────────────────
 const ModalColegio = ({ colegio, onClose, onSave }) => {
   const [form, setForm] = useState({
-    nombre: '', departamento_nombre: '', municipio: '',
-    direccion: '', barrio: '',
-    contactos: [{ nombre:'', cargo:'', telefono:'', email:'' }],
-    usuario: '', password_hash: '',
+    nombre:'', departamento_nombre:'', municipio:'', direccion:'', barrio:'',
+    contactos:[{nombre:'', cargo:'', telefono:'', email:''}],
+    usuario:'', password_hash:'',
     ...(colegio || {})
   })
   const [saving, setSaving] = useState(false)
@@ -98,32 +94,26 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
   const [generando, setGenerando] = useState(false)
 
   const municipios = form.departamento_nombre ? COLOMBIA[form.departamento_nombre] || [] : []
-
   const set = (key, val) => setForm(f => ({...f, [key]:val}))
 
   const handleDeptoChange = (dep) => {
-    setForm(f => ({...f, departamento_nombre: dep, municipio: '', usuario: '', password_hash: ''}))
+    setForm(f => ({...f, departamento_nombre:dep, municipio:'', usuario:'', password_hash:''}))
   }
 
   const handleMuniChange = async (mun) => {
-    set('municipio', mun)
+    setForm(f => ({...f, municipio:mun}))
     if (!colegio && mun && form.departamento_nombre) {
       setGenerando(true)
       const user = await generarUsuario(form.departamento_nombre, mun)
-      setForm(f => ({...f, municipio: mun, usuario: user, password_hash: user.toLowerCase() + '*Mo2026'}))
+      setForm(f => ({...f, municipio:mun, usuario:user, password_hash:user.toLowerCase()+'*Mo2026'}))
       setGenerando(false)
     }
   }
 
-  // Contactos
-  const addContacto = () => setForm(f => ({...f,
-    contactos: [...(f.contactos||[]), {nombre:'',cargo:'',telefono:'',email:''}]
-  }))
-  const removeContacto = (i) => setForm(f => ({...f,
-    contactos: f.contactos.filter((_,idx) => idx !== i)
-  }))
+  const addContacto = () => setForm(f => ({...f, contactos:[...(f.contactos||[]), {nombre:'',cargo:'',telefono:'',email:''}]}))
+  const removeContacto = (i) => setForm(f => ({...f, contactos:f.contactos.filter((_,idx)=>idx!==i)}))
   const updateContacto = (i, key, val) => setForm(f => ({...f,
-    contactos: f.contactos.map((c,idx) => idx===i ? {...c,[key]:val} : c)
+    contactos:f.contactos.map((c,idx)=>idx===i?{...c,[key]:val}:c)
   }))
 
   const validate = () => {
@@ -155,7 +145,6 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
         direccion: form.direccion,
         barrio: form.barrio,
         contactos: form.contactos,
-        // Compatibilidad con campos legacy
         contacto_nombre: form.contactos?.[0]?.nombre,
         contacto_telefono: form.contactos?.[0]?.telefono,
         contacto_email: form.contactos?.[0]?.email,
@@ -177,16 +166,13 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
       <div style={{ background:C.white, borderRadius:12, padding:32,
         width:'100%', maxWidth:680, maxHeight:'92vh', overflowY:'auto',
         boxShadow:'0 20px 60px rgba(0,0,0,0.3)' }}>
-
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:24 }}>
           <h2 style={{ fontFamily:'Playfair Display, serif', fontSize:22, color:C.navy }}>
             {colegio ? 'Editar Colegio' : 'Nuevo Colegio'}
           </h2>
-          <button onClick={onClose} style={{ background:'none', border:'none',
-            fontSize:22, cursor:'pointer', color:C.gray }}>✕</button>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer', color:C.gray }}>✕</button>
         </div>
 
-        {/* Datos institución */}
         <SectionTitle>Datos de la Institución</SectionTitle>
         <Input label="Nombre del colegio" value={form.nombre} onChange={v=>set('nombre',v)}
           placeholder="Nombre completo de la institución" required/>
@@ -194,9 +180,9 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
           <Select label="Departamento" value={form.departamento_nombre}
             onChange={handleDeptoChange} options={DEPARTAMENTOS}
             placeholder="Seleccionar departamento..." required/>
-          <Select label="Municipio" value={form.municipio}
-            onChange={handleMuniChange}
-            options={municipios} placeholder={form.departamento_nombre ? 'Seleccionar municipio...' : 'Primero selecciona departamento'}
+          <Select label="Municipio" value={form.municipio} onChange={handleMuniChange}
+            options={municipios}
+            placeholder={form.departamento_nombre?'Seleccionar municipio...':'Primero selecciona departamento'}
             required/>
         </div>
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
@@ -206,70 +192,54 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
             placeholder="Ej: Campestre" required/>
         </div>
 
-        {/* Contactos */}
         <SectionTitle>Contactos</SectionTitle>
-        {(form.contactos||[]).map((c, i) => (
+        {(form.contactos||[]).map((c,i) => (
           <div key={i} style={{ background:C.bg, borderRadius:8, padding:16,
             marginBottom:12, border:`1px solid ${C.bg2}`, position:'relative' }}>
-            <div style={{ fontSize:11, color:C.navy, fontWeight:600, fontFamily:'Inter',
-              marginBottom:12 }}>
-              {i === 0 ? 'Contacto Principal' : `Contacto ${i + 1}`}
+            <div style={{ fontSize:11, color:C.navy, fontWeight:600, fontFamily:'Inter', marginBottom:12 }}>
+              {i===0?'Contacto Principal':`Contacto ${i+1}`}
             </div>
-            {i > 0 && (
-              <button onClick={() => removeContacto(i)} style={{ position:'absolute',
-                top:12, right:12, background:'none', border:'none',
-                color:C.red, cursor:'pointer', fontSize:16 }}>✕</button>
+            {i>0 && (
+              <button onClick={()=>removeContacto(i)} style={{ position:'absolute', top:12, right:12,
+                background:'none', border:'none', color:C.red, cursor:'pointer', fontSize:16 }}>✕</button>
             )}
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-              <Input label="Nombre completo" value={c.nombre}
-                onChange={v=>updateContacto(i,'nombre',v)}
+              <Input label="Nombre completo" value={c.nombre} onChange={v=>updateContacto(i,'nombre',v)}
                 placeholder="Ej: Carlos Andrade" required={i===0}/>
-              <Input label="Cargo" value={c.cargo}
-                onChange={v=>updateContacto(i,'cargo',v)}
+              <Input label="Cargo" value={c.cargo} onChange={v=>updateContacto(i,'cargo',v)}
                 placeholder="Ej: Rector" required={i===0}/>
-              <Input label="Teléfono" value={c.telefono}
-                onChange={v=>updateContacto(i,'telefono',v)}
+              <Input label="Teléfono" value={c.telefono} onChange={v=>updateContacto(i,'telefono',v)}
                 placeholder="Ej: 3001234567" required={i===0}/>
-              <Input label="Correo electrónico" value={c.email}
-                onChange={v=>updateContacto(i,'email',v)}
+              <Input label="Correo electrónico" value={c.email} onChange={v=>updateContacto(i,'email',v)}
                 placeholder="Ej: rector@colegio.edu.co" type="email" required={i===0}/>
             </div>
           </div>
         ))}
         <button onClick={addContacto} style={{ display:'flex', alignItems:'center', gap:6,
           background:'none', border:`1px dashed ${C.green}`, color:C.green,
-          padding:'8px 16px', borderRadius:6, cursor:'pointer',
-          fontFamily:'Inter', fontSize:12, marginBottom:20 }}>
+          padding:'8px 16px', borderRadius:6, cursor:'pointer', fontFamily:'Inter', fontSize:12, marginBottom:20 }}>
           + Agregar otro contacto
         </button>
 
-        {/* Credenciales */}
         <SectionTitle>Credenciales de Acceso</SectionTitle>
         <div style={{ background:'#FFF9EB', border:'1px solid #FDE68A', borderRadius:8,
           padding:'10px 14px', marginBottom:14, fontFamily:'Inter', fontSize:12, color:'#92400E' }}>
           💡 Las credenciales se generan automáticamente al seleccionar departamento y municipio.
-          Formato: 2 letras depto + 2 letras municipio + número secuencial (Ej: SABU0001)
         </div>
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-          <div>
-            <Input label="Usuario (generado automáticamente)" value={generando ? 'Generando...' : form.usuario}
-              onChange={v=>set('usuario',v)} placeholder="Se genera al seleccionar municipio" required/>
-          </div>
+          <Input label="Usuario (generado automáticamente)" value={generando?'Generando...':form.usuario}
+            onChange={v=>set('usuario',v)} placeholder="Se genera al seleccionar municipio" required/>
           <Input label="Contraseña inicial" value={form.password_hash}
             onChange={v=>set('password_hash',v)} placeholder="Contraseña inicial" required/>
         </div>
 
         {error && (
-          <div style={{ background:'#FEF2F2', border:'1px solid #FECACA',
-            borderRadius:6, padding:'10px 14px', marginBottom:16,
-            fontSize:13, color:C.red, fontFamily:'Inter' }}>{error}</div>
+          <div style={{ background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:6,
+            padding:'10px 14px', marginBottom:16, fontSize:13, color:C.red, fontFamily:'Inter' }}>{error}</div>
         )}
-
-        <div style={{ display:'flex', justifyContent:'flex-end', gap:10, marginTop:8 }}>
+        <div style={{ display:'flex', justifyContent:'flex-end', gap:10 }}>
           <Btn onClick={onClose} outline color={C.gray}>Cancelar</Btn>
-          <Btn onClick={handleSave} disabled={saving}>
-            {saving ? 'Guardando...' : 'Guardar Colegio'}
-          </Btn>
+          <Btn onClick={handleSave} disabled={saving}>{saving?'Guardando...':'Guardar Colegio'}</Btn>
         </div>
       </div>
     </div>
@@ -284,7 +254,7 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
   const [uploading, setUploading] = useState(false)
   const [preview, setPreview] = useState([])
   const [msg, setMsg] = useState('')
-  const [editando, setEditando] = useState(null) // id del estudiante en edición
+  const [editando, setEditando] = useState(null)
   const [editForm, setEditForm] = useState({})
   const fileRef = useRef()
 
@@ -300,97 +270,26 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
 
   const startEdit = (e) => {
     setEditando(e.id)
-    setEditForm({ nombre: e.nombre, grado: e.grado, salon: e.salon,
-      usuario: e.usuario, password_hash: e.password_hash })
+    setEditForm({ nombre:e.nombre, grado:e.grado, salon:e.salon,
+      usuario:e.usuario, password_hash:e.password_hash })
   }
 
   const cancelEdit = () => { setEditando(null); setEditForm({}) }
 
   const saveEdit = async (id) => {
     const { error } = await supabase.from('estudiantes').update({
-      nombre: editForm.nombre,
-      grado: editForm.grado,
-      salon: editForm.salon,
-      usuario: editForm.usuario,
-      password_hash: editForm.password_hash,
+      nombre: editForm.nombre, grado: editForm.grado, salon: editForm.salon,
+      usuario: editForm.usuario, password_hash: editForm.password_hash,
     }).eq('id', id)
-    if (error) { alert('Error al guardar: ' + error.message); return }
+    if (error) { alert('Error: ' + error.message); return }
     setEditando(null)
     setMsg('✅ Estudiante actualizado correctamente.')
+    await loadEstudiantes(); onSave()
+  }
+
+  const handleToggle = async (e) => {
+    await supabase.from('estudiantes').update({ activo: !e.activo }).eq('id', e.id)
     await loadEstudiantes()
-    onSave()
-  }
-
-  const inputStyle = {
-    padding:'4px 8px', border:`1px solid ${C.grayLt}`, borderRadius:4,
-    fontFamily:'Inter', fontSize:12, color:C.text, background:C.white,
-    outline:'none', width:'100%',
-  }
-
-  useEffect(() => { loadEstudiantes() }, [])
-
-  const loadEstudiantes = async () => {
-    setLoading(true)
-    const { data } = await supabase.from('estudiantes')
-      .select('*').eq('colegio_id', colegio.id).order('nombre')
-    setEstudiantes(data || [])
-    setLoading(false)
-  }
-
-  const handleFile = (e) => {
-      const ws = wb.Sheets[wb.SheetNames[0]]
-      const rows = XLSX.utils.sheet_to_json(ws, { header:1 })
-      const data = rows.slice(1).filter(r => r[0]).map(r => ({
-        nombre: String(r[0]||'').trim(),
-        documento: String(r[1]||'').trim(),
-        grado: String(r[2]||'').trim(),
-        salon: String(r[3]||'').trim(),
-      }))
-      setPreview(data)
-      setMode('preview')
-    }
-    reader.readAsArrayBuffer(file)
-  }
-
-  const generateCredentials = (nombre, documento) => {
-    const partes = nombre.trim().split(' ')
-    const apellido = partes.length > 1 ? partes[Math.floor(partes.length/2)] : partes[0]
-    const prefijo = apellido.normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-      .replace(/[^A-Za-z]/g,'').substring(0,4).toUpperCase()
-    return { usuario: documento, password: prefijo + documento.slice(-4) }
-  }
-
-  const handleUpload = async () => {
-    if (!preview.length) return
-    setUploading(true)
-    setMsg('')
-    let creados = 0, omitidos = 0
-    for (const row of preview) {
-      const { usuario, password } = generateCredentials(row.nombre, row.documento)
-      const { error } = await supabase.from('estudiantes').insert({
-        colegio_id: colegio.id,
-        nombre: row.nombre, grado: row.grado, salon: row.salon,
-        usuario, password_hash: password, activo: true,
-      })
-      if (error) omitidos++; else creados++
-    }
-    setMsg(`✅ ${creados} estudiantes creados.${omitidos>0?` ${omitidos} omitidos (ya existían).`:''}`)
-    await loadEstudiantes()
-    setMode('lista')
-    onSave()
-    setUploading(false)
-  }
-
-  const downloadPlantilla = () => {
-    const ws = XLSX.utils.aoa_to_sheet([
-      ['Nombre Completo','Número de Documento','Grado','Salón'],
-      ['García López Juan Pablo','1098765432','11','1'],
-      ['Martínez Ruiz Ana Sofía','1087654321','11','2'],
-    ])
-    ws['!cols'] = [{wch:35},{wch:20},{wch:10},{wch:10}]
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Estudiantes')
-    XLSX.writeFile(wb, 'plantilla_estudiantes.xlsx')
   }
 
   const handleDelete = async (id) => {
@@ -399,11 +298,70 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
     await loadEstudiantes(); onSave()
   }
 
+  const generateCredentials = (nombre, documento) => {
+    const partes = nombre.trim().split(' ')
+    const apellido = partes.length>=2 ? partes[partes.length-2] : partes[partes.length-1]
+    const prefijo = apellido.normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^A-Za-z]/g,'').substring(0,4).toUpperCase()
+    return { usuario: documento, password: prefijo + documento.slice(-4) }
+  }
+
+  const handleFile = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const wb = XLSX.read(ev.target.result, { type:'array' })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json(ws, { header:1 })
+      const data = rows.slice(1).filter(r=>r[0]).map(r => ({
+        nombre: String(r[0]||'').trim(), documento: String(r[1]||'').trim(),
+        grado: String(r[2]||'').trim(), salon: String(r[3]||'').trim(),
+      }))
+      setPreview(data); setMode('preview')
+    }
+    reader.readAsArrayBuffer(file)
+  }
+
+  const handleUpload = async () => {
+    if (!preview.length) return
+    setUploading(true); setMsg('')
+    let creados=0, omitidos=0
+    for (const row of preview) {
+      const { usuario, password } = generateCredentials(row.nombre, row.documento)
+      const { error } = await supabase.from('estudiantes').insert({
+        colegio_id: colegio.id, nombre: row.nombre,
+        grado: row.grado, salon: row.salon,
+        usuario, password_hash: password, activo: true,
+      })
+      if (error) omitidos++; else creados++
+    }
+    setMsg(`✅ ${creados} estudiantes creados.${omitidos>0?` ${omitidos} omitidos.`:''}`)
+    await loadEstudiantes(); setMode('lista'); onSave(); setUploading(false)
+  }
+
+  const downloadPlantilla = () => {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['Nombre Completo','Número de Documento','Grado','Salón'],
+      ['Juan Pablo García López','1098765432','11','1'],
+      ['Ana Sofía Martínez Ruiz','1087654321','11','2'],
+    ])
+    ws['!cols'] = [{wch:35},{wch:20},{wch:10},{wch:10}]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Estudiantes')
+    XLSX.writeFile(wb, 'plantilla_estudiantes.xlsx')
+  }
+
+  const inStyle = {
+    padding:'4px 8px', border:`1px solid ${C.grayLt}`, borderRadius:4,
+    fontFamily:'Inter', fontSize:12, outline:'none', width:'100%',
+  }
+
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)',
       display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999, padding:24 }}>
       <div style={{ background:C.white, borderRadius:12, padding:32,
-        width:'100%', maxWidth:820, maxHeight:'92vh', overflowY:'auto',
+        width:'100%', maxWidth:900, maxHeight:'92vh', overflowY:'auto',
         boxShadow:'0 20px 60px rgba(0,0,0,0.3)' }}>
 
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:24 }}>
@@ -415,19 +373,20 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
               {estudiantes.length} estudiante{estudiantes.length!==1?'s':''} registrado{estudiantes.length!==1?'s':''}
             </div>
           </div>
-          <button onClick={onClose} style={{ background:'none', border:'none',
-            fontSize:22, cursor:'pointer', color:C.gray }}>✕</button>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer', color:C.gray }}>✕</button>
         </div>
 
+        {/* MODO LISTA */}
         {mode==='lista' && (
           <>
             <div style={{ display:'flex', gap:10, marginBottom:20 }}>
               <Btn onClick={()=>setMode('subir')} color={C.green}>+ Subir Excel</Btn>
-              <Btn onClick={downloadPlantilla} outline color={C.navy}>↓ Descargar plantilla</Btn>
+              <Btn onClick={downloadPlantilla} outline color={C.navy}>↓ Plantilla</Btn>
             </div>
-            {msg && <div style={{ background:'#F0FFF4', border:'1px solid #BBF7D0',
-              borderRadius:6, padding:'10px 14px', marginBottom:16,
-              fontSize:13, color:C.green, fontFamily:'Inter' }}>{msg}</div>}
+            {msg && (
+              <div style={{ background:'#F0FFF4', border:'1px solid #BBF7D0', borderRadius:6,
+                padding:'10px 14px', marginBottom:16, fontSize:13, color:C.green, fontFamily:'Inter' }}>{msg}</div>
+            )}
             {loading ? (
               <div style={{ textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter' }}>Cargando...</div>
             ) : estudiantes.length===0 ? (
@@ -435,91 +394,81 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
                 No hay estudiantes. Sube un Excel para comenzar.
               </div>
             ) : (
-              <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter' }}>
-                <thead>
-                  <tr style={{ borderBottom:`2px solid ${C.bg2}` }}>
-                    {['Nombre','Grado','Salón','Usuario','Contraseña','Estado','Acciones'].map(h=>(
-                      <th key={h} style={{ textAlign:'left', padding:'8px 10px', fontSize:10,
-                        color:C.gray, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {estudiantes.map((e,i)=>(
-                    <tr key={i} style={{ borderBottom:`1px solid ${C.bg2}`,
-                      background: !e.activo ? '#FEF2F2' : i%2===0?`${C.bg}80`:'transparent' }}>
-                      {editando === e.id ? (
-                        // Modo edición
-                        <>
-                          <td style={{ padding:'6px' }}>
-                            <input value={editForm.nombre} onChange={ev=>setEditForm({...editForm,nombre:ev.target.value})}
-                              style={{ width:'100%', padding:'5px 8px', border:`1px solid ${C.grayLt}`,
-                                borderRadius:4, fontFamily:'Inter', fontSize:12 }}/>
-                          </td>
-                          <td style={{ padding:'6px' }}>
-                            <input value={editForm.grado} onChange={ev=>setEditForm({...editForm,grado:ev.target.value})}
-                              style={{ width:50, padding:'5px 8px', border:`1px solid ${C.grayLt}`,
-                                borderRadius:4, fontFamily:'Inter', fontSize:12 }}/>
-                          </td>
-                          <td style={{ padding:'6px' }}>
-                            <input value={editForm.salon} onChange={ev=>setEditForm({...editForm,salon:ev.target.value})}
-                              style={{ width:50, padding:'5px 8px', border:`1px solid ${C.grayLt}`,
-                                borderRadius:4, fontFamily:'Inter', fontSize:12 }}/>
-                          </td>
-                          <td style={{ padding:'6px' }}>
-                            <input value={editForm.usuario} onChange={ev=>setEditForm({...editForm,usuario:ev.target.value})}
-                              style={{ width:'100%', padding:'5px 8px', border:`1px solid ${C.grayLt}`,
-                                borderRadius:4, fontFamily:'Inter', fontSize:12 }}/>
-                          </td>
-                          <td style={{ padding:'6px' }}>
-                            <input value={editForm.password_hash} onChange={ev=>setEditForm({...editForm,password_hash:ev.target.value})}
-                              style={{ width:'100%', padding:'5px 8px', border:`1px solid ${C.grayLt}`,
-                                borderRadius:4, fontFamily:'Inter', fontSize:12 }}/>
-                          </td>
-                          <td style={{ padding:'6px' }}>
-                            <Badge color={e.activo?C.green:C.red}>{e.activo?'Activo':'Inactivo'}</Badge>
-                          </td>
-                          <td style={{ padding:'6px' }}>
-                            <div style={{ display:'flex', gap:4 }}>
-                              <Btn onClick={()=>saveEdit(e.id)} small color={C.green}>Guardar</Btn>
-                              <Btn onClick={cancelEdit} small outline color={C.gray}>Cancelar</Btn>
-                            </div>
-                          </td>
-                        </>
-                      ) : (
-                        // Modo vista
-                        <>
-                          <td style={{ padding:'10px', fontSize:13, color:e.activo?C.text:C.gray,
-                            fontWeight:500, textDecoration:e.activo?'none':'line-through' }}>{e.nombre}</td>
-                          <td style={{ padding:'10px', fontSize:12, color:C.gray }}>{e.grado}</td>
-                          <td style={{ padding:'10px', fontSize:12, color:C.gray }}>{e.salon}</td>
-                          <td style={{ padding:'10px', fontSize:12, color:C.navy, fontWeight:500 }}>{e.usuario}</td>
-                          <td style={{ padding:'10px', fontSize:12, color:C.gray }}>{e.password_hash}</td>
-                          <td style={{ padding:'10px' }}>
-                            <Badge color={e.activo?C.green:C.red}>{e.activo?'Activo':'Inactivo'}</Badge>
-                          </td>
-                          <td style={{ padding:'10px' }}>
-                            <div style={{ display:'flex', gap:4 }}>
-                              <Btn onClick={()=>startEdit(e)} small outline color={C.navy}>Editar</Btn>
-                              <Btn onClick={async()=>{
-                                await supabase.from('estudiantes').update({activo:!e.activo}).eq('id',e.id)
-                                await loadEstudiantes()
-                              }} small outline color={e.activo?C.amber:C.green}>
-                                {e.activo?'Inactivar':'Activar'}
-                              </Btn>
-                              <Btn onClick={()=>handleDelete(e.id)} small outline color={C.red}>Eliminar</Btn>
-                            </div>
-                          </td>
-                        </>
-                      )}
+              <div style={{ overflowX:'auto' }}>
+                <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter' }}>
+                  <thead>
+                    <tr style={{ borderBottom:`2px solid ${C.bg2}` }}>
+                      {['Nombre','Grado','Salón','Usuario','Contraseña','Estado','Acciones'].map(h=>(
+                        <th key={h} style={{ textAlign:'left', padding:'8px 10px', fontSize:10,
+                          color:C.gray, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em',
+                          whiteSpace:'nowrap' }}>{h}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {estudiantes.map((e,i)=>(
+                      <tr key={i} style={{ borderBottom:`1px solid ${C.bg2}`,
+                        background: !e.activo?'#FEF2F2':i%2===0?`${C.bg}80`:'transparent' }}>
+                        {editando===e.id ? (
+                          <>
+                            <td style={{ padding:'6px' }}>
+                              <input value={editForm.nombre} onChange={ev=>setEditForm({...editForm,nombre:ev.target.value})} style={inStyle}/>
+                            </td>
+                            <td style={{ padding:'6px' }}>
+                              <input value={editForm.grado} onChange={ev=>setEditForm({...editForm,grado:ev.target.value})} style={{...inStyle,width:48}}/>
+                            </td>
+                            <td style={{ padding:'6px' }}>
+                              <input value={editForm.salon} onChange={ev=>setEditForm({...editForm,salon:ev.target.value})} style={{...inStyle,width:48}}/>
+                            </td>
+                            <td style={{ padding:'6px' }}>
+                              <input value={editForm.usuario} onChange={ev=>setEditForm({...editForm,usuario:ev.target.value})} style={inStyle}/>
+                            </td>
+                            <td style={{ padding:'6px' }}>
+                              <input value={editForm.password_hash} onChange={ev=>setEditForm({...editForm,password_hash:ev.target.value})} style={inStyle}/>
+                            </td>
+                            <td style={{ padding:'6px' }}>
+                              <Badge color={e.activo?C.green:C.red}>{e.activo?'Activo':'Inactivo'}</Badge>
+                            </td>
+                            <td style={{ padding:'6px' }}>
+                              <div style={{ display:'flex', gap:4 }}>
+                                <Btn onClick={()=>saveEdit(e.id)} small color={C.green}>Guardar</Btn>
+                                <Btn onClick={cancelEdit} small outline color={C.gray}>Cancelar</Btn>
+                              </div>
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td style={{ padding:'10px', fontSize:13,
+                              color:e.activo?C.text:C.gray, fontWeight:500,
+                              textDecoration:e.activo?'none':'line-through' }}>{e.nombre}</td>
+                            <td style={{ padding:'10px', fontSize:12, color:C.gray }}>{e.grado}</td>
+                            <td style={{ padding:'10px', fontSize:12, color:C.gray }}>{e.salon}</td>
+                            <td style={{ padding:'10px', fontSize:12, color:C.navy, fontWeight:500 }}>{e.usuario}</td>
+                            <td style={{ padding:'10px', fontSize:12, color:C.gray }}>{e.password_hash}</td>
+                            <td style={{ padding:'10px' }}>
+                              <Badge color={e.activo?C.green:C.red}>{e.activo?'Activo':'Inactivo'}</Badge>
+                            </td>
+                            <td style={{ padding:'10px' }}>
+                              <div style={{ display:'flex', gap:4 }}>
+                                <Btn onClick={()=>startEdit(e)} small outline color={C.navy}>Editar</Btn>
+                                <Btn onClick={()=>handleToggle(e)} small outline color={e.activo?C.amber:C.green}>
+                                  {e.activo?'Inactivar':'Activar'}
+                                </Btn>
+                                <Btn onClick={()=>handleDelete(e.id)} small outline color={C.red}>Eliminar</Btn>
+                              </div>
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </>
         )}
 
+        {/* MODO SUBIR */}
         {mode==='subir' && (
           <div>
             <div style={{ background:C.bg2, borderRadius:8, padding:24, marginBottom:20,
@@ -529,7 +478,7 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
                 Sube el Excel de estudiantes
               </div>
               <div style={{ fontSize:12, color:C.gray, fontFamily:'Inter', marginBottom:16 }}>
-                Columnas: Nombre Completo · Número de Documento · Grado · Salón
+                Columnas: Nombre Completo · Documento · Grado · Salón
               </div>
               <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleFile} style={{display:'none'}}/>
               <div style={{ display:'flex', gap:10, justifyContent:'center' }}>
@@ -537,14 +486,10 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
                 <Btn onClick={()=>setMode('lista')} outline color={C.gray}>Cancelar</Btn>
               </div>
             </div>
-            <div style={{ background:'#FFF9EB', border:'1px solid #FDE68A', borderRadius:8,
-              padding:14, fontFamily:'Inter', fontSize:12, color:'#92400E' }}>
-              💡 <strong>Credenciales automáticas:</strong> Usuario = Número de documento.
-              Contraseña = 4 letras del apellido + últimos 4 dígitos del documento.
-            </div>
           </div>
         )}
 
+        {/* MODO PREVIEW */}
         {mode==='preview' && (
           <div>
             <div style={{ fontFamily:'Inter', fontSize:13, color:C.navy, marginBottom:16, fontWeight:500 }}>
@@ -580,7 +525,7 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
             <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
               <Btn onClick={()=>setMode('subir')} outline color={C.gray}>Volver</Btn>
               <Btn onClick={handleUpload} disabled={uploading} color={C.green}>
-                {uploading ? 'Importando...' : `Importar ${preview.length} estudiantes`}
+                {uploading?'Importando...':`Importar ${preview.length} estudiantes`}
               </Btn>
             </div>
           </div>
@@ -674,56 +619,56 @@ export default function AdminColegios({ onUpdate }) {
             <div style={{ fontSize:13, color:C.gray }}>Crea el primer colegio con el botón de arriba.</div>
           </div>
         ) : (
-          <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter' }}>
-            <thead>
-              <tr style={{ borderBottom:`2px solid ${C.bg2}` }}>
-                {['Nombre','Ubicación','Contacto Principal','Usuario','Estado','Acciones'].map(h=>(
-                  <th key={h} style={{ textAlign:'left', padding:'10px 12px', fontSize:10,
-                    color:C.gray, fontWeight:600, textTransform:'uppercase',
-                    letterSpacing:'0.05em', whiteSpace:'nowrap' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((c,i)=>{
-                const contactoPpal = c.contactos?.[0] || {nombre:c.contacto_nombre, email:c.contacto_email}
-                return (
-                  <tr key={i} style={{ borderBottom:`1px solid ${C.bg2}`,
-                    background:i%2===0?`${C.bg}80`:'transparent' }}>
-                    <td style={{ padding:'12px' }}>
-                      <div style={{ fontSize:13, color:C.text, fontWeight:600 }}>{c.nombre}</div>
-                      <div style={{ fontSize:11, color:C.gray }}>{c.departamento_nombre}</div>
-                    </td>
-                    <td style={{ padding:'12px', fontSize:12, color:C.gray }}>
-                      {c.municipio||'—'}
-                      {c.barrio && <div style={{ fontSize:11 }}>{c.barrio}</div>}
-                    </td>
-                    <td style={{ padding:'12px' }}>
-                      <div style={{ fontSize:12, color:C.text }}>{contactoPpal?.nombre||'—'}</div>
-                      <div style={{ fontSize:11, color:C.gray }}>{contactoPpal?.email||''}</div>
-                    </td>
-                    <td style={{ padding:'12px', fontSize:12, color:C.navy, fontWeight:600 }}>{c.usuario}</td>
-                    <td style={{ padding:'12px' }}>
-                      <Badge color={c.activo?C.green:C.red}>{c.activo?'Activo':'Inactivo'}</Badge>
-                    </td>
-                    <td style={{ padding:'12px' }}>
-                      <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
-                        <Btn onClick={()=>setModalColegio(c)} small outline color={C.navy}>Editar</Btn>
-                        <Btn onClick={()=>setModalEst(c)} small color={C.green}>Estudiantes</Btn>
-                        <Btn onClick={()=>handleToggle(c)} small outline color={c.activo?C.amber:C.green}>
-                          {c.activo?'Desactivar':'Activar'}
-                        </Btn>
-                        <Btn onClick={()=>handleDeleteResultados(c)} small outline color={C.red}>
-                          Borrar resultados
-                        </Btn>
-                        <Btn onClick={()=>handleDeleteColegio(c)} small color={C.red}>Eliminar</Btn>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+          <div style={{ overflowX:'auto' }}>
+            <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter' }}>
+              <thead>
+                <tr style={{ borderBottom:`2px solid ${C.bg2}` }}>
+                  {['Nombre','Ubicación','Contacto Principal','Usuario','Estado','Acciones'].map(h=>(
+                    <th key={h} style={{ textAlign:'left', padding:'10px 12px', fontSize:10,
+                      color:C.gray, fontWeight:600, textTransform:'uppercase',
+                      letterSpacing:'0.05em', whiteSpace:'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((c,i)=>{
+                  const contactoPpal = c.contactos?.[0] || {nombre:c.contacto_nombre, email:c.contacto_email}
+                  return (
+                    <tr key={i} style={{ borderBottom:`1px solid ${C.bg2}`,
+                      background:i%2===0?`${C.bg}80`:'transparent' }}>
+                      <td style={{ padding:'12px' }}>
+                        <div style={{ fontSize:13, color:C.text, fontWeight:600 }}>{c.nombre}</div>
+                        <div style={{ fontSize:11, color:C.gray }}>{c.departamento_nombre}</div>
+                      </td>
+                      <td style={{ padding:'12px', fontSize:12, color:C.gray }}>
+                        {c.municipio||'—'}
+                        {c.barrio && <div style={{ fontSize:11 }}>{c.barrio}</div>}
+                      </td>
+                      <td style={{ padding:'12px' }}>
+                        <div style={{ fontSize:12, color:C.text }}>{contactoPpal?.nombre||'—'}</div>
+                        <div style={{ fontSize:11, color:C.gray }}>{contactoPpal?.email||''}</div>
+                      </td>
+                      <td style={{ padding:'12px', fontSize:12, color:C.navy, fontWeight:600 }}>{c.usuario}</td>
+                      <td style={{ padding:'12px' }}>
+                        <Badge color={c.activo?C.green:C.red}>{c.activo?'Activo':'Inactivo'}</Badge>
+                      </td>
+                      <td style={{ padding:'12px' }}>
+                        <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
+                          <Btn onClick={()=>setModalColegio(c)} small outline color={C.navy}>Editar</Btn>
+                          <Btn onClick={()=>setModalEst(c)} small color={C.green}>Estudiantes</Btn>
+                          <Btn onClick={()=>handleToggle(c)} small outline color={c.activo?C.amber:C.green}>
+                            {c.activo?'Desactivar':'Activar'}
+                          </Btn>
+                          <Btn onClick={()=>handleDeleteResultados(c)} small outline color={C.red}>Borrar resultados</Btn>
+                          <Btn onClick={()=>handleDeleteColegio(c)} small color={C.red}>Eliminar</Btn>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </Card>
 
