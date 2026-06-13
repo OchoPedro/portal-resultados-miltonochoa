@@ -8,7 +8,10 @@ export default function App() {
   const [session, setSession] = useState(null)
 
   const handleLogin = ({ role, data }) => setSession({ role, data })
-  const handleLogout = () => setSession(null)
+  const handleLogout = () => {
+    setSession(null)
+    window.location.href = 'https://miltonochoa-web.vercel.app'
+  }
 
   if (!session) return <Login onLogin={handleLogin} />
   if (session.role === 'admin') return <AdminDashboard session={session.data} onLogout={handleLogout} />
