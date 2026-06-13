@@ -538,13 +538,24 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
 // ── MENÚ ACCIONES DESPLEGABLE ─────────────────────────────────
 const AccionesMenu = ({ onEditar, onEstudiantes, onToggle, activo, onBorrarResultados, onEliminar }) => {
   const [open, setOpen] = useState(false)
+  const [openUp, setOpenUp] = useState(false)
   const ref = useRef()
+  const btnRef = useRef()
 
   useEffect(() => {
     const handleClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
+
+  const handleOpen = () => {
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect()
+      const spaceBelow = window.innerHeight - rect.bottom
+      setOpenUp(spaceBelow < 220)
+    }
+    setOpen(!open)
+  }
 
   const items = [
     { label:'✏️ Editar', onClick: onEditar, color: C.text },
@@ -556,7 +567,7 @@ const AccionesMenu = ({ onEditar, onEstudiantes, onToggle, activo, onBorrarResul
 
   return (
     <div ref={ref} style={{ position:'relative', display:'inline-block' }}>
-      <button onClick={() => setOpen(!open)} style={{
+      <button ref={btnRef} onClick={handleOpen} style={{
         padding:'6px 14px', background:C.navy, color:C.white,
         border:'none', borderRadius:6, fontFamily:'Inter', fontSize:11,
         fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', gap:6,
@@ -565,16 +576,17 @@ const AccionesMenu = ({ onEditar, onEstudiantes, onToggle, activo, onBorrarResul
       </button>
       {open && (
         <div style={{
-          position:'absolute', right:0, top:'calc(100% + 4px)', zIndex:1000,
+          position:'absolute', right:0, zIndex:1000,
+          ...(openUp ? { bottom:'calc(100% + 4px)' } : { top:'calc(100% + 4px)' }),
           background:C.white, borderRadius:8, boxShadow:'0 8px 24px rgba(0,0,0,0.15)',
           border:`1px solid ${C.grayLt}`, minWidth:180, overflow:'hidden',
         }}>
           {items.map((item, i) => (
             <button key={i} onClick={() => { item.onClick(); setOpen(false) }} style={{
               width:'100%', textAlign:'left', padding:'10px 16px',
-              background:'transparent', border:'none', borderBottom: i < items.length-1 ? `1px solid ${C.bg2}` : 'none',
+              background:'transparent', border:'none',
+              borderBottom: i < items.length-1 ? `1px solid ${C.bg2}` : 'none',
               fontFamily:'Inter', fontSize:12, color: item.color, cursor:'pointer',
-              transition:'background 0.15s',
             }}
             onMouseEnter={e => e.currentTarget.style.background = C.bg}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
