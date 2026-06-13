@@ -515,7 +515,9 @@ export default function ColegioDashboard({session, onLogout}) {
         </div>
         )}
 
-        <TabBar tabs={tabs} active={tab} onChange={setTab}/>
+        {['tablero','areas','niveles','desviacion','competencias','mejora','ranking'].includes(tab) && (
+          <TabBar tabs={tabs} active={tab} onChange={setTab}/>
+        )}
 
         {/* ══ TABLERO ══════════════════════════════════════════ */}
         {tab==='tablero' && (
