@@ -605,13 +605,10 @@ export default function ColegioDashboard({session, onLogout}) {
 
         {/* ══ COMPETENCIAS ═════════════════════════════════════ */}
         {tab==='competencias' && (
+          students.length === 0 ? <EmptyState/> :
           <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:16}}>
             {competencias.length === 0 ? (
-              <Card style={{gridColumn:'1/3'}}>
-                <div style={{textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter'}}>
-                  No hay datos de competencias cargados.
-                </div>
-              </Card>
+              <div style={{gridColumn:'1/3'}}><EmptyState/></div>
             ) : (
               <>
                 <Card style={{gridColumn:'1/3'}}>
@@ -661,14 +658,13 @@ export default function ColegioDashboard({session, onLogout}) {
 
         {/* ══ OPORTUNIDADES ════════════════════════════════════ */}
         {tab==='mejora' && (
+          students.length === 0 ? <EmptyState/> :
           <Card>
             <CardTitle sub={`${oportunidades.length} preguntas identificadas`}>
               Oportunidades de Mejoramiento
             </CardTitle>
             {oportunidades.length === 0 ? (
-              <div style={{textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter'}}>
-                No hay oportunidades de mejora cargadas.
-              </div>
+              <EmptyState msg="No hay oportunidades de mejora cargadas para esta prueba."/>
             ) : (
               <div style={{overflowX:'auto'}}>
                 <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter'}}>
