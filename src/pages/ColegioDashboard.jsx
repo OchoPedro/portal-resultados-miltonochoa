@@ -1308,18 +1308,65 @@ export default function ColegioDashboard({session, onLogout}) {
         )}
         {/* ══ CARTA DE BIENVENIDA ══════════════════════════════ */}
         {tab==='carta' && (
-          <Card>
-            <div style={{textAlign:'center', padding:60, display:'flex', flexDirection:'column',
-              alignItems:'center', gap:16}}>
-              <div style={{fontSize:48}}>✉️</div>
-              <div style={{fontFamily:'Playfair Display, serif', fontSize:22, color:C.navy}}>
+          <div style={{display:'grid', gap:20}}>
+            {/* Header carta */}
+            <div style={{background:`linear-gradient(135deg, ${C.navy} 0%, #1A3560 100%)`,
+              borderRadius:16, padding:'48px 56px', position:'relative', overflow:'hidden'}}>
+              <div style={{position:'absolute', top:-30, right:-30, fontSize:180,
+                opacity:0.04, lineHeight:1}}>✦</div>
+              <div style={{position:'absolute', bottom:-20, left:-20, fontSize:120,
+                opacity:0.04, lineHeight:1}}>✦</div>
+              <div style={{fontSize:10, color:'rgba(255,255,255,0.45)', fontFamily:'Inter',
+                letterSpacing:'0.2em', textTransform:'uppercase', marginBottom:16}}>
+                Portal de Resultados — Milton Ochoa
+              </div>
+              <div style={{fontSize:32, fontFamily:'Playfair Display, serif', color:C.white,
+                fontWeight:400, lineHeight:1.3, marginBottom:8}}>
                 Carta de Bienvenida
               </div>
-              <div style={{fontFamily:'Inter', fontSize:13, color:C.gray, maxWidth:360}}>
-                Esta sección estará disponible próximamente.
-              </div>
+              <div style={{width:48, height:2, background:C.green, marginTop:16}}/>
             </div>
-          </Card>
+
+            {/* Cuerpo de la carta */}
+            <Card style={{padding:'48px 56px'}}>
+              {/* Saludo */}
+              <div style={{fontFamily:'Playfair Display, serif', fontSize:18, color:C.navy,
+                fontStyle:'italic', marginBottom:32}}>
+                Estimada comunidad de <strong style={{fontStyle:'normal'}}>{session?.nombre}</strong>,
+              </div>
+
+              {/* Párrafos */}
+              {[
+                'Es un honor para nosotros recibirlos en el Portal de Resultados de Asesorías Académicas Milton Ochoa.',
+                'Cada institución que confía en nosotros representa mucho más que un aliado estratégico — representa una comunidad comprometida con el futuro de Colombia. Ustedes, junto a sus estudiantes y docentes, son protagonistas de una transformación que va más allá de los resultados académicos: están construyendo el país que soñamos.',
+                'En Milton Ochoa creemos profundamente que la evaluación es el primer paso hacia la excelencia. No como un juicio, sino como una brújula que orienta, que revela fortalezas y que ilumina el camino por recorrer. Por eso, cada dato que encuentran en este portal no es solo un número — es una oportunidad de crecer.',
+                'Nuestro equipo está con ustedes en cada etapa. Detrás de cada reporte, de cada análisis, hay personas comprometidas con su éxito y con el de sus estudiantes. No están solos en este camino.',
+                'Gracias por creer en la educación de calidad. Gracias por ser parte de esta misión que nos une:',
+              ].map((p, i) => (
+                <p key={i} style={{fontFamily:'Inter', fontSize:15, lineHeight:1.9,
+                  color:C.gray, marginBottom:20, fontWeight:300}}>{p}</p>
+              ))}
+
+              {/* Frase destacada */}
+              <div style={{background:C.bg, borderRadius:12, padding:'24px 32px',
+                borderLeft:`4px solid ${C.green}`, margin:'8px 0 32px'}}>
+                <div style={{fontFamily:'Playfair Display, serif', fontSize:22, color:C.navy,
+                  fontStyle:'italic', textAlign:'center'}}>
+                  "Inspirar y transformar el mundo."
+                </div>
+              </div>
+
+              {/* Firma */}
+              <div style={{borderTop:`1px solid ${C.bg2}`, paddingTop:32, marginTop:8}}>
+                <div style={{fontFamily:'Inter', fontSize:13, color:C.gray,
+                  marginBottom:4}}>Con gratitud y compromiso,</div>
+                <div style={{fontFamily:'Playfair Display, serif', fontSize:20, color:C.navy,
+                  fontWeight:700, marginBottom:4}}>Asesorías Académicas Milton Ochoa</div>
+                <div style={{fontFamily:'Inter', fontSize:12, color:C.green,
+                  letterSpacing:'0.08em', textTransform:'uppercase'}}>Expertos en Evaluación</div>
+              </div>
+            </Card>
+          </div>
         )}
 
         {/* ══ LISTADO DE ESTUDIANTES ═══════════════════════════ */}
