@@ -338,11 +338,6 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
   }
 
   const handleFile = (e) => {
-    const file = e.target.files[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      const wb = XLSX.read(ev.target.result, { type:'array' })
       const ws = wb.Sheets[wb.SheetNames[0]]
       const rows = XLSX.utils.sheet_to_json(ws, { header:1 })
       const data = rows.slice(1).filter(r => r[0]).map(r => ({
@@ -396,26 +391,6 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Estudiantes')
     XLSX.writeFile(wb, 'plantilla_estudiantes.xlsx')
-  }
-
-  const [editando, setEditando] = useState(null) // estudiante en edición
-
-  const handleToggleEstudiante = async (est) => {
-    await supabase.from('estudiantes').update({ activo: !est.activo }).eq('id', est.id)
-    await loadEstudiantes()
-  }
-
-  const handleEditSave = async () => {
-    if (!editando) return
-    await supabase.from('estudiantes').update({
-      nombre: editando.nombre,
-      grado: editando.grado,
-      salon: editando.salon,
-      usuario: editando.usuario,
-      password_hash: editando.password_hash,
-    }).eq('id', editando.id)
-    setEditando(null)
-    await loadEstudiantes()
   }
 
   const handleDelete = async (id) => {
@@ -473,31 +448,31 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
                   {estudiantes.map((e,i)=>(
                     <tr key={i} style={{ borderBottom:`1px solid ${C.bg2}`,
                       background: !e.activo ? '#FEF2F2' : i%2===0?`${C.bg}80`:'transparent' }}>
-                      {editando?.id === e.id ? (
+                      {editando === e.id ? (
                         // Modo edición
                         <>
                           <td style={{ padding:'6px' }}>
-                            <input value={editando.nombre} onChange={ev=>setEditando({...editando,nombre:ev.target.value})}
+                            <input value={editForm.nombre} onChange={ev=>setEditForm({...editForm,nombre:ev.target.value})}
                               style={{ width:'100%', padding:'5px 8px', border:`1px solid ${C.grayLt}`,
                                 borderRadius:4, fontFamily:'Inter', fontSize:12 }}/>
                           </td>
                           <td style={{ padding:'6px' }}>
-                            <input value={editando.grado} onChange={ev=>setEditando({...editando,grado:ev.target.value})}
+                            <input value={editForm.grado} onChange={ev=>setEditForm({...editForm,grado:ev.target.value})}
                               style={{ width:50, padding:'5px 8px', border:`1px solid ${C.grayLt}`,
                                 borderRadius:4, fontFamily:'Inter', fontSize:12 }}/>
                           </td>
                           <td style={{ padding:'6px' }}>
-                            <input value={editando.salon} onChange={ev=>setEditando({...editando,salon:ev.target.value})}
+                            <input value={editForm.salon} onChange={ev=>setEditForm({...editForm,salon:ev.target.value})}
                               style={{ width:50, padding:'5px 8px', border:`1px solid ${C.grayLt}`,
                                 borderRadius:4, fontFamily:'Inter', fontSize:12 }}/>
                           </td>
                           <td style={{ padding:'6px' }}>
-                            <input value={editando.usuario} onChange={ev=>setEditando({...editando,usuario:ev.target.value})}
+                            <input value={editForm.usuario} onChange={ev=>setEditForm({...editForm,usuario:ev.target.value})}
                               style={{ width:'100%', padding:'5px 8px', border:`1px solid ${C.grayLt}`,
                                 borderRadius:4, fontFamily:'Inter', fontSize:12 }}/>
                           </td>
                           <td style={{ padding:'6px' }}>
-                            <input value={editando.password_hash} onChange={ev=>setEditando({...editando,password_hash:ev.target.value})}
+                            <input value={editForm.password_hash} onChange={ev=>setEditForm({...editForm,password_hash:ev.target.value})}
                               style={{ width:'100%', padding:'5px 8px', border:`1px solid ${C.grayLt}`,
                                 borderRadius:4, fontFamily:'Inter', fontSize:12 }}/>
                           </td>
@@ -506,8 +481,8 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
                           </td>
                           <td style={{ padding:'6px' }}>
                             <div style={{ display:'flex', gap:4 }}>
-                              <Btn onClick={handleEditSave} small color={C.green}>Guardar</Btn>
-                              <Btn onClick={()=>setEditando(null)} small outline color={C.gray}>Cancelar</Btn>
+                              <Btn onClick={()=>saveEdit(e.id)} small color={C.green}>Guardar</Btn>
+                              <Btn onClick={cancelEdit} small outline color={C.gray}>Cancelar</Btn>
                             </div>
                           </td>
                         </>
@@ -525,9 +500,11 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
                           </td>
                           <td style={{ padding:'10px' }}>
                             <div style={{ display:'flex', gap:4 }}>
-                              <Btn onClick={()=>setEditando({...e})} small outline color={C.navy}>Editar</Btn>
-                              <Btn onClick={()=>handleToggleEstudiante(e)} small outline
-                                color={e.activo?C.amber:C.green}>
+                              <Btn onClick={()=>startEdit(e)} small outline color={C.navy}>Editar</Btn>
+                              <Btn onClick={async()=>{
+                                await supabase.from('estudiantes').update({activo:!e.activo}).eq('id',e.id)
+                                await loadEstudiantes()
+                              }} small outline color={e.activo?C.amber:C.green}>
                                 {e.activo?'Inactivar':'Activar'}
                               </Btn>
                               <Btn onClick={()=>handleDelete(e.id)} small outline color={C.red}>Eliminar</Btn>
