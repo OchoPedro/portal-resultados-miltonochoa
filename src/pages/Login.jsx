@@ -26,7 +26,11 @@ export default function Login({ onLogin }) {
         .single()
 
       if (admin) {
-        if (admin.password_hash !== p) { setError('Contraseña incorrecta.'); setLoading(false); return }
+        if (admin.password_hash !== p) {
+          setError('Contraseña incorrecta.')
+          setTimeout(() => { window.location.href = 'https://miltonochoa-web.vercel.app' }, 2000)
+          setLoading(false); return
+        }
         // Registrar última sesión
         await supabase.from('administradores').update({
           ultima_sesion: new Date().toLocaleString('sv-SE', {timeZone:'America/Bogota'}).replace(' ','T')
@@ -44,7 +48,11 @@ export default function Login({ onLogin }) {
         .single()
 
       if (colegio) {
-        if (colegio.password_hash !== p) { setError('Contraseña incorrecta.'); setLoading(false); return }
+        if (colegio.password_hash !== p) {
+          setError('Contraseña incorrecta.')
+          setTimeout(() => { window.location.href = 'https://miltonochoa-web.vercel.app' }, 2000)
+          setLoading(false); return
+        }
         await supabase.from('colegios').update({
           ultima_sesion: new Date().toLocaleString('sv-SE', {timeZone:'America/Bogota'}).replace(' ','T')
         }).eq('id', colegio.id)
@@ -61,7 +69,11 @@ export default function Login({ onLogin }) {
         .single()
 
       if (estudiante) {
-        if (estudiante.password_hash !== p) { setError('Contraseña incorrecta.'); setLoading(false); return }
+        if (estudiante.password_hash !== p) {
+          setError('Contraseña incorrecta.')
+          setTimeout(() => { window.location.href = 'https://miltonochoa-web.vercel.app' }, 2000)
+          setLoading(false); return
+        }
         await supabase.from('estudiantes').update({
           ultima_sesion: new Date().toLocaleString('sv-SE', {timeZone:'America/Bogota'}).replace(' ','T')
         }).eq('id', estudiante.id)
@@ -71,6 +83,9 @@ export default function Login({ onLogin }) {
 
       // No encontrado en ninguna tabla
       setError('Usuario no encontrado.')
+      setTimeout(() => {
+        window.location.href = 'https://miltonochoa-web.vercel.app'
+      }, 2000)
 
     } catch(e) {
       setError('Error de conexión. Intenta de nuevo.')
@@ -158,7 +173,9 @@ export default function Login({ onLogin }) {
             {error && (
               <div style={{ background: '#FEF2F2', border: '1px solid #FECACA',
                 borderRadius: 6, padding: '10px 14px', marginBottom: 16,
-                fontSize: 13, color: C.red, fontFamily: 'Inter' }}>{error}</div>
+                fontSize: 13, color: C.red, fontFamily: 'Inter' }}>
+                {error} Redirigiendo...
+              </div>
             )}
 
             <button type="submit" style={{ width: '100%', padding: '14px',
