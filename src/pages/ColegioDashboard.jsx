@@ -87,6 +87,393 @@ const Loading = () => (
   </div>
 )
 
+// ── PLANTEL: LISTADO DE ESTUDIANTES ──────────────────────────
+function PlantelEstudiantes({ colegioId }) {
+  const [estudiantes, setEstudiantes] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [filtroGrado, setFiltroGrado] = useState('Todos')
+  const [filtroSalon, setFiltroSalon] = useState('Todos')
+
+  useEffect(() => {
+    const load = async () => {
+      const { data } = await supabase.from('estudiantes')
+        .select('*').eq('colegio_id', colegioId).eq('activo', true)
+        .order('nombre')
+      setEstudiantes(data || [])
+      setLoading(false)
+    }
+    load()
+  }, [colegioId])
+
+  const grados = ['Todos', ...new Set(estudiantes.map(e => e.grado).filter(Boolean))]
+  const salones = ['Todos', ...new Set(
+    estudiantes.filter(e => filtroGrado === 'Todos' || e.grado === filtroGrado)
+      .map(e => e.salon).filter(Boolean)
+  )]
+
+  const filtered = estudiantes.filter(e => {
+    const matchSearch = e.nombre?.toLowerCase().includes(search.toLowerCase()) ||
+      e.usuario?.includes(search)
+    const matchGrado = filtroGrado === 'Todos' || e.grado === filtroGrado
+    const matchSalon = filtroSalon === 'Todos' || e.salon === filtroSalon
+    return matchSearch && matchGrado && matchSalon
+  })
+
+  const selStyle = {
+    padding:'8px 12px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+    fontFamily:'Inter', fontSize:12, color:C.text, background:C.bg,
+    outline:'none', cursor:'pointer',
+  }
+
+  return (
+    <Card>
+      <CardTitle sub={`${filtered.length} de ${estudiantes.length} estudiantes activos`}>
+        Listado de Estudiantes
+      </CardTitle>
+      {/* Filtros */}
+      <div style={{display:'flex', gap:10, marginBottom:20, flexWrap:'wrap'}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)}
+          placeholder="Buscar por nombre o documento..."
+          style={{...selStyle, flex:1, minWidth:200}}/>
+        <select value={filtroGrado} onChange={e=>{setFiltroGrado(e.target.value); setFiltroSalon('Todos')}}
+          style={selStyle}>
+          {grados.map(g => <option key={g} value={g}>{g==='Todos'?'Todos los grados':`Grado ${g}`}</option>)}
+        </select>
+        <select value={filtroSalon} onChange={e=>setFiltroSalon(e.target.value)} style={selStyle}>
+          {salones.map(s => <option key={s} value={s}>{s==='Todos'?'Todos los salones':`Salón ${s}`}</option>)}
+        </select>
+      </div>
+
+      {loading ? (
+        <div style={{textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter'}}>Cargando...</div>
+      ) : filtered.length === 0 ? (
+        <div style={{textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter'}}>
+          No se encontraron estudiantes.
+        </div>
+      ) : (
+        <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter'}}>
+          <thead>
+            <tr style={{borderBottom:`2px solid ${C.bg2}`}}>
+              {['#','Nombre','Documento','Grado','Salón','Usuario'].map(h => (
+                <th key={h} style={{textAlign:'left', padding:'8px 12px', fontSize:10,
+                  color:C.gray, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em'}}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((e,i) => (
+              <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`,
+                background:i%2===0?`${C.bg}80`:'transparent'}}>
+                <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{i+1}</td>
+                <td style={{padding:'10px 12px', fontSize:13, color:C.text, fontWeight:500}}>{e.nombre}</td>
+                <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{e.usuario}</td>
+                <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{e.grado||'—'}</td>
+                <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{e.salon||'—'}</td>
+                <td style={{padding:'10px 12px', fontSize:12, color:C.navy, fontWeight:500}}>{e.usuario}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </Card>
+  )
+}
+
+// ── PLANTEL: REPORTE DE RESULTADOS ───────────────────────────
+function PlantelResultados({ colegioId, pruebas }) {
+  const [estudiantes, setEstudiantes] = useState([])
+  const [resultados, setResultados] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [filtroPrueba, setFiltroPrueba] = useState('')
+  const [filtroGrado, setFiltroGrado] = useState('Todos')
+  const [filtroSalon, setFiltroSalon] = useState('Todos')
+
+  useEffect(() => {
+    const load = async () => {
+      const { data: est } = await supabase.from('estudiantes')
+        .select('*').eq('colegio_id', colegioId).eq('activo', true).order('nombre')
+      setEstudiantes(est || [])
+      setLoading(false)
+    }
+    load()
+  }, [colegioId])
+
+  useEffect(() => {
+    if (!filtroPrueba) return
+    const load = async () => {
+      const prueba = pruebas.find(p => p.id === filtroPrueba)
+      if (!prueba) return
+      const { data } = await supabase.from('resultados_estudiante')
+        .select('estudiante_id, puntaje_global')
+        .eq('colegio_id', colegioId).eq('prueba_id', filtroPrueba)
+      setResultados(data || [])
+    }
+    load()
+  }, [filtroPrueba])
+
+  const grados = ['Todos', ...new Set(estudiantes.map(e => e.grado).filter(Boolean))]
+  const salones = ['Todos', ...new Set(
+    estudiantes.filter(e => filtroGrado==='Todos' || e.grado===filtroGrado)
+      .map(e => e.salon).filter(Boolean)
+  )]
+
+  const filtered = estudiantes.filter(e => {
+    const matchGrado = filtroGrado==='Todos' || e.grado===filtroGrado
+    const matchSalon = filtroSalon==='Todos' || e.salon===filtroSalon
+    return matchGrado && matchSalon
+  })
+
+  const tieneResultado = (estId) => resultados.some(r => r.estudiante_id === estId)
+  const conResultados = filtered.filter(e => tieneResultado(e.id)).length
+  const sinResultados = filtered.length - conResultados
+
+  const selStyle = {
+    padding:'8px 12px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+    fontFamily:'Inter', fontSize:12, color:C.text, background:C.bg, outline:'none', cursor:'pointer',
+  }
+
+  return (
+    <div style={{display:'grid', gap:16}}>
+      <Card>
+        <CardTitle sub="Estudiantes con y sin resultados cargados">Reporte de Resultados</CardTitle>
+        {/* Filtros */}
+        <div style={{display:'flex', gap:10, marginBottom:20, flexWrap:'wrap'}}>
+          <select value={filtroPrueba} onChange={e=>setFiltroPrueba(e.target.value)} style={selStyle}>
+            <option value="">Seleccionar prueba...</option>
+            {pruebas.map(p => <option key={p.id} value={p.id}>{p.codigo} — {p.nombre}</option>)}
+          </select>
+          <select value={filtroGrado} onChange={e=>{setFiltroGrado(e.target.value); setFiltroSalon('Todos')}}
+            style={selStyle}>
+            {grados.map(g => <option key={g} value={g}>{g==='Todos'?'Todos los grados':`Grado ${g}`}</option>)}
+          </select>
+          <select value={filtroSalon} onChange={e=>setFiltroSalon(e.target.value)} style={selStyle}>
+            {salones.map(s => <option key={s} value={s}>{s==='Todos'?'Todos los salones':`Salón ${s}`}</option>)}
+          </select>
+        </div>
+
+        {/* KPIs resumen */}
+        {filtroPrueba && (
+          <div style={{display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:20}}>
+            {[
+              {label:'Total estudiantes', val:filtered.length, color:C.navy},
+              {label:'Con resultados', val:conResultados, color:C.green},
+              {label:'Sin resultados', val:sinResultados, color:sinResultados>0?C.amber:C.green},
+            ].map((k,i) => (
+              <div key={i} style={{background:C.bg, borderRadius:8, padding:'16px',
+                textAlign:'center', border:`1px solid ${C.grayLt}`}}>
+                <div style={{fontSize:10, color:C.gray, fontFamily:'Inter',
+                  textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6}}>{k.label}</div>
+                <div style={{fontSize:28, fontFamily:'Playfair Display, serif',
+                  color:k.color, fontWeight:700}}>{k.val}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {loading ? (
+          <div style={{textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter'}}>Cargando...</div>
+        ) : (
+          <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter'}}>
+            <thead>
+              <tr style={{borderBottom:`2px solid ${C.bg2}`}}>
+                {['#','Nombre','Grado','Salón','Estado','Puntaje'].map(h => (
+                  <th key={h} style={{textAlign:'left', padding:'8px 12px', fontSize:10,
+                    color:C.gray, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em'}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((e,i) => {
+                const res = resultados.find(r => r.estudiante_id === e.id)
+                return (
+                  <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`,
+                    background:i%2===0?`${C.bg}80`:'transparent'}}>
+                    <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{i+1}</td>
+                    <td style={{padding:'10px 12px', fontSize:13, color:C.text, fontWeight:500}}>{e.nombre}</td>
+                    <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{e.grado||'—'}</td>
+                    <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{e.salon||'—'}</td>
+                    <td style={{padding:'10px 12px'}}>
+                      {!filtroPrueba ? (
+                        <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Selecciona una prueba</span>
+                      ) : res ? (
+                        <Badge color={C.green}>Con resultados</Badge>
+                      ) : (
+                        <Badge color={C.amber}>Sin resultados</Badge>
+                      )}
+                    </td>
+                    <td style={{padding:'10px 12px', fontSize:14, fontWeight:700,
+                      color:C.navy, fontFamily:'Playfair Display, serif'}}>
+                      {res?.puntaje_global || '—'}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
+      </Card>
+    </div>
+  )
+}
+
+// ── PLANTEL: MENCIÓN DE HONOR ─────────────────────────────────
+function PlantelMencion({ colegioId, pruebas }) {
+  const [filtroPrueba, setFiltroPrueba] = useState('')
+  const [filtroGrado, setFiltroGrado] = useState('Todos')
+  const [filtroSalon, setFiltroSalon] = useState('Todos')
+  const [ganador, setGanador] = useState(null)
+  const [todosResultados, setTodosResultados] = useState([])
+  const [grados, setGrados] = useState(['Todos'])
+  const [salones, setSalones] = useState(['Todos'])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    const loadGrados = async () => {
+      const { data } = await supabase.from('estudiantes')
+        .select('grado, salon').eq('colegio_id', colegioId).eq('activo', true)
+      const g = ['Todos', ...new Set((data||[]).map(e=>e.grado).filter(Boolean))]
+      setGrados(g)
+    }
+    loadGrados()
+  }, [colegioId])
+
+  useEffect(() => {
+    const updateSalones = async () => {
+      const { data } = await supabase.from('estudiantes')
+        .select('salon, grado').eq('colegio_id', colegioId).eq('activo', true)
+      const filtered = (data||[]).filter(e => filtroGrado==='Todos' || e.grado===filtroGrado)
+      setSalones(['Todos', ...new Set(filtered.map(e=>e.salon).filter(Boolean))])
+      setFiltroSalon('Todos')
+    }
+    updateSalones()
+  }, [filtroGrado])
+
+  useEffect(() => {
+    if (!filtroPrueba) return
+    const load = async () => {
+      setLoading(true)
+      const { data } = await supabase.from('resultados_estudiante')
+        .select('*, estudiantes(nombre, grado, salon)')
+        .eq('colegio_id', colegioId).eq('prueba_id', filtroPrueba)
+        .order('puntaje_global', {ascending: false})
+      setTodosResultados(data || [])
+      setLoading(false)
+    }
+    load()
+  }, [filtroPrueba])
+
+  useEffect(() => {
+    if (!todosResultados.length) { setGanador(null); return }
+    const filtrados = todosResultados.filter(r => {
+      const g = filtroGrado==='Todos' || r.estudiantes?.grado===filtroGrado
+      const s = filtroSalon==='Todos' || r.estudiantes?.salon===filtroSalon
+      return g && s
+    })
+    setGanador(filtrados[0] || null)
+  }, [todosResultados, filtroGrado, filtroSalon])
+
+  const selStyle = {
+    padding:'8px 12px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+    fontFamily:'Inter', fontSize:12, color:C.text, background:C.bg, outline:'none', cursor:'pointer',
+  }
+
+  const areas = ganador ? [
+    {label:'Mat. Cuantitativa', val:ganador.mat_cuantitativo},
+    {label:'Mat. Específica',   val:ganador.mat_especifico},
+    {label:'Química',           val:ganador.cn_quimica},
+    {label:'Física',            val:ganador.cn_fisica},
+    {label:'Biología',          val:ganador.cn_biologia},
+    {label:'CTS',               val:ganador.cn_cts},
+    {label:'Sociales',          val:ganador.sociales},
+    {label:'Lect. Crítica',     val:ganador.lectura_critica},
+    {label:'Inglés',            val:ganador.ingles},
+  ].filter(a => a.val) : []
+
+  return (
+    <Card>
+      <CardTitle sub="Estudiante con mejor puntaje según los filtros aplicados">
+        🏅 Mención de Honor
+      </CardTitle>
+
+      {/* Filtros */}
+      <div style={{display:'flex', gap:10, marginBottom:24, flexWrap:'wrap'}}>
+        <select value={filtroPrueba} onChange={e=>setFiltroPrueba(e.target.value)} style={selStyle}>
+          <option value="">Seleccionar prueba...</option>
+          {pruebas.map(p => <option key={p.id} value={p.id}>{p.codigo} — {p.nombre}</option>)}
+        </select>
+        <select value={filtroGrado} onChange={e=>setFiltroGrado(e.target.value)} style={selStyle}>
+          {grados.map(g => <option key={g} value={g}>{g==='Todos'?'Todos los grados':`Grado ${g}`}</option>)}
+        </select>
+        <select value={filtroSalon} onChange={e=>setFiltroSalon(e.target.value)} style={selStyle}>
+          {salones.map(s => <option key={s} value={s}>{s==='Todos'?'Todos los salones':`Salón ${s}`}</option>)}
+        </select>
+      </div>
+
+      {!filtroPrueba ? (
+        <div style={{textAlign:'center', padding:60, color:C.gray, fontFamily:'Inter'}}>
+          <div style={{fontSize:40, marginBottom:12}}>🏅</div>
+          <div style={{fontFamily:'Playfair Display, serif', fontSize:18, color:C.navy, marginBottom:8}}>
+            Selecciona una prueba
+          </div>
+          <div style={{fontSize:13}}>para ver el estudiante con mejor desempeño.</div>
+        </div>
+      ) : loading ? (
+        <div style={{textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter'}}>Cargando...</div>
+      ) : !ganador ? (
+        <div style={{textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter'}}>
+          No hay resultados para los filtros seleccionados.
+        </div>
+      ) : (
+        <div>
+          {/* Tarjeta del ganador */}
+          <div style={{background:`linear-gradient(135deg, ${C.navy} 0%, #1A3560 100%)`,
+            borderRadius:16, padding:40, textAlign:'center', marginBottom:24,
+            position:'relative', overflow:'hidden'}}>
+            <div style={{position:'absolute', top:-20, right:-20, fontSize:120, opacity:0.05}}>🏅</div>
+            <div style={{fontSize:48, marginBottom:12}}>🏅</div>
+            <div style={{fontSize:11, color:'rgba(255,255,255,0.5)', fontFamily:'Inter',
+              letterSpacing:'0.15em', textTransform:'uppercase', marginBottom:8}}>
+              Mención de Honor
+            </div>
+            <div style={{fontSize:28, fontFamily:'Playfair Display, serif', color:'#FFFFFF',
+              fontWeight:400, marginBottom:4}}>{ganador.estudiantes?.nombre}</div>
+            <div style={{fontSize:13, color:'rgba(255,255,255,0.5)', fontFamily:'Inter', marginBottom:24}}>
+              Grado {ganador.estudiantes?.grado} · Salón {ganador.estudiantes?.salon}
+            </div>
+            <div style={{display:'inline-block', background:'rgba(255,255,255,0.1)',
+              borderRadius:12, padding:'16px 40px'}}>
+              <div style={{fontSize:11, color:'rgba(255,255,255,0.5)', fontFamily:'Inter',
+                letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:4}}>Puntaje Global</div>
+              <div style={{fontSize:52, fontFamily:'Playfair Display, serif',
+                color:C.greenLt, fontWeight:700, lineHeight:1}}>{ganador.puntaje_global}</div>
+              <div style={{fontSize:11, color:'rgba(255,255,255,0.4)', fontFamily:'Inter',
+                marginTop:4}}>de 500 puntos</div>
+            </div>
+          </div>
+
+          {/* Desglose por áreas */}
+          <div style={{display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10}}>
+            {areas.map((a,i) => (
+              <div key={i} style={{background:C.bg, borderRadius:8, padding:'14px 16px',
+                border:`1px solid ${C.grayLt}`}}>
+                <div style={{fontSize:10, color:C.gray, fontFamily:'Inter',
+                  textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4}}>{a.label}</div>
+                <div style={{fontSize:22, fontFamily:'Playfair Display, serif',
+                  color:semaforoColor(a.val), fontWeight:700}}>{a.val?.toFixed(1)}%</div>
+                <div style={{height:4, background:C.bg2, borderRadius:2, marginTop:6, overflow:'hidden'}}>
+                  <div style={{height:'100%', width:`${a.val}%`, borderRadius:2,
+                    background:semaforoColor(a.val)}}/>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Card>
+  )
+}
+
 // ── MAIN DASHBOARD ───────────────────────────────────────────
 export default function ColegioDashboard({session, onLogout}) {
   const [tab, setTab] = useState('carta')
@@ -919,18 +1306,45 @@ export default function ColegioDashboard({session, onLogout}) {
             </div>
           </Card>
         )}
-        {/* ══ SECCIONES PLANTEL ════════════════════════════════ */}
-        {['carta','estudiantes','mencion','acompanamiento'].includes(tab) && (
+        {/* ══ CARTA DE BIENVENIDA ══════════════════════════════ */}
+        {tab==='carta' && (
           <Card>
             <div style={{textAlign:'center', padding:60, display:'flex', flexDirection:'column',
               alignItems:'center', gap:16}}>
-              <div style={{fontSize:48}}>
-                {tab==='carta'?'✉️':tab==='estudiantes'?'👥':tab==='mencion'?'🏅':'🤝'}
-              </div>
+              <div style={{fontSize:48}}>✉️</div>
               <div style={{fontFamily:'Playfair Display, serif', fontSize:22, color:C.navy}}>
-                {tab==='carta'?'Carta de Bienvenida':
-                 tab==='estudiantes'?'Listado de Estudiantes':
-                 tab==='mencion'?'Mención de Honor':'Acompañamiento'}
+                Carta de Bienvenida
+              </div>
+              <div style={{fontFamily:'Inter', fontSize:13, color:C.gray, maxWidth:360}}>
+                Esta sección estará disponible próximamente.
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* ══ LISTADO DE ESTUDIANTES ═══════════════════════════ */}
+        {tab==='estudiantes' && (
+          <PlantelEstudiantes colegioId={session?.id} />
+        )}
+
+        {/* ══ REPORTE DE RESULTADOS ════════════════════════════ */}
+        {tab==='resultados' && (
+          <PlantelResultados colegioId={session?.id} pruebas={allPruebas} />
+        )}
+
+        {/* ══ MENCIÓN DE HONOR ═════════════════════════════════ */}
+        {tab==='mencion' && (
+          <PlantelMencion colegioId={session?.id} pruebas={allPruebas} />
+        )}
+
+        {/* ══ ACOMPAÑAMIENTO ═══════════════════════════════════ */}
+        {tab==='acompanamiento' && (
+          <Card>
+            <div style={{textAlign:'center', padding:60, display:'flex', flexDirection:'column',
+              alignItems:'center', gap:16}}>
+              <div style={{fontSize:48}}>🤝</div>
+              <div style={{fontFamily:'Playfair Display, serif', fontSize:22, color:C.navy}}>
+                Acompañamiento
               </div>
               <div style={{fontFamily:'Inter', fontSize:13, color:C.gray, maxWidth:360}}>
                 Esta sección estará disponible próximamente.
