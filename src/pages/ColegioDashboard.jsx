@@ -89,8 +89,8 @@ const Loading = () => (
 
 // ── MAIN DASHBOARD ───────────────────────────────────────────
 export default function ColegioDashboard({session, onLogout}) {
-  const [tab, setTab] = useState('tablero')
-  const [menuSection, setMenuSection] = useState('herramientas')
+  const [tab, setTab] = useState('carta')
+  const [menuSection, setMenuSection] = useState('plantel')
   const [loading, setLoading] = useState(true)
   const [prueba, setPrueba] = useState(null)
 
