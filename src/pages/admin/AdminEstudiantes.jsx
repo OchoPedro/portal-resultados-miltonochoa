@@ -66,14 +66,23 @@ export default function AdminEstudiantes({ onUpdate }) {
           salon:     String(r[3]||'').trim(),
         }))
 
-        // Buscar colegio por código
+        // Buscar colegio por usuario (ej: ANME0001) o por código numérico
         let colegio = null
         let error = null
         if (codigoColegio) {
-          const { data } = await supabase.from('colegios')
-            .select('id, nombre, municipio').eq('codigo', parseInt(codigoColegio)).single()
-          if (data) colegio = data
-          else error = `Colegio con código ${codigoColegio} no encontrado`
+          const codigoStr = String(codigoColegio).trim()
+          // Intentar por usuario primero
+          const { data: porUsuario } = await supabase.from('colegios')
+            .select('id, nombre, municipio').eq('usuario', codigoStr).single()
+          if (porUsuario) {
+            colegio = porUsuario
+          } else {
+            // Intentar por código numérico
+            const { data: porCodigo } = await supabase.from('colegios')
+              .select('id, nombre, municipio').eq('codigo', parseInt(codigoStr)).single()
+            if (porCodigo) colegio = porCodigo
+            else error = `Colegio con código "${codigoStr}" no encontrado`
+          }
         } else {
           error = 'No se encontró código de colegio en la celda B1'
         }
@@ -106,7 +115,6 @@ export default function AdminEstudiantes({ onUpdate }) {
         const { usuario, password } = generateCredentials(est.nombre, est.documento)
         const { error } = await supabase.from('estudiantes').insert({
           colegio_id:    archivo.colegio.id,
-          codigo:        parseInt(est.documento) || 0,
           nombre:        est.nombre,
           grado:         est.grado,
           salon:         est.salon,
@@ -133,12 +141,12 @@ export default function AdminEstudiantes({ onUpdate }) {
   const downloadPlantilla = () => {
     const wb = XLSX.utils.book_new()
     const ws = XLSX.utils.aoa_to_sheet([
-      ['Código Colegio', 7001, '← Reemplaza con el código real', ''],
+      ['Usuario Colegio', 'ANME0001', '← Reemplaza con el usuario real del colegio', ''],
       ['Nombre Completo', 'Número de Documento', 'Grado', 'Salón'],
       ['Juan Pablo García López', '1098765432', '11', '1'],
       ['Ana Sofía Martínez Ruiz', '1087654321', '11', '2'],
     ])
-    ws['!cols'] = [{wch:38},{wch:22},{wch:10},{wch:10}]
+    ws['!cols'] = [{wch:20},{wch:22},{wch:38},{wch:10}]
     XLSX.utils.book_append_sheet(wb, ws, 'Estudiantes')
     XLSX.writeFile(wb, 'plantilla_estudiantes.xlsx')
   }
