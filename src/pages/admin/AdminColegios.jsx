@@ -456,6 +456,8 @@ export default function AdminColegios({ onUpdate }) {
     await supabase.from('colegios').update({ activo: !colegio.activo }).eq('id', colegio.id)
     loadColegios()
   }
+
+  const filtered = colegios.filter(c =>
     c.nombre?.toLowerCase().includes(search.toLowerCase()) ||
     c.municipio?.toLowerCase().includes(search.toLowerCase())
   )
