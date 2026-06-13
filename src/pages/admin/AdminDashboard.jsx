@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import AdminColegios from './AdminColegios'
+import AdminEstudiantes from './AdminEstudiantes'
 import AdminPruebas from './AdminPruebas'
 import AdminAdmins from './AdminAdmins'
 
@@ -12,9 +13,10 @@ const C = {
 }
 
 const MENU = [
-  { id:'colegios',  label:'Colegios',   icon:'🏫', desc:'Gestión de instituciones' },
-  { id:'pruebas',   label:'Pruebas',    icon:'📋', desc:'Tipos y referencias' },
-  { id:'admins',    label:'Administradores', icon:'👤', desc:'Usuarios admin' },
+  { id:'colegios',     label:'Colegios',        icon:'🏫', desc:'Gestión de instituciones' },
+  { id:'estudiantes',  label:'Estudiantes',      icon:'👥', desc:'Carga masiva de estudiantes' },
+  { id:'pruebas',      label:'Pruebas',          icon:'📋', desc:'Tipos y referencias' },
+  { id:'admins',       label:'Administradores',  icon:'👤', desc:'Usuarios admin' },
 ]
 
 export default function AdminDashboard({ session, onLogout }) {
@@ -128,9 +130,10 @@ export default function AdminDashboard({ session, onLogout }) {
         </div>
 
         {/* Contenido */}
-        {section==='colegios'  && <AdminColegios onUpdate={loadStats} />}
-        {section==='pruebas'   && <AdminPruebas onUpdate={loadStats} />}
-        {section==='admins'    && <AdminAdmins session={session} onUpdate={loadStats} />}
+        {section==='colegios'    && <AdminColegios    onUpdate={loadStats} />}
+        {section==='estudiantes' && <AdminEstudiantes onUpdate={loadStats} />}
+        {section==='pruebas'     && <AdminPruebas     onUpdate={loadStats} />}
+        {section==='admins'      && <AdminAdmins      session={session}    onUpdate={loadStats} />}
       </main>
     </div>
   )
