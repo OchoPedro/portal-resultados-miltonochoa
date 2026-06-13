@@ -321,28 +321,30 @@ export default function AdminEstudiantes({ onUpdate }) {
             textTransform:'uppercase', marginBottom:16, paddingBottom:10,
             borderBottom:`1px solid ${C.bg2}` }}>Resultado de la Importación</div>
           {resultados.map((r, i) => (
-            <div key={i} style={{ display:'flex', justifyContent:'space-between',
-              alignItems:'center', padding:'14px 0',
-              borderBottom: i < resultados.length-1 ? `1px solid ${C.bg2}` : 'none' }}>
-              <div>
-                <div style={{ fontSize:13, color:C.text, fontWeight:600,
-                  fontFamily:'Inter' }}>{r.colegio}</div>
-                <div style={{ fontSize:11, color:C.gray, fontFamily:'Inter',
-                  marginTop:2 }}>{r.archivo}</div>
+            <div key={i}>
+              <div style={{ display:'flex', justifyContent:'space-between',
+                alignItems:'center', padding:'14px 0',
+                borderBottom: i < resultados.length-1 && !r.errores?.length ? `1px solid ${C.bg2}` : 'none' }}>
+                <div>
+                  <div style={{ fontSize:13, color:C.text, fontWeight:600,
+                    fontFamily:'Inter' }}>{r.colegio}</div>
+                  <div style={{ fontSize:11, color:C.gray, fontFamily:'Inter',
+                    marginTop:2 }}>{r.archivo}</div>
+                </div>
+                <div style={{ display:'flex', gap:10 }}>
+                  <Badge color={C.green}>{r.creados} creados</Badge>
+                  {r.omitidos > 0 && <Badge color={C.amber}>{r.omitidos} omitidos</Badge>}
+                </div>
               </div>
-              <div style={{ display:'flex', gap:10 }}>
-                <Badge color={C.green}>{r.creados} creados</Badge>
-                {r.omitidos > 0 && <Badge color={C.amber}>{r.omitidos} omitidos</Badge>}
-              </div>
+              {r.errores?.length > 0 && (
+                <div style={{ marginBottom:8, padding:'8px 12px', background:'#FEF2F2',
+                  border:'1px solid #FECACA', borderRadius:6, fontSize:11,
+                  color:C.red, fontFamily:'Inter' }}>
+                  {r.errores.slice(0,3).map((e,j) => <div key={j}>⚠️ {e}</div>)}
+                  {r.errores.length > 3 && <div>...y {r.errores.length-3} más</div>}
+                </div>
+              )}
             </div>
-            {r.errores?.length > 0 && (
-              <div style={{ marginTop:8, padding:'8px 12px', background:'#FEF2F2',
-                border:'1px solid #FECACA', borderRadius:6, fontSize:11,
-                color:C.red, fontFamily:'Inter' }}>
-                {r.errores.slice(0,3).map((e,i) => <div key={i}>⚠️ {e}</div>)}
-                {r.errores.length > 3 && <div>...y {r.errores.length-3} más</div>}
-              </div>
-            )}
           ))}
           <div style={{ marginTop:16, padding:'12px 16px', background:'#F0FFF4',
             border:'1px solid #BBF7D0', borderRadius:8, fontFamily:'Inter',
