@@ -90,6 +90,7 @@ const Loading = () => (
 // ── MAIN DASHBOARD ───────────────────────────────────────────
 export default function ColegioDashboard({session, onLogout}) {
   const [tab, setTab] = useState('tablero')
+  const [menuSection, setMenuSection] = useState('herramientas')
   const [loading, setLoading] = useState(true)
   const [prueba, setPrueba] = useState(null)
 
@@ -390,20 +391,71 @@ export default function ColegioDashboard({session, onLogout}) {
 
           <div style={{height:1, background:'rgba(255,255,255,0.08)', margin:'16px 0'}}/>
 
-          {/* Menú de reportes */}
-          <div style={{fontSize:9, color:'rgba(255,255,255,0.35)', fontFamily:'Inter',
-            letterSpacing:'0.15em', textTransform:'uppercase', marginBottom:8, paddingLeft:4}}>
-            Reportes
-          </div>
-          {tabs.map(t => (
-            <button key={t.id} onClick={()=>setTab(t.id)} style={{
-              width:'100%', textAlign:'left', padding:'9px 12px', borderRadius:8,
-              border:'none', cursor:'pointer', marginBottom:2, fontFamily:'Inter', fontSize:11,
-              background: tab===t.id?'rgba(255,255,255,0.1)':'transparent',
-              color: tab===t.id?C.white:'rgba(255,255,255,0.55)',
-              borderLeft: tab===t.id?`3px solid ${C.green}`:'3px solid transparent',
-              transition:'all 0.2s',
-            }}>{t.label}</button>
+          {/* Menú jerárquico */}
+          {[
+            {
+              id: 'plantel', label: 'Plantel', icon: '🏫',
+              items: [
+                {id:'carta',      label:'Carta de Bienvenida'},
+                {id:'estudiantes',label:'Listado de Estudiantes'},
+                {id:'resultados', label:'Reporte de Resultados'},
+                {id:'mencion',    label:'Mención de Honor'},
+                {id:'acompanamiento', label:'Acompañamiento'},
+              ]
+            },
+            {
+              id: 'herramientas', label: 'Herramientas', icon: '🛠️',
+              items: [
+                {id:'tablero',      label:'Tablero de Gestión'},
+                {id:'areas',        label:'Análisis por Áreas'},
+                {id:'niveles',      label:'% por Nivel'},
+                {id:'desviacion',   label:'Desviación'},
+                {id:'competencias', label:'Competencias'},
+                {id:'mejora',       label:'Oportunidades'},
+                {id:'ranking',      label:'Ranking'},
+              ]
+            },
+            {
+              id: 'consultoria', label: 'Consultoría', icon: '💡',
+              items: [
+                {id:'recomendaciones', label:'Recomendaciones'},
+                {id:'portafolio',      label:'Portafolio'},
+                {id:'valor',           label:'Valor Agregado'},
+              ]
+            },
+          ].map(section => (
+            <div key={section.id} style={{marginBottom:4}}>
+              {/* Sección header */}
+              <button onClick={() => setMenuSection(menuSection === section.id ? null : section.id)}
+                style={{
+                  width:'100%', textAlign:'left', padding:'9px 12px', borderRadius:8,
+                  border:'none', cursor:'pointer', marginBottom:2, fontFamily:'Inter', fontSize:12,
+                  background: menuSection===section.id ? 'rgba(255,255,255,0.12)' : 'transparent',
+                  color: menuSection===section.id ? C.white : 'rgba(255,255,255,0.7)',
+                  display:'flex', alignItems:'center', gap:8, fontWeight:600,
+                  transition:'all 0.2s',
+                }}>
+                <span>{section.icon}</span>
+                <span style={{flex:1}}>{section.label}</span>
+                <span style={{fontSize:10, opacity:0.5}}>{menuSection===section.id ? '▲' : '▼'}</span>
+              </button>
+
+              {/* Sub-items */}
+              {menuSection === section.id && (
+                <div style={{paddingLeft:8}}>
+                  {section.items.map(item => (
+                    <button key={item.id} onClick={() => setTab(item.id)} style={{
+                      width:'100%', textAlign:'left', padding:'7px 12px', borderRadius:6,
+                      border:'none', cursor:'pointer', marginBottom:1, fontFamily:'Inter', fontSize:11,
+                      background: tab===item.id ? 'rgba(255,255,255,0.1)' : 'transparent',
+                      color: tab===item.id ? C.white : 'rgba(255,255,255,0.5)',
+                      borderLeft: tab===item.id ? `3px solid ${C.green}` : '3px solid transparent',
+                      transition:'all 0.2s',
+                    }}>{item.label}</button>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
         </div>
         <div style={{padding:'16px 20px', borderTop:'1px solid rgba(255,255,255,0.08)'}}>
@@ -861,6 +913,45 @@ export default function ColegioDashboard({session, onLogout}) {
             </div>
           </Card>
         )}
+        {/* ══ SECCIONES PLANTEL ════════════════════════════════ */}
+        {['carta','estudiantes','mencion','acompanamiento'].includes(tab) && (
+          <Card>
+            <div style={{textAlign:'center', padding:60, display:'flex', flexDirection:'column',
+              alignItems:'center', gap:16}}>
+              <div style={{fontSize:48}}>
+                {tab==='carta'?'✉️':tab==='estudiantes'?'👥':tab==='mencion'?'🏅':'🤝'}
+              </div>
+              <div style={{fontFamily:'Playfair Display, serif', fontSize:22, color:C.navy}}>
+                {tab==='carta'?'Carta de Bienvenida':
+                 tab==='estudiantes'?'Listado de Estudiantes':
+                 tab==='mencion'?'Mención de Honor':'Acompañamiento'}
+              </div>
+              <div style={{fontFamily:'Inter', fontSize:13, color:C.gray, maxWidth:360}}>
+                Esta sección estará disponible próximamente.
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* ══ SECCIONES CONSULTORÍA ════════════════════════════ */}
+        {['recomendaciones','portafolio','valor'].includes(tab) && (
+          <Card>
+            <div style={{textAlign:'center', padding:60, display:'flex', flexDirection:'column',
+              alignItems:'center', gap:16}}>
+              <div style={{fontSize:48}}>
+                {tab==='recomendaciones'?'📌':tab==='portafolio'?'📁':'⭐'}
+              </div>
+              <div style={{fontFamily:'Playfair Display, serif', fontSize:22, color:C.navy}}>
+                {tab==='recomendaciones'?'Recomendaciones':
+                 tab==='portafolio'?'Portafolio':'Valor Agregado'}
+              </div>
+              <div style={{fontFamily:'Inter', fontSize:13, color:C.gray, maxWidth:360}}>
+                Esta sección estará disponible próximamente.
+              </div>
+            </div>
+          </Card>
+        )}
+
       </main>
     </div>
   )
