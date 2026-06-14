@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { C } from '../../components/ui'
+import ReportePlantel from './ReportePlantel'
 
 const ANIOS = [2026, 2025, 2024, 2023, 2022, 2021, 2020]
 const POR_PAGINA = 100
@@ -84,6 +85,7 @@ export default function AdminRanking() {
   const [filtroNat, setFiltroNat]       = useState('')
   const [filtroJorn, setFiltroJorn]     = useState('')
   const [filtroCalend, setFiltroCalend] = useState('')
+  const [reporte, setReporte] = useState(null) // { codigo, nombre }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -225,16 +227,23 @@ export default function AdminRanking() {
                       const p   = r.puesto_anio
                       const med = medalla(p)
                       return (
-                        <tr key={r.id} style={{
-                          background: i % 2 === 0 ? rowBg(p) : rowBg(p) || `${C.bg}60`,
-                          borderBottom:`1px solid ${C.bg2}`,
-                        }}>
+                        <tr key={r.id}
+                          onClick={() => setReporte({ codigo: r.codigo, nombre: r.nombre })}
+                          style={{
+                            background: i % 2 === 0 ? rowBg(p) : rowBg(p) || `${C.bg}60`,
+                            borderBottom:`1px solid ${C.bg2}`,
+                            cursor: 'pointer',
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.green + '15'}
+                          onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? rowBg(p) : rowBg(p) || `${C.bg}60`}
+                        >
                           <Td style={{ fontWeight:700, color:C.navy, textAlign:'center' }}>
                             {med ? <span style={{ marginRight:2 }}>{med}</span> : null}
                             {p}
                           </Td>
-                          <Td style={{ fontWeight:600, color:C.text, maxWidth:260,
-                            whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                          <Td style={{ fontWeight:600, color:C.navy, maxWidth:260,
+                            whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis',
+                            textDecoration:'underline', textDecorationColor: C.green + '80' }}>
                             {r.nombre}
                           </Td>
                           <Td style={{ color:C.gray, whiteSpace:'nowrap' }}>
@@ -309,6 +318,14 @@ export default function AdminRanking() {
             </div>
           )}
         </>
+      )}
+
+      {reporte && (
+        <ReportePlantel
+          codigo={reporte.codigo}
+          nombre={reporte.nombre}
+          onClose={() => setReporte(null)}
+        />
       )}
     </div>
   )
