@@ -255,8 +255,8 @@ export default function AdminResultados({ onUpdate }) {
   useEffect(() => {
     if (metodo === 'manual' && colegioId) {
       supabase.from('estudiantes')
-        .select('grado, estado')
-        .eq('colegio_id', colegioId)
+        .select('grado')
+        .eq('colegio_id', colegioId).eq('activo', true)
         .then(({ data, error }) => {
           console.log('Estudiantes raw:', data, 'error:', error)
           const grados = [...new Set((data||[]).map(e => e.grado).filter(Boolean))].sort()
@@ -666,7 +666,7 @@ export default function AdminResultados({ onUpdate }) {
                 if (e.target.value && colegioId) {
                   const { data } = await supabase.from('estudiantes')
                     .select('id,nombre,usuario').eq('colegio_id', colegioId)
-                    .eq('grado', e.target.value).eq('estado', 'Activo').order('nombre')
+                    .eq('grado', e.target.value).eq('activo', true).order('nombre')
                   setEstDisp(data || [])
                 }
               }} disabled={!colegioId || gradosDisp.length === 0}>
