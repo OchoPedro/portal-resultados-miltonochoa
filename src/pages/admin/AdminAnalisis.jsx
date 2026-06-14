@@ -151,14 +151,18 @@ function AnalisisPruebas({ colegios, pruebas }) {
   const [publicando,         setPublicando]         = useState(false)
   const [msg,                setMsg]                = useState('')
 
+  // ciudad se guarda como "Municipio, DEPARTAMENTO" — usarlo como fallback
+  const getDepto = (c) => c.departamento_nombre || (c.ciudad ? c.ciudad.split(', ').slice(1).join(', ') : '')
+  const getMuni  = (c) => c.municipio || (c.ciudad ? c.ciudad.split(', ')[0] : '')
+
   // Deptos y municipios derivados del listado ya cargado
-  const deptos = [...new Set(colegios.map(c => c.departamento_nombre).filter(Boolean))].sort()
+  const deptos = [...new Set(colegios.map(getDepto).filter(Boolean))].sort()
   const munisDisp = selectedDepto
-    ? [...new Set(colegios.filter(c => c.departamento_nombre === selectedDepto).map(c => c.municipio).filter(Boolean))].sort()
+    ? [...new Set(colegios.filter(c => getDepto(c) === selectedDepto).map(getMuni).filter(Boolean))].sort()
     : []
   const colegiosFiltrados = colegios.filter(c => {
-    if (selectedMuni)  return c.municipio === selectedMuni
-    if (selectedDepto) return c.departamento_nombre === selectedDepto
+    if (selectedMuni)  return getMuni(c) === selectedMuni
+    if (selectedDepto) return getDepto(c) === selectedDepto
     return true
   })
 
@@ -1060,7 +1064,7 @@ export default function AdminAnalisis() {
 
   const loadData = async () => {
     const [{ data: cols }, { data: prbs }] = await Promise.all([
-      supabase.from('colegios').select('id, nombre, usuario, departamento_nombre, municipio').eq('activo', true).order('nombre'),
+      supabase.from('colegios').select('id, nombre, usuario, departamento_nombre, municipio, ciudad').eq('activo', true).order('nombre'),
       supabase.from('pruebas').select('id, codigo, nombre, tipo').eq('activa', true).order('nombre'),
     ])
     setColegios(cols || [])
