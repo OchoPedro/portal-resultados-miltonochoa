@@ -240,9 +240,13 @@ export default function AdminResultados({ onUpdate }) {
   const [confirmar, setConfirmar]     = useState(false)
   const [resultado, setResultado]     = useState(null)
   const [error, setError]             = useState('')
-  const [manualDoc, setManualDoc]     = useState('')
-  const [manualResp, setManualResp]   = useState('')
-  const [manualPrev, setManualPrev]   = useState('')
+  const [manualDoc, setManualDoc]         = useState('')
+  const [manualResp, setManualResp]       = useState('')
+  const [manualPrev, setManualPrev]       = useState('')
+  const [manualGrado, setManualGrado]     = useState('')
+  const [manualEstId, setManualEstId]     = useState('')
+  const [gradosDisp, setGradosDisp]       = useState([])
+  const [estudiantesDisp, setEstDisp]     = useState([])
   const cancelarRef                   = { value: false }
 
   useEffect(() => { cargarDatos() }, [])
@@ -260,12 +264,12 @@ export default function AdminResultados({ onUpdate }) {
   function reset() {
     setMetodo(null); setArchivo(null); setArchivos([]); setPreview(null); setResultado(null)
     setError(''); setColegioId(''); setPruebaId(''); setProgreso({ actual:0, total:0, msg:'' })
-    setManualDoc(''); setManualResp(''); setManualPrev(''); cancelarRef.value = false
+    setManualDoc(''); setManualResp(''); setManualPrev(''); setManualGrado(''); setManualEstId(''); setGradosDisp([]); setEstDisp([]); cancelarRef.value = false
   }
   function resetForm() {
     setArchivo(null); setArchivos([]); setPreview(null); setResultado(null)
     setError(''); setConfirmar(false); setProgreso({ actual:0, total:0, msg:'' })
-    setManualDoc(''); setManualResp(''); setManualPrev('')
+    setManualDoc(''); setManualResp(''); setManualPrev(''); setManualGrado(''); setManualEstId(''); setGradosDisp([]); setEstDisp([])
   }
 
   function getClave() {
@@ -410,7 +414,7 @@ export default function AdminResultados({ onUpdate }) {
   const metodoActivo = METODOS.find(m => m.id === metodo)
   const pruebaActiva = pruebas.find(p => p.id === pruebaId)
   const listo = colegioId && pruebaId && (
-    metodo === 'manual' ? manualDoc && manualResp :
+    metodo === 'manual' ? manualEstId && manualResp :
     metodo === 'fotos'  ? archivos.length > 0 : archivo
   )
   const pctProg = progreso.total > 0 ? Math.round((progreso.actual / progreso.total) * 100) : 0
@@ -562,7 +566,15 @@ export default function AdminResultados({ onUpdate }) {
         {/* Colegio */}
         <div style={{ marginBottom:18 }}>
           <Label>Colegio</Label>
-          <select style={selectStyle} value={colegioId} onChange={e => { setColegioId(e.target.value); resetForm() }} disabled={cargando}>
+          <select style={selectStyle} value={colegioId} onChange={async e => {
+            setColegioId(e.target.value); resetForm()
+            if (e.target.value && metodo === 'manual') {
+              const { data } = await supabase.from('estudiantes')
+                .select('grado').eq('colegio_id', e.target.value).eq('estado', 'activo')
+              const grados = [...new Set((data||[]).map(e => e.grado).filter(Boolean))].sort()
+              setGradosDisp(grados)
+            }
+          }} disabled={cargando}>
             <option value="">{cargando?'Cargando…':'Selecciona un colegio'}</option>
             {colegios.map(c => <option key={c.id} value={c.id}>{c.nombre}{c.usuario?` (${c.usuario})`:''}</option>)}
           </select>
@@ -633,10 +645,40 @@ export default function AdminResultados({ onUpdate }) {
         {metodo === 'manual' && (
           <div>
             <div style={{ marginBottom:18 }}>
-              <Label>Número de documento del estudiante</Label>
-              <input type="text" value={manualDoc} onChange={e => { setManualDoc(e.target.value); setPreview(null); setError('') }}
-                placeholder="Ej: 1098765432" style={{ ...selectStyle, padding:'11px 13px' }} />
+              <Label>Grado</Label>
+              <select style={selectStyle} value={manualGrado} onChange={async e => {
+                setManualGrado(e.target.value); setManualEstId(''); setManualDoc(''); setEstDisp([])
+                if (e.target.value && colegioId) {
+                  const { data } = await supabase.from('estudiantes')
+                    .select('id,nombre,usuario').eq('colegio_id', colegioId)
+                    .eq('grado', e.target.value).eq('estado', 'activo').order('nombre')
+                  setEstDisp(data || [])
+                }
+              }} disabled={!colegioId || gradosDisp.length === 0}>
+                <option value="">{!colegioId ? 'Selecciona un colegio primero' : gradosDisp.length === 0 ? 'Cargando grados…' : 'Selecciona el grado'}</option>
+                {gradosDisp.map(g => <option key={g} value={g}>Grado {g}</option>)}
+              </select>
             </div>
+
+            <div style={{ marginBottom:18 }}>
+              <Label>Estudiante</Label>
+              <select style={selectStyle} value={manualEstId} onChange={e => {
+                const est = estudiantesDisp.find(es => es.id === e.target.value)
+                setManualEstId(e.target.value)
+                setManualDoc(est?.usuario || '')
+              }} disabled={!manualGrado || estudiantesDisp.length === 0}>
+                <option value="">{!manualGrado ? 'Selecciona el grado primero' : estudiantesDisp.length === 0 ? 'Cargando estudiantes…' : 'Selecciona el estudiante'}</option>
+                {estudiantesDisp.map(est => (
+                  <option key={est.id} value={est.id}>{est.nombre} — {est.usuario}</option>
+                ))}
+              </select>
+              {manualDoc && (
+                <div style={{ fontSize:12, color:C.green, marginTop:5, fontWeight:600 }}>
+                  ✓ Usuario seleccionado: {manualDoc}
+                </div>
+              )}
+            </div>
+
             <div style={{ marginBottom:18 }}>
               <Label>Respuestas</Label>
               <div style={{ fontSize:12, color:C.gray, marginBottom:8, lineHeight:1.6 }}>
