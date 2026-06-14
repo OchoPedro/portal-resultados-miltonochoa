@@ -51,10 +51,9 @@ export default function AdminDashboard({ session, onLogout }) {
 
         {/* Header con logo */}
         <div style={{ padding:'20px 16px 16px', borderBottom:'1px solid rgba(255,255,255,0.08)' }}>
-          <div style={{ background:C.white, borderRadius:10, padding:'10px 12px',
-            display:'flex', alignItems:'center', justifyContent:'center', marginBottom:10 }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', marginBottom:10 }}>
             <img src="/logo-milton-ochoa.png" alt="Milton Ochoa"
-              style={{ width:'100%', maxWidth:172, height:'auto', display:'block' }} />
+              style={{ width:'100%', maxWidth:180, height:'auto', display:'block' }} />
           </div>
           <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', fontFamily:'Inter',
             letterSpacing:'0.12em', textTransform:'uppercase', textAlign:'center' }}>Panel Administrador</div>
