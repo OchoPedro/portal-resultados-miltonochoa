@@ -96,8 +96,34 @@ function ExcelUploader({ onParsed, parsed }) {
       try {
         const wb = XLSX.read(evt.target.result, { type: 'binary' })
         const ws = wb.Sheets[wb.SheetNames[0]]
-        const data = XLSX.utils.sheet_to_json(ws, { header: 1 })
-        onParsed({ raw: data, rows: data.length, cols: data[0]?.length || 0, fileName: file.name })
+        // Leer todas las filas como array de arrays
+        const allRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+
+        // Detectar fila de headers: buscar la fila con más celdas no vacías
+        let headerRowIndex = 0
+        let maxFilled = 0
+        allRows.slice(0, 5).forEach((row, i) => {
+          const filled = row.filter(c => c !== '' && c !== null && c !== undefined).length
+          if (filled > maxFilled) { maxFilled = filled; headerRowIndex = i }
+        })
+
+        // Separar metadata (filas antes del header), headers y datos
+        const metaRows = allRows.slice(0, headerRowIndex)   // ej: fila "Referencia: DB-A"
+        const headers = allRows[headerRowIndex]
+        const dataRows = allRows.slice(headerRowIndex + 1).filter(r =>
+          r.some(c => c !== '' && c !== null && c !== undefined)
+        )
+
+        onParsed({
+          meta: metaRows,
+          headers,
+          rows: dataRows,
+          totalRows: dataRows.length,
+          cols: headers.length,
+          fileName: file.name,
+          // También guardamos raw completo para reconstruir el Excel al descargar
+          raw: allRows,
+        })
       } catch {
         setError('Error al leer el archivo. Verifica que sea un Excel válido.')
       }
@@ -124,12 +150,8 @@ function ExcelUploader({ onParsed, parsed }) {
               {fileName || parsed.fileName}
             </div>
             <div style={{ fontSize:11, color:C.gray, fontFamily:'Inter', marginTop:2 }}>
-              {parsed.rows} filas × {parsed.cols} columnas — clic para cambiar
+              {parsed.totalRows ?? parsed.rows} filas × {parsed.cols} columnas — clic para cambiar
             </div>
-          </div>
-        ) : (
-          <div>
-            <div style={{ fontSize:28 }}>📊</div>
             <div style={{ fontSize:13, fontWeight:600, color:C.navy, fontFamily:'Inter' }}>
               Arrastra el Excel o haz clic para seleccionar
             </div>
@@ -146,76 +168,110 @@ function ExcelUploader({ onParsed, parsed }) {
 
 // ── MODAL VER EXCEL ───────────────────────────────────────────
 function ModalVerExcel({ referencia, onClose }) {
-  const data = referencia.estructura_excel?.raw || []
-  const fileName = referencia.estructura_excel?.fileName || `${referencia.codigo}.xlsx`
+  const excel = referencia.estructura_excel || {}
+  const fileName = excel.fileName || `${referencia.codigo}.xlsx`
+
+  // Soporte estructura nueva (headers + rows) y antigua (raw)
+  const headers = excel.headers || excel.raw?.[0] || []
+  const rows    = excel.rows    || excel.raw?.slice(1) || []
+  const meta    = excel.meta    || []
+
+  // Colores de columna similares al Excel original
+  const COL_COLORS = [
+    '#BDD7EE','#BDD7EE','#70AD47','#4472C4',
+    '#4472C4','#4472C4','#4472C4','#4472C4',
+    '#4472C4','#FFD966','#FFD966',
+  ]
 
   const handleDownload = () => {
     const wb = XLSX.utils.book_new()
-    const ws = XLSX.utils.aoa_to_sheet(data)
+    const ws = XLSX.utils.aoa_to_sheet(excel.raw || [headers, ...rows])
     XLSX.utils.book_append_sheet(wb, ws, 'Prueba')
     XLSX.writeFile(wb, fileName)
   }
 
-  const headers = data[0] || []
-  const rows = data.slice(1)
-
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)',
       display:'flex', alignItems:'center', justifyContent:'center', zIndex:1100 }}>
-      <div style={{ background:C.white, borderRadius:12, width:'92%', maxWidth:900,
-        maxHeight:'88vh', display:'flex', flexDirection:'column',
+      <div style={{ background:C.white, borderRadius:12, width:'95%', maxWidth:1100,
+        maxHeight:'90vh', display:'flex', flexDirection:'column',
         boxShadow:'0 24px 64px rgba(0,0,0,0.25)' }}>
 
-        {/* Header */}
+        {/* Header modal */}
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
-          padding:'18px 24px', borderBottom:`1px solid ${C.grayLt}` }}>
+          padding:'18px 24px', borderBottom:`1px solid ${C.grayLt}`, flexShrink:0 }}>
           <div>
             <h2 style={{ fontSize:16, fontWeight:700, color:C.navy, margin:0, fontFamily:'Inter' }}>
               📊 {referencia.nombre}
             </h2>
-            <p style={{ fontSize:12, color:C.gray, margin:'2px 0 0', fontFamily:'Inter' }}>
-              {data.length} filas · {headers.length} columnas
+            <p style={{ fontSize:12, color:C.gray, margin:'3px 0 0', fontFamily:'Inter' }}>
+              {rows.length} preguntas · {headers.length} columnas
+              {meta.length > 0 && meta[0]?.filter(Boolean).length > 0 &&
+                ` · ${meta[0].filter(Boolean).join(' ')}`}
             </p>
           </div>
           <div style={{ display:'flex', gap:10, alignItems:'center' }}>
-            <Btn small onClick={handleDownload}>⬇ Descargar Excel</Btn>
+            <button onClick={handleDownload} style={{
+              display:'flex', alignItems:'center', gap:6,
+              background:C.green, color:C.white, border:'none',
+              borderRadius:6, padding:'8px 16px', fontSize:13,
+              fontWeight:600, cursor:'pointer', fontFamily:'Inter' }}>
+              ⬇ Descargar Excel
+            </button>
             <button onClick={onClose} style={{ background:'none', border:'none',
               fontSize:22, cursor:'pointer', color:C.gray, lineHeight:1 }}>✕</button>
           </div>
         </div>
 
         {/* Tabla */}
-        <div style={{ overflowY:'auto', overflowX:'auto', flex:1, padding:'0' }}>
-          {data.length === 0 ? (
+        <div style={{ overflowY:'auto', overflowX:'auto', flex:1 }}>
+          {headers.length === 0 ? (
             <div style={{ textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter' }}>
               Sin datos en el archivo
             </div>
           ) : (
-            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13, fontFamily:'Inter' }}>
-              <thead style={{ position:'sticky', top:0, zIndex:1 }}>
-                <tr style={{ background:C.navy }}>
-                  <th style={{ padding:'10px 14px', textAlign:'left', color:C.grayLt,
-                    fontSize:11, fontWeight:600, whiteSpace:'nowrap', minWidth:40 }}>#</th>
+            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12, fontFamily:'Inter' }}>
+              <thead style={{ position:'sticky', top:0, zIndex:2 }}>
+                <tr>
+                  <th style={{ padding:'10px 12px', background:'#1F3864', color:'white',
+                    fontSize:11, fontWeight:700, minWidth:36, textAlign:'center',
+                    borderRight:'1px solid rgba(255,255,255,0.2)' }}>#</th>
                   {headers.map((h, i) => (
-                    <th key={i} style={{ padding:'10px 14px', textAlign:'left', color:C.white,
-                      fontSize:11, fontWeight:600, whiteSpace:'nowrap', minWidth:100 }}>
-                      {h ?? `Col ${i+1}`}
+                    <th key={i} style={{
+                      padding:'10px 12px', textAlign:'center',
+                      background: COL_COLORS[i] || '#4472C4',
+                      color: ['#FFD966'].includes(COL_COLORS[i]) ? '#1A1A2E' : 'white',
+                      fontSize:11, fontWeight:700, whiteSpace:'nowrap', minWidth:110,
+                      borderRight:'1px solid rgba(255,255,255,0.3)',
+                      borderBottom:'2px solid rgba(0,0,0,0.15)'
+                    }}>
+                      {h !== undefined && h !== null && h !== '' ? String(h) : `Col ${i+1}`}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row, ri) => (
-                  <tr key={ri} style={{ background: ri % 2 === 0 ? C.white : C.bg,
-                    borderBottom:`1px solid ${C.bg2}` }}>
-                    <td style={{ padding:'8px 14px', color:C.gray, fontSize:11,
-                      fontWeight:600, textAlign:'center' }}>{ri + 1}</td>
-                    {headers.map((_, ci) => (
-                      <td key={ci} style={{ padding:'8px 14px', color:C.text,
-                        whiteSpace:'nowrap' }}>
-                        {row[ci] !== undefined && row[ci] !== null ? String(row[ci]) : ''}
-                      </td>
-                    ))}
+                  <tr key={ri} style={{ background: ri % 2 === 0 ? C.white : '#F0F4FA' }}>
+                    <td style={{ padding:'7px 12px', color:C.gray, fontSize:11,
+                      fontWeight:600, textAlign:'center', background: ri % 2 === 0 ? '#EBF0FA' : '#D6E4F0',
+                      borderRight:'1px solid #D1D5DB', borderBottom:'1px solid #E5E7EB' }}>
+                      {ri + 1}
+                    </td>
+                    {headers.map((_, ci) => {
+                      const val = Array.isArray(row) ? row[ci] : row
+                      return (
+                        <td key={ci} style={{
+                          padding:'7px 12px', color:C.text,
+                          borderRight:'1px solid #E5E7EB',
+                          borderBottom:'1px solid #E5E7EB',
+                          maxWidth:220, overflow:'hidden',
+                          textOverflow:'ellipsis', whiteSpace:'nowrap'
+                        }} title={val !== undefined && val !== null ? String(val) : ''}>
+                          {val !== undefined && val !== null && val !== '' ? String(val) : ''}
+                        </td>
+                      )
+                    })}
                   </tr>
                 ))}
               </tbody>
