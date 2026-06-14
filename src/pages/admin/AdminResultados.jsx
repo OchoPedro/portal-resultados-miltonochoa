@@ -255,7 +255,7 @@ export default function AdminResultados({ onUpdate }) {
   useEffect(() => {
     if (metodo === 'manual' && colegioId) {
       supabase.from('estudiantes')
-        .select('grado').eq('colegio_id', colegioId).eq('estado', 'activo')
+        .select('grado').eq('colegio_id', colegioId).eq('estado', 'Activo')
         .then(({ data }) => {
           const grados = [...new Set((data||[]).map(e => e.grado).filter(Boolean))].sort()
           setGradosDisp(grados)
@@ -663,11 +663,11 @@ export default function AdminResultados({ onUpdate }) {
                 if (e.target.value && colegioId) {
                   const { data } = await supabase.from('estudiantes')
                     .select('id,nombre,usuario').eq('colegio_id', colegioId)
-                    .eq('grado', e.target.value).eq('estado', 'activo').order('nombre')
+                    .eq('grado', e.target.value).eq('estado', 'Activo').order('nombre')
                   setEstDisp(data || [])
                 }
               }} disabled={!colegioId || gradosDisp.length === 0}>
-                <option value="">{!colegioId ? 'Selecciona un colegio primero' : gradosDisp.length === 0 ? 'Cargando grados…' : 'Selecciona el grado'}</option>
+                <option value="">{!colegioId ? 'Selecciona un colegio primero' : gradosDisp.length === 0 ? 'Sin grados disponibles' : 'Selecciona el grado'}</option>
                 {gradosDisp.map(g => <option key={g} value={g}>Grado {g}</option>)}
               </select>
             </div>
