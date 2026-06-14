@@ -431,11 +431,13 @@ export default function AdminResultados({ onUpdate }) {
           <button key={m.id} onClick={async () => {
             setMetodo(m.id)
             if (m.id === 'manual' && colegioId) {
+              const cid = colegioId
               const { data } = await supabase.from('estudiantes')
-                .select('grado').eq('colegio_id', colegioId).eq('activo', true)
+                .select('grado').eq('colegio_id', cid).eq('activo', true)
               const unicos = [...new Set((data||[]).map(r => r.grado).filter(Boolean))]
               unicos.sort((a,b) => String(a).localeCompare(String(b), undefined, {numeric:true}))
-              setGradosDisp(unicos)
+              console.log('Grados al entrar manual:', unicos)
+              setGradosDisp([...unicos])
             }
           }} style={{
             textAlign:'left', cursor:'pointer', background:C.white, border:`1px solid ${C.grayLt}`,
@@ -578,12 +580,14 @@ export default function AdminResultados({ onUpdate }) {
         <div style={{ marginBottom:18 }}>
           <Label>Colegio</Label>
           <select style={selectStyle} value={colegioId} onChange={async e => {
-            setColegioId(e.target.value); resetForm()
-            if (e.target.value && metodo === 'manual') {
+            const cid = e.target.value
+            setColegioId(cid); resetForm()
+            if (cid && metodo === 'manual') {
               const { data } = await supabase.from('estudiantes')
-                .select('grado').eq('colegio_id', e.target.value).eq('estado', 'activo')
-              const grados = [...new Set((data||[]).map(e => e.grado).filter(Boolean))].sort()
-              setGradosDisp(grados)
+                .select('grado').eq('colegio_id', cid).eq('activo', true)
+              const unicos = [...new Set((data||[]).map(r => r.grado).filter(Boolean))]
+              unicos.sort((a,b) => String(a).localeCompare(String(b), undefined, {numeric:true}))
+              setGradosDisp(unicos)
             }
           }} disabled={cargando}>
             <option value="">{cargando?'Cargando…':'Selecciona un colegio'}</option>
