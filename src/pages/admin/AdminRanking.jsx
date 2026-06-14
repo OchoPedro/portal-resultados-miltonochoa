@@ -202,7 +202,22 @@ export default function AdminRanking() {
     if (jorn)       q = q.ilike('jornada', `%${jorn}%`)
     if (cal)        q = q.eq('calendario', cal)
     const { data: rows, count, error } = await q
-    if (!error) { setData(rows || []); setTotal(count || 0) }
+    if (!error && rows?.length) {
+      const { data: prevRows } = await supabase
+        .from('ranking_colegios')
+        .select('codigo,puesto_anio')
+        .eq('anio', a - 1)
+        .in('codigo', rows.map(r => r.codigo))
+      const prevMap = {}
+      ;(prevRows || []).forEach(r => { prevMap[r.codigo] = r.puesto_anio })
+      setData(rows.map(r => ({
+        ...r,
+        comportamiento: prevMap[r.codigo] != null ? prevMap[r.codigo] - r.puesto_anio : null
+      })))
+      setTotal(count || 0)
+    } else if (!error) {
+      setData([]); setTotal(0)
+    }
     setLoading(false)
   }
 
@@ -308,12 +323,12 @@ export default function AdminRanking() {
                         )}
                         <Td style={{ textAlign:'center' }}>
                           {g.comportamiento == null
-                            ? <span style={{ color:C.gray, fontSize:11 }}>—</span>
+                            ? <span style={{ color:C.grayLt, fontSize:11 }}>—</span>
                             : g.comportamiento > 0
-                            ? <span style={{ color:C.green, fontWeight:700, fontSize:12 }}>↑ Subió {g.comportamiento}</span>
+                            ? <span style={{ color:C.green, fontWeight:700, fontSize:16 }} title={`Subió ${g.comportamiento} posiciones`}>↑</span>
                             : g.comportamiento < 0
-                            ? <span style={{ color:C.red, fontWeight:700, fontSize:12 }}>↓ Bajó {Math.abs(g.comportamiento)}</span>
-                            : <span style={{ color:C.gray, fontSize:12 }}>→ Igual</span>
+                            ? <span style={{ color:C.red, fontWeight:700, fontSize:16 }} title={`Bajó ${Math.abs(g.comportamiento)} posiciones`}>↓</span>
+                            : <span style={{ color:C.gray, fontSize:14 }}>→</span>
                           }
                         </Td>
                         <Td style={{ textAlign:'center', color:C.gray }}>{g.colegios.toLocaleString('es-CO')}</Td>
@@ -418,13 +433,12 @@ export default function AdminRanking() {
                 <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter' }}>
                   <thead>
                     <tr>
-                      <Th style={{ width:60 }}>#</Th>
+                      <Th style={{ width:50 }}>#</Th>
+                      <Th style={{ width:24, textAlign:'center' }}>↕</Th>
                       <Th>Institución</Th>
                       <Th>Departamento</Th>
                       <Th>Ciudad</Th>
                       <Th style={{ textAlign:'center' }}>Cal.</Th>
-                      <Th>Naturaleza</Th>
-                      <Th>Jornada</Th>
                       <Th style={{ textAlign:'center' }}>Eval.</Th>
                       <Th style={{ textAlign:'center' }}>L.C.</Th>
                       <Th style={{ textAlign:'center' }}>Mat.</Th>
@@ -450,35 +464,39 @@ export default function AdminRanking() {
                           onMouseEnter={e => e.currentTarget.style.background = C.green + '15'}
                           onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? rowBg(p) : rowBg(p) || `${C.bg}60`}
                         >
-                          <Td style={{ fontWeight:700, color:C.navy, textAlign:'center' }}>
+                          <Td style={{ fontWeight:700, color:C.navy, textAlign:'center', whiteSpace:'nowrap' }}>
                             {med ? <span style={{ marginRight:2 }}>{med}</span> : null}
                             {p}
                           </Td>
-                          <Td style={{ fontWeight:600, color:C.navy, maxWidth:260,
+                          <Td style={{ textAlign:'center', width:24, padding:'10px 4px' }}>
+                            {r.comportamiento == null
+                              ? <span style={{ color:C.grayLt, fontSize:11 }}>—</span>
+                              : r.comportamiento > 0
+                              ? <span style={{ color:C.green, fontWeight:700, fontSize:15 }} title={`Subió ${r.comportamiento}`}>↑</span>
+                              : r.comportamiento < 0
+                              ? <span style={{ color:C.red, fontWeight:700, fontSize:15 }} title={`Bajó ${Math.abs(r.comportamiento)}`}>↓</span>
+                              : <span style={{ color:C.gray, fontSize:13 }}>→</span>
+                            }
+                          </Td>
+                          <Td style={{ fontWeight:600, color:C.navy, maxWidth:220,
                             whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis',
                             textDecoration:'underline', textDecorationColor: C.green + '80' }}>
                             {r.nombre}
                           </Td>
-                          <Td style={{ color:C.gray, whiteSpace:'nowrap' }}>
+                          <Td style={{ color:C.gray, whiteSpace:'nowrap', fontSize:11 }}>
                             {r.departamento}
                           </Td>
-                          <Td style={{ color:C.gray, whiteSpace:'nowrap' }}>
+                          <Td style={{ color:C.gray, whiteSpace:'nowrap', fontSize:11 }}>
                             {r.ciudad}
                           </Td>
                           <Td style={{ textAlign:'center' }}>
                             <span style={{ background:r.calendario==='B'?C.navy+'18':C.green+'18',
                               color:r.calendario==='B'?C.navy:C.green,
-                              padding:'2px 8px', borderRadius:12, fontSize:11, fontWeight:600 }}>
+                              padding:'2px 6px', borderRadius:12, fontSize:11, fontWeight:600 }}>
                               {r.calendario}
                             </span>
                           </Td>
-                          <Td style={{ color:C.gray, fontSize:11, whiteSpace:'nowrap' }}>
-                            {r.naturaleza}
-                          </Td>
-                          <Td style={{ color:C.gray, fontSize:11, whiteSpace:'nowrap' }}>
-                            {r.jornada}
-                          </Td>
-                          <Td style={{ textAlign:'center', color:C.gray }}>{r.eval_estudiantes}</Td>
+                          <Td style={{ textAlign:'center', color:C.gray, fontSize:11 }}>{r.eval_estudiantes}</Td>
                           <Td style={{ textAlign:'center' }}><Score val={r.lectura_critica}/></Td>
                           <Td style={{ textAlign:'center' }}><Score val={r.matematicas}/></Td>
                           <Td style={{ textAlign:'center' }}><Score val={r.ciencias_sociales}/></Td>
