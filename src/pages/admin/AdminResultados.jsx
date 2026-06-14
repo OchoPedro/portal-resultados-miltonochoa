@@ -254,15 +254,19 @@ export default function AdminResultados({ onUpdate }) {
   // Cargar grados cuando se entra a modo manual con colegio ya seleccionado
   useEffect(() => {
     if (metodo === 'manual' && colegioId) {
+      setGradosDisp([]) // reset first
       supabase.from('estudiantes')
         .select('grado')
-        .eq('colegio_id', colegioId).eq('activo', true)
-        .then(({ data, error }) => {
-          console.log('Estudiantes raw:', data, 'error:', error)
-          const grados = [...new Set((data||[]).map(e => String(e.grado)).filter(Boolean))].sort()
-          console.log('Grados encontrados:', grados)
-          setGradosDisp([...grados])
+        .eq('colegio_id', colegioId)
+        .eq('activo', true)
+        .then(({ data }) => {
+          const unicos = [...new Set((data||[]).map(r => r.grado).filter(g => g !== null && g !== undefined))]
+          unicos.sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }))
+          console.log('Grados cargados:', unicos)
+          setGradosDisp(unicos)
         })
+    } else if (metodo !== 'manual') {
+      setGradosDisp([])
     }
   }, [metodo, colegioId])
 
@@ -669,8 +673,8 @@ export default function AdminResultados({ onUpdate }) {
                     .eq('grado', e.target.value).eq('activo', true).order('nombre')
                   setEstDisp(data || [])
                 }
-              }} disabled={!colegioId || gradosDisp.length === 0}>
-                <option value="">Selecciona el grado</option>
+              }} disabled={!colegioId}>
+                <option value="">{gradosDisp.length === 0 ? 'Cargando…' : 'Selecciona el grado'}</option>
                 {gradosDisp.map(g => <option key={g} value={g}>Grado {g}</option>)}
               </select>
             </div>
