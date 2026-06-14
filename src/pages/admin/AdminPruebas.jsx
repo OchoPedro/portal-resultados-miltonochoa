@@ -520,12 +520,282 @@ function ModalReferencia({ pruebaTipo, refData, onClose, onSaved }) {
   )
 }
 
+// ── MODAL EQUILIBRIO DE PRUEBA ────────────────────────────────
+function ModalEquilibrio({ referencia, onClose }) {
+  const excel = referencia.estructura_excel || {}
+  const headers = excel.headers || []
+  const allRows = excel.rows || []
+
+  // Índices de columnas clave
+  const idx = (name) => headers.findIndex(h => String(h).trim() === name)
+  const iArea       = idx('Área')
+  const iCompetencia = idx('Competencia')
+  const iComponente  = idx('Componente')
+  const iDificultad  = idx('Dificultad')
+
+  // Áreas disponibles
+  const areas = [...new Set(allRows.map(r => String(r[iArea] ?? '')).filter(Boolean))].sort()
+  const [areaSelec, setAreaSelec] = useState(areas[0] || '')
+
+  // Filtrar por área
+  const rowsFiltradas = areaSelec
+    ? allRows.filter(r => String(r[iArea] ?? '') === areaSelec)
+    : allRows
+
+  // Valores únicos de competencia, componente y dificultad
+  const competencias = [...new Set(rowsFiltradas.map(r => String(r[iCompetencia] ?? '')).filter(Boolean))].sort()
+  const componentes  = [...new Set(rowsFiltradas.map(r => String(r[iComponente] ?? '')).filter(Boolean))].sort()
+  const dificultades = ['Alto', 'Básico', 'Bajo', 'Superior'].filter(d =>
+    rowsFiltradas.some(r => String(r[iDificultad] ?? '') === d)
+  )
+
+  // Construir matriz: componente → competencia → dificultad → count
+  const matriz = {}
+  componentes.forEach(comp => {
+    matriz[comp] = {}
+    competencias.forEach(competencia => {
+      matriz[comp][competencia] = {}
+      dificultades.forEach(dif => { matriz[comp][competencia][dif] = 0 })
+    })
+  })
+  rowsFiltradas.forEach(row => {
+    const comp = String(row[iComponente] ?? '')
+    const competencia = String(row[iCompetencia] ?? '')
+    const dif = String(row[iDificultad] ?? '')
+    if (matriz[comp]?.[competencia]?.[dif] !== undefined) {
+      matriz[comp][competencia][dif]++
+    }
+  })
+
+  // Totales por competencia+dificultad
+  const totales = {}
+  competencias.forEach(competencia => {
+    totales[competencia] = {}
+    dificultades.forEach(dif => {
+      totales[competencia][dif] = componentes.reduce((sum, comp) => sum + (matriz[comp]?.[competencia]?.[dif] || 0), 0)
+    })
+  })
+
+  // Total general por componente
+  const totalComp = (comp) => competencias.reduce((s1, competencia) =>
+    s1 + dificultades.reduce((s2, dif) => s2 + (matriz[comp]?.[competencia]?.[dif] || 0), 0), 0)
+
+  // Total general global
+  const totalGlobal = componentes.reduce((s, comp) => s + totalComp(comp), 0)
+
+  // Color por dificultad
+  const difColor = { Alto:'#DC2626', Básico:'#D97706', Bajo:'#2563EB', Superior:'#7C3AED' }
+  const difBg    = { Alto:'#FEF2F2', Básico:'#FFFBEB', Bajo:'#EFF6FF', Superior:'#F5F3FF' }
+
+  const noData = iArea === -1 || iCompetencia === -1 || iComponente === -1 || iDificultad === -1
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)',
+      display:'flex', alignItems:'center', justifyContent:'center', zIndex:1100 }}>
+      <div style={{ background:C.white, borderRadius:16, width:'96%', maxWidth:1300,
+        maxHeight:'92vh', display:'flex', flexDirection:'column',
+        boxShadow:'0 24px 80px rgba(0,0,0,0.3)' }}>
+
+        {/* Header */}
+        <div style={{ padding:'20px 28px', borderBottom:`1px solid ${C.grayLt}`,
+          display:'flex', justifyContent:'space-between', alignItems:'center', flexShrink:0 }}>
+          <div>
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <span style={{ fontSize:22 }}>⚖️</span>
+              <h2 style={{ fontSize:18, fontWeight:700, color:C.navy, margin:0, fontFamily:'Inter' }}>
+                Equilibrio de Prueba
+              </h2>
+            </div>
+            <p style={{ fontSize:13, color:C.gray, margin:'4px 0 0', fontFamily:'Inter' }}>
+              {referencia.nombre} · {rowsFiltradas.length} preguntas
+              {areaSelec && ` · Área: ${areaSelec}`}
+            </p>
+          </div>
+          <button onClick={onClose} style={{ background:'none', border:'none',
+            fontSize:24, cursor:'pointer', color:C.gray }}>✕</button>
+        </div>
+
+        {/* Filtro área */}
+        {areas.length > 1 && (
+          <div style={{ padding:'12px 28px', borderBottom:`1px solid ${C.bg2}`,
+            display:'flex', alignItems:'center', gap:10, flexShrink:0, background:C.bg }}>
+            <span style={{ fontSize:12, fontWeight:600, color:C.gray, fontFamily:'Inter',
+              textTransform:'uppercase', letterSpacing:'0.05em' }}>Área:</span>
+            {areas.map(a => (
+              <button key={a} onClick={() => setAreaSelec(a)}
+                style={{ padding:'5px 14px', borderRadius:20, border:'none', cursor:'pointer',
+                  fontFamily:'Inter', fontSize:12, fontWeight:600, transition:'all 0.15s',
+                  background: areaSelec === a ? C.navy : C.bg2,
+                  color: areaSelec === a ? C.white : C.text }}>
+                {a}
+              </button>
+            ))}
+            <button onClick={() => setAreaSelec('')}
+              style={{ padding:'5px 14px', borderRadius:20, cursor:'pointer', fontFamily:'Inter',
+                fontSize:12, fontWeight:600, border:`1px solid ${C.grayLt}`,
+                background: !areaSelec ? C.green : 'transparent',
+                color: !areaSelec ? C.white : C.gray }}>
+              Todas
+            </button>
+          </div>
+        )}
+
+        {noData ? (
+          <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center',
+            color:C.gray, fontFamily:'Inter', fontSize:14 }}>
+            El archivo Excel no tiene las columnas necesarias (Área, Competencia, Componente, Dificultad)
+          </div>
+        ) : (
+          <div style={{ flex:1, overflowY:'auto', overflowX:'auto', padding:'24px 28px' }}>
+
+            {/* Leyenda dificultades */}
+            <div style={{ display:'flex', gap:12, marginBottom:20, flexWrap:'wrap' }}>
+              {dificultades.map(d => (
+                <div key={d} style={{ display:'flex', alignItems:'center', gap:6,
+                  background: difBg[d] || '#F9FAFB', borderRadius:20,
+                  padding:'4px 12px', border:`1px solid ${difColor[d] || C.grayLt}` }}>
+                  <div style={{ width:8, height:8, borderRadius:'50%', background: difColor[d] || C.gray }}/>
+                  <span style={{ fontSize:12, fontWeight:600, color: difColor[d] || C.text, fontFamily:'Inter' }}>{d}</span>
+                </div>
+              ))}
+              <div style={{ marginLeft:'auto', fontSize:12, color:C.gray, fontFamily:'Inter',
+                display:'flex', alignItems:'center' }}>
+                Total: <strong style={{ color:C.navy, marginLeft:4 }}>{totalGlobal} preguntas</strong>
+              </div>
+            </div>
+
+            {/* Tabla matriz */}
+            <div style={{ borderRadius:12, overflow:'hidden', border:`1px solid ${C.grayLt}`,
+              boxShadow:'0 2px 12px rgba(0,0,0,0.06)' }}>
+              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12, fontFamily:'Inter' }}>
+                <thead>
+                  {/* Fila 1: Competencias (agrupadas) */}
+                  <tr>
+                    <th rowSpan={2} style={{ padding:'14px 16px', background:C.navy, color:C.white,
+                      fontSize:12, fontWeight:700, textAlign:'left', minWidth:180,
+                      borderRight:'2px solid rgba(255,255,255,0.2)', verticalAlign:'middle' }}>
+                      Componente
+                    </th>
+                    {competencias.map(competencia => (
+                      <th key={competencia} colSpan={dificultades.length}
+                        style={{ padding:'10px 8px', background:'#1E3A5F', color:C.white,
+                          fontSize:11, fontWeight:700, textAlign:'center',
+                          borderRight:'2px solid rgba(255,255,255,0.15)',
+                          borderBottom:'1px solid rgba(255,255,255,0.2)',
+                          maxWidth: dificultades.length * 60 }}>
+                        <div style={{ maxWidth: dificultades.length * 70,
+                          overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
+                          margin:'0 auto' }} title={competencia}>
+                          {competencia}
+                        </div>
+                      </th>
+                    ))}
+                    <th style={{ padding:'10px 8px', background:'#0F2A45', color:C.white,
+                      fontSize:11, fontWeight:700, textAlign:'center', minWidth:60 }}>
+                      Total
+                    </th>
+                  </tr>
+                  {/* Fila 2: Dificultades */}
+                  <tr>
+                    {competencias.map(competencia =>
+                      dificultades.map(dif => (
+                        <th key={`${competencia}-${dif}`}
+                          style={{ padding:'7px 6px', textAlign:'center',
+                            background: difBg[dif] || '#F9FAFB',
+                            color: difColor[dif] || C.text,
+                            fontSize:10, fontWeight:700,
+                            borderRight:'1px solid #E5E7EB',
+                            borderBottom:'2px solid #D1D5DB',
+                            minWidth:52 }}>
+                          {dif}
+                        </th>
+                      ))
+                    )}
+                    <th style={{ padding:'7px 6px', background:'#F1F5F9', fontSize:10,
+                      fontWeight:700, color:C.gray, textAlign:'center',
+                      borderBottom:'2px solid #D1D5DB' }}/>
+                  </tr>
+                </thead>
+                <tbody>
+                  {componentes.map((comp, ri) => {
+                    const totalFila = totalComp(comp)
+                    return (
+                      <tr key={comp} style={{ background: ri % 2 === 0 ? C.white : '#F8FAFC' }}>
+                        <td style={{ padding:'11px 16px', fontWeight:600, color:C.navy,
+                          borderRight:'2px solid #E5E7EB', borderBottom:'1px solid #F1F5F9',
+                          background: ri % 2 === 0 ? '#F8FAFC' : '#EEF2F7' }}>
+                          {comp}
+                        </td>
+                        {competencias.map(competencia =>
+                          dificultades.map(dif => {
+                            const val = matriz[comp]?.[competencia]?.[dif] || 0
+                            return (
+                              <td key={`${competencia}-${dif}`}
+                                style={{ padding:'11px 6px', textAlign:'center',
+                                  borderRight:'1px solid #F1F5F9',
+                                  borderBottom:'1px solid #F1F5F9',
+                                  fontWeight: val > 0 ? 700 : 400,
+                                  color: val > 0 ? (difColor[dif] || C.text) : '#CBD5E1',
+                                  fontSize: val > 0 ? 14 : 12 }}>
+                                {val > 0 ? val : '·'}
+                              </td>
+                            )
+                          })
+                        )}
+                        <td style={{ padding:'11px 8px', textAlign:'center', fontWeight:700,
+                          color: totalFila > 0 ? C.navy : C.gray, fontSize:13,
+                          background: ri % 2 === 0 ? '#EEF2F7' : '#E4EAF2',
+                          borderBottom:'1px solid #F1F5F9',
+                          borderLeft:'2px solid #E5E7EB' }}>
+                          {totalFila || '·'}
+                        </td>
+                      </tr>
+                    )
+                  })}
+
+                  {/* Fila total */}
+                  <tr style={{ background:'#1E3A5F' }}>
+                    <td style={{ padding:'12px 16px', fontWeight:700, color:C.white,
+                      fontSize:12, borderRight:'2px solid rgba(255,255,255,0.2)' }}>
+                      Total General
+                    </td>
+                    {competencias.map(competencia =>
+                      dificultades.map(dif => {
+                        const val = totales[competencia]?.[dif] || 0
+                        return (
+                          <td key={`total-${competencia}-${dif}`}
+                            style={{ padding:'12px 6px', textAlign:'center',
+                              fontWeight:700, color: val > 0 ? C.white : 'rgba(255,255,255,0.3)',
+                              fontSize: val > 0 ? 14 : 12,
+                              borderRight:'1px solid rgba(255,255,255,0.1)' }}>
+                            {val > 0 ? val : '·'}
+                          </td>
+                        )
+                      })
+                    )}
+                    <td style={{ padding:'12px 8px', textAlign:'center', fontWeight:800,
+                      color:C.white, fontSize:15,
+                      borderLeft:'2px solid rgba(255,255,255,0.2)' }}>
+                      {totalGlobal}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── MAIN ─────────────────────────────────────────────────────
 export default function AdminPruebas({ onUpdate }) {
   const [pruebas, setPruebas] = useState([])
   const [tipoSelec, setTipoSelec] = useState(null)
   const [modalRef, setModalRef] = useState(null)
   const [modalExcel, setModalExcel] = useState(null)
+  const [modalEquilibrio, setModalEquilibrio] = useState(null)
   const [nuevoTipo, setNuevoTipo] = useState('')
   const [showNuevoTipo, setShowNuevoTipo] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -657,14 +927,24 @@ export default function AdminPruebas({ onUpdate }) {
                           </td>
                           <td style={{ padding:'10px 12px' }}>
                             {r.estructura_excel ? (
-                              <button onClick={() => setModalExcel(r)}
-                                style={{ display:'flex', alignItems:'center', gap:5,
-                                  background:'#EFF6FF', border:'1.5px solid #BFDBFE',
-                                  borderRadius:6, padding:'4px 10px', cursor:'pointer',
-                                  fontSize:12, fontWeight:600, color:'#1D4ED8',
-                                  fontFamily:'Inter' }}>
-                                📊 Ver Excel
-                              </button>
+                              <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                                <button onClick={() => setModalExcel(r)}
+                                  style={{ display:'flex', alignItems:'center', gap:5,
+                                    background:'#EFF6FF', border:'1.5px solid #BFDBFE',
+                                    borderRadius:6, padding:'4px 10px', cursor:'pointer',
+                                    fontSize:12, fontWeight:600, color:'#1D4ED8',
+                                    fontFamily:'Inter' }}>
+                                  📊 Ver Excel
+                                </button>
+                                <button onClick={() => setModalEquilibrio(r)}
+                                  style={{ display:'flex', alignItems:'center', gap:5,
+                                    background:'#F0FDF4', border:'1.5px solid #86EFAC',
+                                    borderRadius:6, padding:'4px 10px', cursor:'pointer',
+                                    fontSize:12, fontWeight:600, color:'#15803D',
+                                    fontFamily:'Inter' }}>
+                                  ⚖️ Equilibrio
+                                </button>
+                              </div>
                             ) : (
                               <span style={{ fontSize:11, color:C.gray }}>—</span>
                             )}
@@ -708,6 +988,13 @@ export default function AdminPruebas({ onUpdate }) {
         <ModalVerExcel
           referencia={modalExcel}
           onClose={() => setModalExcel(null)}
+        />
+      )}
+
+      {modalEquilibrio && (
+        <ModalEquilibrio
+          referencia={modalEquilibrio}
+          onClose={() => setModalEquilibrio(null)}
         />
       )}
     </div>
