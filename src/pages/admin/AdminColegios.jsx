@@ -7,6 +7,10 @@ import * as XLSX from 'xlsx'
 
 const DEPARTAMENTOS = Object.keys(COLOMBIA).sort()
 
+const CALENDARIO_OPTIONS = ['A', 'B']
+const NATURALEZA_OPTIONS  = ['Oficial', 'Privada', 'Concesión']
+const JORNADA_OPTIONS     = ['Mañana', 'Tarde', 'Noche', 'Completa / Única', 'Sabatino']
+
 const Card = ({children, style={}}) => (
   <div style={{ background:C.white, borderRadius:12, padding:24,
     boxShadow:'0 1px 4px rgba(10,31,61,0.07), 0 4px 16px rgba(10,31,61,0.05)',
@@ -80,6 +84,7 @@ const generarUsuario = async (departamento, municipio) => {
 const ModalColegio = ({ colegio, onClose, onSave }) => {
   const [form, setForm] = useState({
     nombre:'', departamento_nombre:'', municipio:'', direccion:'', barrio:'',
+    calendario:'', naturaleza:'', jornada:'',
     contactos:[{nombre:'', cargo:'', telefono:'', email:''}],
     usuario:'', password_hash:'',
     ...(colegio || {}),
@@ -145,13 +150,16 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
         ciudad: `${form.municipio}, ${form.departamento_nombre}`,
         direccion: form.direccion,
         barrio: form.barrio,
+        calendario: form.calendario || null,
+        naturaleza: form.naturaleza || null,
+        jornada: form.jornada || null,
         contactos: form.contactos,
         contacto_nombre: form.contactos?.[0]?.nombre,
         contacto_telefono: form.contactos?.[0]?.telefono,
         contacto_email: form.contactos?.[0]?.email,
         usuario: form.usuario,
         ...(hashedPassword ? { password_hash: hashedPassword } : {}),
-        activo: true,
+        ...(!colegio ? { activo: false } : {}),
       }
       const { error: err } = colegio
         ? await supabase.from('colegios').update(payload).eq('id', colegio.id)
@@ -191,6 +199,14 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
             placeholder="Ej: Calle 53 No 31-128" required/>
           <Input label="Barrio" value={form.barrio} onChange={v=>set('barrio',v)}
             placeholder="Ej: Campestre" required/>
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
+          <Select label="Calendario" value={form.calendario} onChange={v=>set('calendario',v)}
+            options={CALENDARIO_OPTIONS} placeholder="Seleccionar..."/>
+          <Select label="Naturaleza" value={form.naturaleza} onChange={v=>set('naturaleza',v)}
+            options={NATURALEZA_OPTIONS} placeholder="Seleccionar..."/>
+          <Select label="Jornada" value={form.jornada} onChange={v=>set('jornada',v)}
+            options={JORNADA_OPTIONS} placeholder="Seleccionar..."/>
         </div>
 
         <SectionTitle>Contactos</SectionTitle>
@@ -537,8 +553,321 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
   )
 }
 
+// ── MODAL IMPORTAR COLEGIOS DESDE EXCEL ──────────────────────
+const ModalImportarColegios = ({ onClose, onSave }) => {
+  const [mode, setMode]       = useState('subir')
+  const [preview, setPreview] = useState([])
+  const [uploading, setUploading] = useState(false)
+  const [msg, setMsg]         = useState('')
+  const fileRef               = useRef()
+
+  const handleFile = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const wb   = XLSX.read(ev.target.result, { type:'array' })
+      const ws   = wb.Sheets[wb.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json(ws, { header:1 })
+      const data = rows.slice(1).filter(r => r[0]).map(r => ({
+        nombre:            String(r[0]  || '').trim(),
+        departamento_nombre: String(r[1] || '').trim(),
+        municipio:         String(r[2]  || '').trim(),
+        direccion:         String(r[3]  || '').trim(),
+        barrio:            String(r[4]  || '').trim(),
+        calendario:        String(r[5]  || '').trim(),
+        naturaleza:        String(r[6]  || '').trim(),
+        jornada:           String(r[7]  || '').trim(),
+        contacto_nombre:   String(r[8]  || '').trim(),
+        contacto_cargo:    String(r[9]  || '').trim(),
+        contacto_telefono: String(r[10] || '').trim(),
+        contacto_email:    String(r[11] || '').trim(),
+      }))
+      setPreview(data); setMode('preview')
+    }
+    reader.readAsArrayBuffer(file)
+  }
+
+  const handleUpload = async () => {
+    if (!preview.length) return
+    setUploading(true); setMsg('')
+    let creados = 0, omitidos = 0
+    for (const row of preview) {
+      if (!row.nombre || !row.departamento_nombre || !row.municipio) { omitidos++; continue }
+      const usuario = await generarUsuario(row.departamento_nombre, row.municipio)
+      const pwdRaw  = usuario.toLowerCase() + '*Mo2026'
+      const { data: hashed } = await supabase.rpc('hashear_password', { p_password: pwdRaw })
+      const { error } = await supabase.from('colegios').insert({
+        nombre:              row.nombre,
+        departamento_nombre: row.departamento_nombre,
+        municipio:           row.municipio,
+        ciudad:              `${row.municipio}, ${row.departamento_nombre}`,
+        direccion:           row.direccion || '',
+        barrio:              row.barrio    || '',
+        calendario:          row.calendario || null,
+        naturaleza:          row.naturaleza || null,
+        jornada:             row.jornada   || null,
+        contacto_nombre:     row.contacto_nombre   || '',
+        contacto_telefono:   row.contacto_telefono || '',
+        contacto_email:      row.contacto_email    || '',
+        contactos: [{
+          nombre:   row.contacto_nombre   || '',
+          cargo:    row.contacto_cargo    || '',
+          telefono: row.contacto_telefono || '',
+          email:    row.contacto_email    || '',
+        }],
+        usuario,
+        password_hash: hashed,
+        activo: false,
+      })
+      if (error) omitidos++; else creados++
+    }
+    setMsg(`✅ ${creados} colegios importados.${omitidos > 0 ? ` ${omitidos} omitidos (datos incompletos o duplicados).` : ''}`)
+    setMode('lista'); onSave(); setUploading(false)
+  }
+
+  const downloadPlantilla = () => {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['Nombre','Departamento','Municipio','Dirección','Barrio','Calendario','Naturaleza','Jornada','Contacto Nombre','Contacto Cargo','Contacto Teléfono','Contacto Email'],
+      ['Colegio Ejemplo','Antioquia','Medellín','Calle 1 # 2-3','Centro','A','Oficial','Mañana','Juan Pérez','Rector','3001234567','rector@colegio.edu.co'],
+    ])
+    ws['!cols'] = Array(12).fill({wch:22})
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Colegios')
+    XLSX.writeFile(wb, 'plantilla_colegios.xlsx')
+  }
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)',
+      display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999, padding:24 }}>
+      <div style={{ background:C.white, borderRadius:12, padding:32,
+        width:'100%', maxWidth:900, maxHeight:'92vh', overflowY:'auto',
+        boxShadow:'0 20px 60px rgba(0,0,0,0.3)' }}>
+
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:24 }}>
+          <div>
+            <h2 style={{ fontFamily:'Playfair Display, serif', fontSize:22, color:C.navy }}>
+              Importar Colegios desde Excel
+            </h2>
+            <div style={{ fontSize:12, color:C.gray, fontFamily:'Inter', marginTop:2 }}>
+              Todos los colegios se crearán en estado <strong>inactivo</strong>. Las credenciales se generan automáticamente.
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer', color:C.gray }}>✕</button>
+        </div>
+
+        {mode === 'subir' && (
+          <div>
+            <div style={{ background:'#FFF9EB', border:'1px solid #FDE68A', borderRadius:8,
+              padding:'10px 14px', marginBottom:20, fontFamily:'Inter', fontSize:12, color:'#92400E' }}>
+              💡 Descarga la plantilla para ver el formato exacto de columnas esperado.
+            </div>
+            <div style={{ background:C.bg2, borderRadius:8, padding:32,
+              border:`2px dashed ${C.grayLt}`, textAlign:'center' }}>
+              <div style={{ fontSize:36, marginBottom:8 }}>📂</div>
+              <div style={{ fontFamily:'Playfair Display, serif', fontSize:18, color:C.navy, marginBottom:6 }}>
+                Selecciona el archivo Excel con los colegios
+              </div>
+              <div style={{ fontSize:12, color:C.gray, fontFamily:'Inter', marginBottom:16 }}>
+                Columnas: Nombre · Departamento · Municipio · Dirección · Barrio · Calendario · Naturaleza · Jornada · Contacto (nombre, cargo, tel, email)
+              </div>
+              <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleFile} style={{display:'none'}}/>
+              <div style={{ display:'flex', gap:10, justifyContent:'center' }}>
+                <Btn onClick={()=>fileRef.current?.click()} color={C.green}>Seleccionar archivo</Btn>
+                <Btn onClick={downloadPlantilla} outline color={C.navy}>↓ Plantilla</Btn>
+                <Btn onClick={onClose} outline color={C.gray}>Cancelar</Btn>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {mode === 'preview' && (
+          <div>
+            <div style={{ fontFamily:'Inter', fontSize:13, color:C.navy, marginBottom:16, fontWeight:500 }}>
+              Vista previa — {preview.length} colegios a importar
+            </div>
+            <div style={{ maxHeight:380, overflowY:'auto', marginBottom:16, overflowX:'auto' }}>
+              <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter', minWidth:900 }}>
+                <thead>
+                  <tr style={{ borderBottom:`2px solid ${C.bg2}`, position:'sticky', top:0, background:C.white }}>
+                    {['Nombre','Departamento','Municipio','Calendario','Naturaleza','Jornada','Contacto'].map(h=>(
+                      <th key={h} style={{ textAlign:'left', padding:'8px 10px', fontSize:10,
+                        color:C.gray, fontWeight:600, textTransform:'uppercase', whiteSpace:'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.map((r,i)=>(
+                    <tr key={i} style={{ borderBottom:`1px solid ${C.bg2}` }}>
+                      <td style={{ padding:'8px 10px', fontSize:12, color:C.text, fontWeight:500 }}>{r.nombre}</td>
+                      <td style={{ padding:'8px 10px', fontSize:12, color:C.gray }}>{r.departamento_nombre}</td>
+                      <td style={{ padding:'8px 10px', fontSize:12, color:C.gray }}>{r.municipio}</td>
+                      <td style={{ padding:'8px 10px', fontSize:12, color:C.gray }}>{r.calendario||'—'}</td>
+                      <td style={{ padding:'8px 10px', fontSize:12, color:C.gray }}>{r.naturaleza||'—'}</td>
+                      <td style={{ padding:'8px 10px', fontSize:12, color:C.gray }}>{r.jornada||'—'}</td>
+                      <td style={{ padding:'8px 10px', fontSize:12, color:C.gray }}>{r.contacto_nombre||'—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
+              <Btn onClick={()=>setMode('subir')} outline color={C.gray}>Volver</Btn>
+              <Btn onClick={handleUpload} disabled={uploading} color={C.green}>
+                {uploading ? 'Importando...' : `Importar ${preview.length} colegios`}
+              </Btn>
+            </div>
+          </div>
+        )}
+
+        {mode === 'lista' && msg && (
+          <div style={{ background:'#F0FFF4', border:'1px solid #BBF7D0', borderRadius:8,
+            padding:20, textAlign:'center', fontFamily:'Inter', fontSize:14, color:C.green }}>
+            {msg}
+            <div style={{ marginTop:16 }}><Btn onClick={onClose}>Cerrar</Btn></div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── MODAL HISTÓRICOS ──────────────────────────────────────────
+const ModalHistoricos = ({ colegio, onClose }) => {
+  const [anios, setAnios]     = useState([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving]   = useState(false)
+  const [msg, setMsg]         = useState('')
+
+  useEffect(() => { loadAnios() }, [])
+
+  const loadAnios = async () => {
+    setLoading(true)
+    const { data } = await supabase
+      .from('colegio_anios')
+      .select('*')
+      .eq('colegio_id', colegio.id)
+      .order('anio', { ascending: false })
+    setAnios(data || [])
+    setLoading(false)
+  }
+
+  const anioActivo = anios.find(a => a.activo)
+  const anioActual = new Date().getFullYear()
+
+  const handleIniciarAnio = async () => {
+    if (anioActivo) {
+      setMsg('⚠️ Ya existe un año activo. Ciérralo antes de iniciar uno nuevo.')
+      return
+    }
+    setSaving(true); setMsg('')
+    const { error } = await supabase.from('colegio_anios').insert({
+      colegio_id:   colegio.id,
+      anio:         anioActual,
+      activo:       true,
+      fecha_inicio: new Date().toISOString().split('T')[0],
+    })
+    if (error) setMsg('❌ Error: ' + error.message)
+    else { setMsg(`✅ Año ${anioActual} iniciado correctamente.`); await loadAnios() }
+    setSaving(false)
+  }
+
+  const handleCerrarAnio = async () => {
+    if (!anioActivo) return
+    if (!confirm(`¿Cerrar el año ${anioActivo.anio}? Los resultados quedarán archivados y podrás iniciar el siguiente año.`)) return
+    setSaving(true); setMsg('')
+    const { error } = await supabase.from('colegio_anios').update({
+      activo:       false,
+      fecha_cierre: new Date().toISOString().split('T')[0],
+    }).eq('id', anioActivo.id)
+    if (error) setMsg('❌ Error: ' + error.message)
+    else { setMsg(`✅ Año ${anioActivo.anio} cerrado y archivado.`); await loadAnios() }
+    setSaving(false)
+  }
+
+  const formatFecha = (f) => f ? new Date(f + 'T12:00:00').toLocaleDateString('es-CO', { year:'numeric', month:'long', day:'numeric' }) : '—'
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)',
+      display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999, padding:24 }}>
+      <div style={{ background:C.white, borderRadius:12, padding:32,
+        width:'100%', maxWidth:620, maxHeight:'88vh', overflowY:'auto',
+        boxShadow:'0 20px 60px rgba(0,0,0,0.3)' }}>
+
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+          <h2 style={{ fontFamily:'Playfair Display, serif', fontSize:22, color:C.navy }}>
+            Históricos
+          </h2>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer', color:C.gray }}>✕</button>
+        </div>
+        <div style={{ fontSize:13, color:C.gray, fontFamily:'Inter', marginBottom:24 }}>
+          {colegio.nombre}
+        </div>
+
+        {msg && (
+          <div style={{ background: msg.startsWith('✅') ? '#F0FFF4' : '#FEF2F2',
+            border:`1px solid ${msg.startsWith('✅') ? '#BBF7D0' : '#FECACA'}`,
+            borderRadius:6, padding:'10px 14px', marginBottom:16, fontSize:13,
+            color: msg.startsWith('✅') ? C.green : C.red, fontFamily:'Inter' }}>{msg}</div>
+        )}
+
+        {/* Acciones */}
+        <div style={{ display:'flex', gap:10, marginBottom:24 }}>
+          {!anioActivo && (
+            <Btn onClick={handleIniciarAnio} disabled={saving} color={C.green}>
+              + Iniciar año {anioActual}
+            </Btn>
+          )}
+          {anioActivo && (
+            <Btn onClick={handleCerrarAnio} disabled={saving} color={C.amber}>
+              Cerrar y archivar año {anioActivo.anio}
+            </Btn>
+          )}
+        </div>
+
+        {/* Lista de años */}
+        {loading ? (
+          <div style={{ textAlign:'center', padding:32, color:C.gray, fontFamily:'Inter' }}>Cargando...</div>
+        ) : anios.length === 0 ? (
+          <div style={{ textAlign:'center', padding:32, color:C.gray, fontFamily:'Inter', background:C.bg, borderRadius:8 }}>
+            <div style={{ fontSize:32, marginBottom:8 }}>📅</div>
+            <div style={{ fontSize:14, color:C.navy, fontFamily:'Playfair Display, serif', marginBottom:4 }}>Sin histórico registrado</div>
+            <div style={{ fontSize:12 }}>Inicia el año {anioActual} para comenzar a registrar resultados.</div>
+          </div>
+        ) : (
+          <div>
+            <SectionTitle>Años registrados</SectionTitle>
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              {anios.map(a => (
+                <div key={a.id} style={{
+                  background: a.activo ? '#F0FFF4' : C.bg,
+                  border:`1px solid ${a.activo ? '#BBF7D0' : C.grayLt}`,
+                  borderRadius:8, padding:'14px 18px',
+                  display:'flex', justifyContent:'space-between', alignItems:'center',
+                }}>
+                  <div>
+                    <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                      <span style={{ fontFamily:'Playfair Display, serif', fontSize:20, color:C.navy, fontWeight:700 }}>{a.anio}</span>
+                      {a.activo && <Badge color={C.green}>Año activo</Badge>}
+                      {!a.activo && <Badge color={C.gray}>Archivado</Badge>}
+                    </div>
+                    <div style={{ fontSize:12, color:C.gray, fontFamily:'Inter', marginTop:4 }}>
+                      Inicio: {formatFecha(a.fecha_inicio)}
+                      {a.fecha_cierre && <> · Cierre: {formatFecha(a.fecha_cierre)}</>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── MENÚ ACCIONES DESPLEGABLE ─────────────────────────────────
-const AccionesMenu = ({ onEditar, onEstudiantes, onToggle, activo, onBorrarResultados, onEliminar }) => {
+const AccionesMenu = ({ onEditar, onEstudiantes, onHistoricos, onToggle, activo, onBorrarResultados, onEliminar }) => {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState({ top:0, left:0 })
   const btnRef = useRef()
@@ -565,6 +894,7 @@ const AccionesMenu = ({ onEditar, onEstudiantes, onToggle, activo, onBorrarResul
   const items = [
     { label:'✏️ Editar',            onClick: onEditar,           color: C.text  },
     { label:'👥 Estudiantes',        onClick: onEstudiantes,      color: C.green },
+    { label:'📅 Históricos',         onClick: onHistoricos,       color: C.navy  },
     { label: activo ? '🔴 Desactivar' : '🟢 Activar', onClick: onToggle, color: activo ? C.amber : C.green },
     { label:'🗑️ Borrar resultados',  onClick: onBorrarResultados, color: C.red   },
     { label:'❌ Eliminar colegio',   onClick: onEliminar,         color: C.red   },
@@ -605,11 +935,13 @@ const AccionesMenu = ({ onEditar, onEstudiantes, onToggle, activo, onBorrarResul
 
 // ── MAIN ─────────────────────────────────────────────────────
 export default function AdminColegios({ onUpdate }) {
-  const [colegios, setColegios] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [colegios, setColegios]         = useState([])
+  const [loading, setLoading]           = useState(true)
   const [modalColegio, setModalColegio] = useState(null)
-  const [modalEst, setModalEst] = useState(null)
-  const [search, setSearch] = useState('')
+  const [modalEst, setModalEst]         = useState(null)
+  const [modalImport, setModalImport]   = useState(false)
+  const [modalHistorico, setModalHistorico] = useState(null)
+  const [search, setSearch]             = useState('')
 
   useEffect(() => { loadColegios() }, [])
 
@@ -673,7 +1005,10 @@ export default function AdminColegios({ onUpdate }) {
           placeholder="Buscar por nombre, municipio o departamento..."
           style={{ padding:'10px 16px', border:`1px solid ${C.grayLt}`, borderRadius:8,
             fontFamily:'Inter', fontSize:13, width:320, outline:'none', background:C.bg }} />
-        <Btn onClick={()=>setModalColegio('new')} color={C.green}>+ Nuevo Colegio</Btn>
+        <div style={{ display:'flex', gap:8 }}>
+          <Btn onClick={()=>setModalImport(true)} outline color={C.navy}>↑ Importar Excel</Btn>
+          <Btn onClick={()=>setModalColegio('new')} color={C.green}>+ Nuevo Colegio</Btn>
+        </div>
       </div>
 
       <Card>
@@ -715,6 +1050,7 @@ export default function AdminColegios({ onUpdate }) {
                       <AccionesMenu
                         onEditar={()=>setModalColegio(c)}
                         onEstudiantes={()=>setModalEst(c)}
+                        onHistoricos={()=>setModalHistorico(c)}
                         onToggle={()=>handleToggle(c)}
                         activo={c.activo}
                         onBorrarResultados={()=>handleDeleteResultados(c)}
@@ -741,6 +1077,18 @@ export default function AdminColegios({ onUpdate }) {
           colegio={modalEst}
           onClose={()=>setModalEst(null)}
           onSave={handleSave}
+        />
+      )}
+      {modalImport && (
+        <ModalImportarColegios
+          onClose={()=>setModalImport(false)}
+          onSave={handleSave}
+        />
+      )}
+      {modalHistorico && (
+        <ModalHistoricos
+          colegio={modalHistorico}
+          onClose={()=>setModalHistorico(null)}
         />
       )}
     </div>
