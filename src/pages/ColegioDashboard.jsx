@@ -202,15 +202,13 @@ function PlantelResultados({ colegioId, pruebas }) {
   useEffect(() => {
     if (!filtroPrueba) return
     const load = async () => {
-      const prueba = pruebas.find(p => p.id === filtroPrueba)
-      if (!prueba) return
       const { data } = await supabase.from('resultados_estudiante')
         .select('estudiante_id, puntaje_global')
         .eq('colegio_id', colegioId).eq('prueba_id', filtroPrueba)
       setResultados(data || [])
     }
     load()
-  }, [filtroPrueba])
+  }, [filtroPrueba, colegioId])
 
   const grados = ['Todos', ...new Set(estudiantes.map(e => e.grado).filter(Boolean))]
   const salones = ['Todos', ...new Set(

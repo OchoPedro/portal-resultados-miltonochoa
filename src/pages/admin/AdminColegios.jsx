@@ -82,7 +82,8 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
     nombre:'', departamento_nombre:'', municipio:'', direccion:'', barrio:'',
     contactos:[{nombre:'', cargo:'', telefono:'', email:''}],
     usuario:'', password_hash:'',
-    ...(colegio || {})
+    ...(colegio || {}),
+    password_hash: '',  // nunca prellenar con el hash bcrypt del DB
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -123,7 +124,7 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
     if (!c?.telefono) return 'Teléfono del contacto principal es obligatorio.'
     if (!c?.email) return 'Correo del contacto principal es obligatorio.'
     if (!form.usuario) return 'Usuario es obligatorio.'
-    if (!form.password_hash) return 'Contraseña es obligatoria.'
+    if (!colegio && !form.password_hash) return 'Contraseña es obligatoria.'
     return null
   }
 
@@ -132,7 +133,11 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
     if (err) { setError(err); return }
     setSaving(true)
     try {
-      const { data: hashed } = await supabase.rpc('hashear_password', { p_password: form.password_hash })
+      let hashedPassword
+      if (form.password_hash) {
+        const { data: hashed } = await supabase.rpc('hashear_password', { p_password: form.password_hash })
+        hashedPassword = hashed
+      }
       const payload = {
         nombre: form.nombre,
         departamento_nombre: form.departamento_nombre,
@@ -145,7 +150,7 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
         contacto_telefono: form.contactos?.[0]?.telefono,
         contacto_email: form.contactos?.[0]?.email,
         usuario: form.usuario,
-        password_hash: hashed,
+        ...(hashedPassword ? { password_hash: hashedPassword } : {}),
         activo: true,
       }
       const { error: err } = colegio
@@ -225,8 +230,11 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
           <Input label="Usuario (generado automáticamente)" value={generando?'Generando...':form.usuario}
             onChange={v=>set('usuario',v)} placeholder="Se genera al seleccionar municipio" required/>
-          <Input label="Contraseña inicial" value={form.password_hash}
-            onChange={v=>set('password_hash',v)} placeholder="Contraseña inicial" required/>
+          <Input label={colegio ? 'Nueva contraseña (dejar en blanco para no cambiar)' : 'Contraseña inicial'}
+            value={form.password_hash}
+            onChange={v=>set('password_hash',v)}
+            placeholder={colegio ? 'Dejar en blanco para mantener la actual' : 'Contraseña inicial'}
+            required={!colegio}/>
         </div>
 
         {error && (
@@ -317,10 +325,11 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
     let creados=0, omitidos=0
     for (const row of preview) {
       const { usuario, password } = generateCredentials(row.nombre, row.documento)
+      const { data: hashed } = await supabase.rpc('hashear_password', { p_password: password })
       const { error } = await supabase.from('estudiantes').insert({
         colegio_id: colegio.id, nombre: row.nombre,
         grado: row.grado, salon: row.salon,
-        usuario, password_hash: password, activo: true,
+        usuario, password_hash: hashed, activo: true,
       })
       if (error) omitidos++; else creados++
     }
