@@ -133,18 +133,61 @@ function ModoSelector({ onSelect }) {
 // ─── Análisis Pruebas Internas ─────────────────────────────────────────────
 
 function AnalisisPruebas({ colegios, pruebas }) {
-  const [selectedColegio, setSelectedColegio] = useState('')
-  const [selectedPrueba, setSelectedPrueba] = useState('')
-  const [promptCustom, setPromptCustom] = useState('')
+  // Filtros en cascada
+  const [selectedDepto,    setSelectedDepto]    = useState('')
+  const [selectedMuni,     setSelectedMuni]     = useState('')
+  const [selectedColegio,  setSelectedColegio]  = useState('')
+  const [selectedPrueba,   setSelectedPrueba]   = useState('')
+  const [selectedGrado,    setSelectedGrado]    = useState('')
+  const [selectedSalon,    setSelectedSalon]    = useState('')
+  // Listas derivadas
+  const [gradosDisp,  setGradosDisp]  = useState([])
+  const [salonesDisp, setSalonesDisp] = useState([])
+  // Análisis
+  const [promptCustom,       setPromptCustom]       = useState('')
   const [analisisExistentes, setAnalisisExistentes] = useState([])
-  const [generando, setGenerando] = useState(false)
-  const [borrador, setBorrador] = useState(null)
-  const [publicando, setPublicando] = useState(false)
-  const [msg, setMsg] = useState('')
+  const [generando,          setGenerando]          = useState(false)
+  const [borrador,           setBorrador]           = useState(null)
+  const [publicando,         setPublicando]         = useState(false)
+  const [msg,                setMsg]                = useState('')
+
+  // Deptos y municipios derivados del listado ya cargado
+  const deptos = [...new Set(colegios.map(c => c.departamento_nombre).filter(Boolean))].sort()
+  const munisDisp = selectedDepto
+    ? [...new Set(colegios.filter(c => c.departamento_nombre === selectedDepto).map(c => c.municipio).filter(Boolean))].sort()
+    : []
+  const colegiosFiltrados = colegios.filter(c => {
+    if (selectedMuni)  return c.municipio === selectedMuni
+    if (selectedDepto) return c.departamento_nombre === selectedDepto
+    return true
+  })
 
   useEffect(() => {
     if (selectedColegio && selectedPrueba) loadAnalisis()
+    else setAnalisisExistentes([])
   }, [selectedColegio, selectedPrueba])
+
+  useEffect(() => {
+    if (selectedColegio) loadGrados(selectedColegio)
+    else { setGradosDisp([]); setSelectedGrado(''); setSalonesDisp([]); setSelectedSalon('') }
+  }, [selectedColegio])
+
+  useEffect(() => {
+    if (selectedColegio && selectedGrado) loadSalones(selectedColegio, selectedGrado)
+    else { setSalonesDisp([]); setSelectedSalon('') }
+  }, [selectedColegio, selectedGrado])
+
+  const loadGrados = async (colegioId) => {
+    const { data } = await supabase.from('estudiantes')
+      .select('grado').eq('colegio_id', colegioId).eq('activo', true).order('grado')
+    setGradosDisp([...new Set((data||[]).map(r => r.grado).filter(Boolean))].sort())
+  }
+
+  const loadSalones = async (colegioId, grado) => {
+    const { data } = await supabase.from('estudiantes')
+      .select('salon').eq('colegio_id', colegioId).eq('grado', grado).eq('activo', true).order('salon')
+    setSalonesDisp([...new Set((data||[]).map(r => r.salon).filter(Boolean))].sort())
+  }
 
   const loadAnalisis = async () => {
     const { data } = await supabase.from('analisis_ia')
@@ -153,13 +196,34 @@ function AnalisisPruebas({ colegios, pruebas }) {
     setAnalisisExistentes(data || [])
   }
 
+  // Cambios en cascada
+  const cambiarDepto = (v) => { setSelectedDepto(v); setSelectedMuni(''); setSelectedColegio(''); setSelectedPrueba(''); setSelectedGrado(''); setSelectedSalon(''); setBorrador(null) }
+  const cambiarMuni  = (v) => { setSelectedMuni(v);  setSelectedColegio(''); setSelectedPrueba(''); setSelectedGrado(''); setSelectedSalon(''); setBorrador(null) }
+  const cambiarCol   = (v) => { setSelectedColegio(v); setSelectedPrueba(''); setSelectedGrado(''); setSelectedSalon(''); setBorrador(null) }
+  const cambiarPrueba= (v) => { setSelectedPrueba(v); setBorrador(null) }
+  const cambiarGrado = (v) => { setSelectedGrado(v); setSelectedSalon(''); setBorrador(null) }
+
   const generarAnalisis = async () => {
     if (!selectedColegio || !selectedPrueba) return
     setGenerando(true); setBorrador(null); setMsg('')
 
-    const { data: resultados } = await supabase
-      .from('resultados_estudiante').select('*, estudiantes(nombre)')
+    // Si hay filtro por grado/salón, obtener IDs de estudiantes primero
+    let estudianteIdsFiltro = null
+    if (selectedGrado) {
+      let qEst = supabase.from('estudiantes').select('id')
+        .eq('colegio_id', selectedColegio).eq('grado', selectedGrado).eq('activo', true)
+      if (selectedSalon) qEst = qEst.eq('salon', selectedSalon)
+      const { data: estFiltro } = await qEst
+      estudianteIdsFiltro = (estFiltro||[]).map(e => e.id)
+    }
+
+    let qRes = supabase.from('resultados_estudiante')
+      .select('*, estudiantes(nombre, grado, salon)')
       .eq('colegio_id', selectedColegio).eq('prueba_id', selectedPrueba)
+    if (estudianteIdsFiltro !== null)
+      qRes = qRes.in('estudiante_id', estudianteIdsFiltro.length ? estudianteIdsFiltro : ['no-match'])
+
+    const { data: resultados } = await qRes
     const { data: competencias } = await supabase
       .from('notas_competencia').select('competencia, nota')
       .in('estudiante_id', (resultados||[]).map(r => r.estudiante_id))
@@ -170,26 +234,34 @@ function AnalisisPruebas({ colegios, pruebas }) {
       .eq('oportunidad_mejora', true).order('pct_colegio')
 
     const colegio = colegios.find(c => c.id === selectedColegio)
-    const prueba = pruebas.find(p => p.id === selectedPrueba)
-    const avg = arr => arr.length ? (arr.reduce((a,b)=>a+b,0)/arr.length).toFixed(1) : 0
+    const prueba  = pruebas.find(p => p.id === selectedPrueba)
+    const avg = arr => arr.filter(v => v != null && !isNaN(v)).length
+      ? (arr.filter(v => v != null && !isNaN(v)).reduce((a,b)=>a+b,0) / arr.filter(v => v != null && !isNaN(v)).length).toFixed(1)
+      : '—'
     const vals = resultados || []
-    const promGlobal = avg(vals.map(r=>r.puntaje_global).filter(Boolean))
-    const promMat = avg(vals.map(r=>((r.mat_cuantitativo||0)+(r.mat_especifico||0))/2))
-    const promCN  = avg(vals.map(r=>((r.cn_quimica||0)+(r.cn_fisica||0)+(r.cn_biologia||0)+(r.cn_cts||0))/4))
-    const promSoc = avg(vals.map(r=>r.sociales||0))
-    const promLC  = avg(vals.map(r=>r.lectura_critica||0))
-    const promIng = avg(vals.map(r=>r.ingles||0))
+
+    const promGlobal = avg(vals.map(r=>r.puntaje_global))
+    const promMat    = avg(vals.map(r=>((r.mat_cuantitativo||0)+(r.mat_especifico||0))/2))
+    const promCN     = avg(vals.map(r=>((r.cn_quimica||0)+(r.cn_fisica||0)+(r.cn_biologia||0)+(r.cn_cts||0))/4))
+    const promSoc    = avg(vals.map(r=>r.sociales||0))
+    const promLC     = avg(vals.map(r=>r.lectura_critica||0))
+    const promIng    = avg(vals.map(r=>r.ingles||0))
 
     const compGrupo = {}
     ;(competencias||[]).forEach(c => {
       if (!compGrupo[c.competencia]) compGrupo[c.competencia] = []
       compGrupo[c.competencia].push(c.nota)
     })
-    const compArr = Object.entries(compGrupo).map(([k,v]) => ({comp:k, prom: avg(v)})).sort((a,b) => b.prom - a.prom)
-    const topComp = compArr.slice(0,3).map(c=>`${c.comp} (${c.prom}%)`).join(', ')
-    const bajComp = compArr.slice(-3).map(c=>`${c.comp} (${c.prom}%)`).join(', ')
-    const topOpor = (oportunidades||[]).slice(0,5)
+    const compArr  = Object.entries(compGrupo).map(([k,v]) => ({comp:k, prom: avg(v)})).sort((a,b) => b.prom - a.prom)
+    const topComp  = compArr.slice(0,3).map(c=>`${c.comp} (${c.prom}%)`).join(', ')
+    const bajComp  = compArr.slice(-3).map(c=>`${c.comp} (${c.prom}%)`).join(', ')
+    const topOpor  = (oportunidades||[]).slice(0,5)
       .map(q=>`Pregunta ${q.nro_pregunta} de ${q.materia} (colegio ${q.pct_colegio}% vs nacional ${q.pct_nacional}%)`).join('; ')
+
+    const alcance = [
+      selectedGrado ? `Grado ${selectedGrado}` : 'Todos los grados',
+      selectedSalon ? `Salón ${selectedSalon}` : null,
+    ].filter(Boolean).join(', ')
 
     const instruccionCustom = promptCustom.trim()
       ? `\nENFOQUE ESPECÍFICO SOLICITADO: ${promptCustom.trim()}\nUtiliza ÚNICAMENTE los datos suministrados. No inventes información externa.`
@@ -199,6 +271,7 @@ function AnalisisPruebas({ colegios, pruebas }) {
 
 Analiza los siguientes resultados del ${colegio?.nombre} en la prueba ${prueba?.codigo} y genera un informe de recomendaciones pedagógicas detallado.
 
+ALCANCE DEL ANÁLISIS: ${alcance}
 RESULTADOS:
 - Puntaje Global Promedio: ${promGlobal} puntos
 - Matemáticas: ${promMat}% | Ciencias Naturales: ${promCN}% | Sociales: ${promSoc}%
@@ -255,26 +328,80 @@ Sé específico, práctico y orientado a la acción. Tono profesional pero cerca
     await loadAnalisis()
   }
 
+  const colegioSel = colegios.find(c => c.id === selectedColegio)
+  const pruebaSel  = pruebas.find(p => p.id === selectedPrueba)
+
   return (
     <div style={{ display:'grid', gap:20 }}>
       <Card>
         <SectionTitle>Generar Análisis de Prueba Interna</SectionTitle>
+
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
+          {/* Departamento */}
           <div>
-            <Label>Colegio *</Label>
-            <select value={selectedColegio} onChange={e=>setSelectedColegio(e.target.value)} style={selStyle}>
-              <option value="">Seleccionar colegio...</option>
-              {colegios.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+            <Label>Departamento</Label>
+            <select value={selectedDepto} onChange={e => cambiarDepto(e.target.value)} style={selStyle}>
+              <option value="">Todos los departamentos</option>
+              {deptos.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
           </div>
+          {/* Municipio */}
+          <div>
+            <Label>Municipio</Label>
+            <select value={selectedMuni} onChange={e => cambiarMuni(e.target.value)} style={selStyle}
+              disabled={!selectedDepto}>
+              <option value="">{selectedDepto ? 'Todos los municipios' : 'Selecciona departamento primero'}</option>
+              {munisDisp.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+          {/* Colegio */}
+          <div>
+            <Label>Nombre *</Label>
+            <select value={selectedColegio} onChange={e => cambiarCol(e.target.value)} style={selStyle}>
+              <option value="">Seleccionar colegio...</option>
+              {colegiosFiltrados.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+            </select>
+          </div>
+          {/* Prueba */}
           <div>
             <Label>Prueba *</Label>
-            <select value={selectedPrueba} onChange={e=>setSelectedPrueba(e.target.value)} style={selStyle}>
-              <option value="">Seleccionar prueba...</option>
+            <select value={selectedPrueba} onChange={e => cambiarPrueba(e.target.value)} style={selStyle}
+              disabled={!selectedColegio}>
+              <option value="">{selectedColegio ? 'Seleccionar prueba...' : 'Selecciona colegio primero'}</option>
               {pruebas.map(p => <option key={p.id} value={p.id}>{p.codigo} — {p.nombre}</option>)}
             </select>
           </div>
+          {/* Grado */}
+          <div>
+            <Label>Grado</Label>
+            <select value={selectedGrado} onChange={e => cambiarGrado(e.target.value)} style={selStyle}
+              disabled={!selectedColegio}>
+              <option value="">{selectedColegio ? 'Todos los grados' : 'Selecciona colegio primero'}</option>
+              {gradosDisp.map(g => <option key={g} value={g}>Grado {g}</option>)}
+            </select>
+          </div>
+          {/* Salón */}
+          <div>
+            <Label>Salón</Label>
+            <select value={selectedSalon} onChange={e => setSelectedSalon(e.target.value)} style={selStyle}
+              disabled={!selectedGrado}>
+              <option value="">{selectedGrado ? 'Todos los salones' : 'Selecciona grado primero'}</option>
+              {salonesDisp.map(s => <option key={s} value={s}>Salón {s}</option>)}
+            </select>
+          </div>
         </div>
+
+        {/* Scope badge */}
+        {selectedColegio && selectedPrueba && (
+          <div style={{ marginBottom:16, padding:'8px 14px', background:'#EEF2FF',
+            border:'1px solid #C7D2FE', borderRadius:6, fontSize:12, color:'#3730A3',
+            fontFamily:'Inter', fontWeight:500 }}>
+            📍 {colegioSel?.nombre} · {pruebaSel?.codigo}
+            {selectedGrado ? ` · Grado ${selectedGrado}` : ''}
+            {selectedSalon ? ` · Salón ${selectedSalon}` : ''}
+          </div>
+        )}
+
         <div style={{ marginBottom:16 }}>
           <Label>¿Qué deseas examinar? (opcional)</Label>
           <textarea value={promptCustom} onChange={e=>setPromptCustom(e.target.value)}
@@ -284,6 +411,7 @@ Sé específico, práctico y orientado a la acción. Tono profesional pero cerca
             Claude solo usará los datos de la prueba seleccionada, sin información externa.
           </div>
         </div>
+
         <div style={{ display:'flex', gap:10, alignItems:'center' }}>
           <Btn onClick={generarAnalisis} disabled={!selectedColegio||!selectedPrueba||generando} color={C.green}>
             {generando ? '⏳ Generando análisis...' : '✨ Generar análisis con IA'}
@@ -302,7 +430,9 @@ Sé específico, práctico y orientado a la acción. Tono profesional pero cerca
                 Borrador — Revisar antes de publicar
               </div>
               <div style={{ fontSize:11, color:C.gray, fontFamily:'Inter', marginTop:3 }}>
-                {colegios.find(c=>c.id===selectedColegio)?.nombre} · {pruebas.find(p=>p.id===selectedPrueba)?.codigo}
+                {colegioSel?.nombre} · {pruebaSel?.codigo}
+                {selectedGrado ? ` · Grado ${selectedGrado}` : ''}
+                {selectedSalon ? ` · Salón ${selectedSalon}` : ''}
               </div>
             </div>
             <div style={{ display:'flex', gap:8 }}>
@@ -318,7 +448,7 @@ Sé específico, práctico y orientado a la acción. Tono profesional pero cerca
 
       {analisisExistentes.length > 0 && (
         <Card>
-          <SectionTitle>Análisis Guardados — {colegios.find(c=>c.id===selectedColegio)?.nombre}</SectionTitle>
+          <SectionTitle>Análisis Guardados — {colegioSel?.nombre}</SectionTitle>
           {analisisExistentes.map((a,i) => (
             <div key={i} style={{ borderBottom: i<analisisExistentes.length-1?`1px solid ${C.bg2}`:'none',
               paddingBottom:16, marginBottom:16 }}>
@@ -930,7 +1060,7 @@ export default function AdminAnalisis() {
 
   const loadData = async () => {
     const [{ data: cols }, { data: prbs }] = await Promise.all([
-      supabase.from('colegios').select('id, nombre, usuario').eq('activo', true).order('nombre'),
+      supabase.from('colegios').select('id, nombre, usuario, departamento_nombre, municipio').eq('activo', true).order('nombre'),
       supabase.from('pruebas').select('id, codigo, nombre, tipo').eq('activa', true).order('nombre'),
     ])
     setColegios(cols || [])
