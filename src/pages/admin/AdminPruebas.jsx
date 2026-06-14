@@ -9,7 +9,7 @@ const C = {
   red:'#E05252', amber:'#F59E0B',
 }
 
-const GRADOS = Array.from({ length: 12 }, (_, i) => i) // 0 a 11
+const GRADOS = Array.from({ length: 12 }, (_, i) => i)
 
 function Input({ label, value, onChange, placeholder, required }) {
   return (
@@ -91,16 +91,14 @@ function ExcelUploader({ onParsed, parsed }) {
     if (!file) return
     setError('')
     setFileName(file.name)
-
     const reader = new FileReader()
     reader.onload = (evt) => {
       try {
         const wb = XLSX.read(evt.target.result, { type: 'binary' })
         const ws = wb.Sheets[wb.SheetNames[0]]
         const data = XLSX.utils.sheet_to_json(ws, { header: 1 })
-        // Pasar los datos crudos — la estructura la define el admin
-        onParsed({ raw: data, rows: data.length, cols: data[0]?.length || 0 })
-      } catch (err) {
+        onParsed({ raw: data, rows: data.length, cols: data[0]?.length || 0, fileName: file.name })
+      } catch {
         setError('Error al leer el archivo. Verifica que sea un Excel válido.')
       }
     }
@@ -113,19 +111,17 @@ function ExcelUploader({ onParsed, parsed }) {
         color:C.navy, marginBottom:6, fontFamily:'Inter' }}>
         Estructura de la prueba (Excel) <span style={{ color:C.red }}>*</span>
       </label>
-
       <div style={{ border:`2px dashed ${parsed ? C.green : C.grayLt}`,
         borderRadius:8, padding:'16px', textAlign:'center',
         background: parsed ? '#F0FDF4' : C.bg2, cursor:'pointer' }}
         onClick={() => inputRef.current.click()}>
         <input ref={inputRef} type="file" accept=".xlsx,.xls"
           style={{ display:'none' }} onChange={handleFile}/>
-
         {parsed ? (
           <div>
             <div style={{ fontSize:20 }}>✅</div>
             <div style={{ fontSize:13, fontWeight:600, color:C.green, fontFamily:'Inter' }}>
-              {fileName}
+              {fileName || parsed.fileName}
             </div>
             <div style={{ fontSize:11, color:C.gray, fontFamily:'Inter', marginTop:2 }}>
               {parsed.rows} filas × {parsed.cols} columnas — clic para cambiar
@@ -143,16 +139,96 @@ function ExcelUploader({ onParsed, parsed }) {
           </div>
         )}
       </div>
+      {error && <p style={{ fontSize:12, color:C.red, marginTop:4, fontFamily:'Inter' }}>{error}</p>}
+    </div>
+  )
+}
 
-      {error && (
-        <p style={{ fontSize:12, color:C.red, marginTop:4, fontFamily:'Inter' }}>{error}</p>
-      )}
+// ── MODAL VER EXCEL ───────────────────────────────────────────
+function ModalVerExcel({ referencia, onClose }) {
+  const data = referencia.estructura_excel?.raw || []
+  const fileName = referencia.estructura_excel?.fileName || `${referencia.codigo}.xlsx`
+
+  const handleDownload = () => {
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.aoa_to_sheet(data)
+    XLSX.utils.book_append_sheet(wb, ws, 'Prueba')
+    XLSX.writeFile(wb, fileName)
+  }
+
+  const headers = data[0] || []
+  const rows = data.slice(1)
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)',
+      display:'flex', alignItems:'center', justifyContent:'center', zIndex:1100 }}>
+      <div style={{ background:C.white, borderRadius:12, width:'92%', maxWidth:900,
+        maxHeight:'88vh', display:'flex', flexDirection:'column',
+        boxShadow:'0 24px 64px rgba(0,0,0,0.25)' }}>
+
+        {/* Header */}
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
+          padding:'18px 24px', borderBottom:`1px solid ${C.grayLt}` }}>
+          <div>
+            <h2 style={{ fontSize:16, fontWeight:700, color:C.navy, margin:0, fontFamily:'Inter' }}>
+              📊 {referencia.nombre}
+            </h2>
+            <p style={{ fontSize:12, color:C.gray, margin:'2px 0 0', fontFamily:'Inter' }}>
+              {data.length} filas · {headers.length} columnas
+            </p>
+          </div>
+          <div style={{ display:'flex', gap:10, alignItems:'center' }}>
+            <Btn small onClick={handleDownload}>⬇ Descargar Excel</Btn>
+            <button onClick={onClose} style={{ background:'none', border:'none',
+              fontSize:22, cursor:'pointer', color:C.gray, lineHeight:1 }}>✕</button>
+          </div>
+        </div>
+
+        {/* Tabla */}
+        <div style={{ overflowY:'auto', overflowX:'auto', flex:1, padding:'0' }}>
+          {data.length === 0 ? (
+            <div style={{ textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter' }}>
+              Sin datos en el archivo
+            </div>
+          ) : (
+            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13, fontFamily:'Inter' }}>
+              <thead style={{ position:'sticky', top:0, zIndex:1 }}>
+                <tr style={{ background:C.navy }}>
+                  <th style={{ padding:'10px 14px', textAlign:'left', color:C.grayLt,
+                    fontSize:11, fontWeight:600, whiteSpace:'nowrap', minWidth:40 }}>#</th>
+                  {headers.map((h, i) => (
+                    <th key={i} style={{ padding:'10px 14px', textAlign:'left', color:C.white,
+                      fontSize:11, fontWeight:600, whiteSpace:'nowrap', minWidth:100 }}>
+                      {h ?? `Col ${i+1}`}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, ri) => (
+                  <tr key={ri} style={{ background: ri % 2 === 0 ? C.white : C.bg,
+                    borderBottom:`1px solid ${C.bg2}` }}>
+                    <td style={{ padding:'8px 14px', color:C.gray, fontSize:11,
+                      fontWeight:600, textAlign:'center' }}>{ri + 1}</td>
+                    {headers.map((_, ci) => (
+                      <td key={ci} style={{ padding:'8px 14px', color:C.text,
+                        whiteSpace:'nowrap' }}>
+                        {row[ci] !== undefined && row[ci] !== null ? String(row[ci]) : ''}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
 
 // ── MODAL REFERENCIA ──────────────────────────────────────────
-function ModalReferencia({ pruebaTipo, ref: refData, onClose, onSaved }) {
+function ModalReferencia({ pruebaTipo, refData, onClose, onSaved }) {
   const isEdit = !!refData
   const [form, setForm] = useState({
     codigo: refData?.codigo || '',
@@ -181,7 +257,7 @@ function ModalReferencia({ pruebaTipo, ref: refData, onClose, onSaved }) {
       nombre: form.nombre.trim(),
       descripcion: form.descripcion.trim(),
       grados: form.grados,
-      estructura_excel: excelParsed ? excelParsed.raw : (refData?.estructura_excel || null),
+      estructura_excel: excelParsed ? excelParsed : (refData?.estructura_excel || null),
     }
 
     let err
@@ -217,10 +293,8 @@ function ModalReferencia({ pruebaTipo, ref: refData, onClose, onSaved }) {
           Prueba: <strong style={{ color:C.navy }}>{pruebaTipo.charAt(0).toUpperCase()+pruebaTipo.slice(1)}</strong>
         </div>
 
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-          <Input label="Código / Referencia" value={form.codigo} onChange={v=>set('codigo',v)}
-            placeholder="Ej: GO2" required/>
-        </div>
+        <Input label="Código / Referencia" value={form.codigo} onChange={v=>set('codigo',v)}
+          placeholder="Ej: GO2" required/>
 
         <Input label="Nombre completo" value={form.nombre} onChange={v=>set('nombre',v)}
           placeholder="Ej: Simulacro GO2 — Mayo 2026" required/>
@@ -260,6 +334,7 @@ export default function AdminPruebas({ onUpdate }) {
   const [pruebas, setPruebas] = useState([])
   const [tipoSelec, setTipoSelec] = useState(null)
   const [modalRef, setModalRef] = useState(null)
+  const [modalExcel, setModalExcel] = useState(null)
   const [nuevoTipo, setNuevoTipo] = useState('')
   const [showNuevoTipo, setShowNuevoTipo] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -297,10 +372,8 @@ export default function AdminPruebas({ onUpdate }) {
     loadPruebas()
   }
 
-  // Agrupar por tipo
   const tipos = [...new Set(pruebas.map(p => p.tipo))]
   const refs = pruebas.filter(p => p.tipo === tipoSelec && p.codigo !== '_tipo_')
-  const tipoData = pruebas.find(p => p.tipo === tipoSelec && p.codigo === '_tipo_')
 
   return (
     <div style={{ fontFamily:'Inter' }}>
@@ -361,7 +434,7 @@ export default function AdminPruebas({ onUpdate }) {
                 <h2 style={{ fontSize:15, fontWeight:700, color:C.navy, margin:0 }}>
                   {tipoSelec.charAt(0).toUpperCase() + tipoSelec.slice(1)} — Referencias
                 </h2>
-                <Btn onClick={() => setModalRef({ tipo: tipoSelec, ref: null })}>+ Nueva referencia</Btn>
+                <Btn onClick={() => setModalRef({ tipo: tipoSelec, refData: null })}>+ Nueva referencia</Btn>
               </div>
 
               {refs.length === 0 ? (
@@ -369,51 +442,62 @@ export default function AdminPruebas({ onUpdate }) {
                   <p style={{ fontSize:13 }}>Sin referencias. Crea la primera.</p>
                 </div>
               ) : (
-                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
-                  <thead>
-                    <tr style={{ background:C.bg2 }}>
-                      {['Código','Nombre','Grados','Excel','Estado','Acciones'].map(h => (
-                        <th key={h} style={{ padding:'8px 12px', textAlign:'left',
-                          fontSize:11, fontWeight:600, color:C.gray,
-                          textTransform:'uppercase', letterSpacing:'0.04em' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {refs.map(r => (
-                      <tr key={r.id} style={{ borderBottom:`1px solid ${C.bg2}` }}>
-                        <td style={{ padding:'10px 12px', fontWeight:600, color:C.navy }}>{r.codigo}</td>
-                        <td style={{ padding:'10px 12px', color:C.text }}>{r.nombre}</td>
-                        <td style={{ padding:'10px 12px', color:C.gray, fontSize:12 }}>
-                          {r.grados?.length > 0
-                            ? r.grados.map(g => g === 0 ? 'Pre' : `G${g}`).join(', ')
-                            : '—'}
-                        </td>
-                        <td style={{ padding:'10px 12px' }}>
-                          {r.estructura_excel
-                            ? <span style={{ fontSize:11, background:'#F0FDF4', color:C.green,
-                                padding:'2px 8px', borderRadius:10, fontWeight:600 }}>✓ Cargado</span>
-                            : <span style={{ fontSize:11, color:C.gray }}>—</span>}
-                        </td>
-                        <td style={{ padding:'10px 12px' }}>
-                          <button onClick={() => handleToggle(r)}
-                            style={{ fontSize:11, padding:'3px 10px', borderRadius:10,
-                              border:'none', cursor:'pointer', fontWeight:600,
-                              background: r.activa ? '#DCFCE7' : '#FEE2E2',
-                              color: r.activa ? '#16A34A' : C.red }}>
-                            {r.activa ? 'Activa' : 'Inactiva'}
-                          </button>
-                        </td>
-                        <td style={{ padding:'10px 12px' }}>
-                          <div style={{ display:'flex', gap:6 }}>
-                            <Btn small outline onClick={() => setModalRef({ tipo: tipoSelec, ref: r })}>Editar</Btn>
-                            <Btn small outline color={C.red} onClick={() => handleDelete(r.id)}>Eliminar</Btn>
-                          </div>
-                        </td>
+                <div style={{ overflowX:'auto' }}>
+                  <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+                    <thead>
+                      <tr style={{ background:C.bg2 }}>
+                        {['Código','Nombre','Grados','Estructura','Estado','Acciones'].map(h => (
+                          <th key={h} style={{ padding:'8px 12px', textAlign:'left',
+                            fontSize:11, fontWeight:600, color:C.gray,
+                            textTransform:'uppercase', letterSpacing:'0.04em',
+                            whiteSpace:'nowrap' }}>{h}</th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {refs.map(r => (
+                        <tr key={r.id} style={{ borderBottom:`1px solid ${C.bg2}` }}>
+                          <td style={{ padding:'10px 12px', fontWeight:600, color:C.navy }}>{r.codigo}</td>
+                          <td style={{ padding:'10px 12px', color:C.text }}>{r.nombre}</td>
+                          <td style={{ padding:'10px 12px', color:C.gray, fontSize:12 }}>
+                            {r.grados?.length > 0
+                              ? r.grados.map(g => g === 0 ? 'Pre' : `G${g}`).join(', ')
+                              : '—'}
+                          </td>
+                          <td style={{ padding:'10px 12px' }}>
+                            {r.estructura_excel ? (
+                              <button onClick={() => setModalExcel(r)}
+                                style={{ display:'flex', alignItems:'center', gap:5,
+                                  background:'#EFF6FF', border:'1.5px solid #BFDBFE',
+                                  borderRadius:6, padding:'4px 10px', cursor:'pointer',
+                                  fontSize:12, fontWeight:600, color:'#1D4ED8',
+                                  fontFamily:'Inter' }}>
+                                📊 Ver Excel
+                              </button>
+                            ) : (
+                              <span style={{ fontSize:11, color:C.gray }}>—</span>
+                            )}
+                          </td>
+                          <td style={{ padding:'10px 12px' }}>
+                            <button onClick={() => handleToggle(r)}
+                              style={{ fontSize:11, padding:'3px 10px', borderRadius:10,
+                                border:'none', cursor:'pointer', fontWeight:600,
+                                background: r.activa ? '#DCFCE7' : '#FEE2E2',
+                                color: r.activa ? '#16A34A' : C.red }}>
+                              {r.activa ? 'Activa' : 'Inactiva'}
+                            </button>
+                          </td>
+                          <td style={{ padding:'10px 12px' }}>
+                            <div style={{ display:'flex', gap:6 }}>
+                              <Btn small outline onClick={() => setModalRef({ tipo: tipoSelec, refData: r })}>Editar</Btn>
+                              <Btn small outline color={C.red} onClick={() => handleDelete(r.id)}>Eliminar</Btn>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </>
           )}
@@ -423,9 +507,16 @@ export default function AdminPruebas({ onUpdate }) {
       {modalRef && (
         <ModalReferencia
           pruebaTipo={modalRef.tipo}
-          ref={modalRef.ref}
+          refData={modalRef.refData}
           onClose={() => setModalRef(null)}
           onSaved={() => { setModalRef(null); handleSaved() }}
+        />
+      )}
+
+      {modalExcel && (
+        <ModalVerExcel
+          referencia={modalExcel}
+          onClose={() => setModalExcel(null)}
         />
       )}
     </div>
