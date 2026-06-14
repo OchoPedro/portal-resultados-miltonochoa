@@ -109,9 +109,9 @@ export default function AdminRanking() {
     setLoading(false)
   }, [anio, pagina, buscar, filtroDepto, filtroNat, filtroJorn, filtroCalend])
 
-  useEffect(() => { if (anio === 2025) { setPagina(1); load() } }, [anio])
-  useEffect(() => { if (anio === 2025) load() }, [pagina])
-  useEffect(() => { if (anio === 2025) { setPagina(1); load() } },
+  useEffect(() => { setPagina(1); load() }, [anio])
+  useEffect(() => { load() }, [pagina])
+  useEffect(() => { setPagina(1); load() },
     [buscar, filtroDepto, filtroNat, filtroJorn, filtroCalend])
 
   const totalPags = Math.ceil(total / POR_PAGINA)
@@ -125,8 +125,8 @@ export default function AdminRanking() {
         ))}
       </div>
 
-      {/* Año sin datos */}
-      {anio !== 2025 && (
+      {/* Sin datos */}
+      {!loading && data.length === 0 && (
         <div style={{ textAlign:'center', padding:'80px 0', color:C.gray, fontFamily:'Inter' }}>
           <div style={{ fontSize:48, marginBottom:16 }}>📅</div>
           <div style={{ fontSize:20, fontFamily:'Playfair Display, serif', color:C.navy, marginBottom:8 }}>
