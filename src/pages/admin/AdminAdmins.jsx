@@ -96,7 +96,7 @@ export default function AdminAdmins({ session }) {
 
   const loadAdmins = async () => {
     setLoading(true)
-    const { data } = await supabase.from('administradores').select('*').order('nombre')
+    const { data } = await supabase.from('administradores').select('id, nombre, usuario, activo, ultima_sesion').order('nombre')
     setAdmins(data || [])
     setLoading(false)
   }
