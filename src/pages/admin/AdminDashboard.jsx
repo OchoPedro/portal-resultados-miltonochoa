@@ -6,7 +6,7 @@ import AdminPruebas from './AdminPruebas'
 import AdminResultados from './AdminResultados'
 import AdminAdmins from './AdminAdmins'
 import AdminAnalisis from './AdminAnalisis'
-import HojasRespuesta from '../components/HojasRespuesta'
+import HojasRespuesta from '../../components/HojasRespuesta'
 
 const C = {
   navy:'#0A1F3D', green:'#2D9B6F', greenLt:'#3AB882',
