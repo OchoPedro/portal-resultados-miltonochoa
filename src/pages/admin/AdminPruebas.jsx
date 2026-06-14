@@ -934,7 +934,7 @@ export default function AdminPruebas({ onUpdate }) {
                                     borderRadius:6, padding:'4px 10px', cursor:'pointer',
                                     fontSize:12, fontWeight:600, color:'#1D4ED8',
                                     fontFamily:'Inter' }}>
-                                  📊 Ver Excel
+                                  📊 Detalle Prueba
                                 </button>
                                 <button onClick={() => setModalEquilibrio(r)}
                                   style={{ display:'flex', alignItems:'center', gap:5,
