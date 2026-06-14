@@ -87,37 +87,28 @@ export default function AdminRanking() {
   const [filtroCalend, setFiltroCalend] = useState('')
   const [reporte, setReporte] = useState(null)
 
-  useEffect(() => {
-    let cancelled = false
-    const fetchData = async () => {
-      setLoading(true)
-      const offset = (pagina - 1) * POR_PAGINA
-      let q = supabase
-        .from('ranking_colegios')
-        .select('*', { count: 'exact' })
-        .eq('anio', anio)
-        .order('puesto_anio', { ascending: true })
-        .range(offset, offset + POR_PAGINA - 1)
-      if (buscar.trim())  q = q.ilike('nombre', `%${buscar.trim()}%`)
-      if (filtroDepto)    q = q.eq('departamento', filtroDepto)
-      if (filtroNat)      q = q.eq('naturaleza', filtroNat)
-      if (filtroJorn)     q = q.ilike('jornada', `%${filtroJorn}%`)
-      if (filtroCalend)   q = q.eq('calendario', filtroCalend)
-      const { data: rows, count, error } = await q
-      if (!cancelled && !error) { setData(rows || []); setTotal(count || 0) }
-      if (!cancelled) setLoading(false)
-    }
-    fetchData()
-    return () => { cancelled = true }
-  }, [anio, pagina, buscar, filtroDepto, filtroNat, filtroJorn, filtroCalend])
+  const doLoad = async (a, p, bus, dep, nat, jorn, cal) => {
+    setLoading(true)
+    const offset = (p - 1) * POR_PAGINA
+    let q = supabase
+      .from('ranking_colegios')
+      .select('*', { count: 'exact' })
+      .eq('anio', a)
+      .order('puesto_anio', { ascending: true })
+      .range(offset, offset + POR_PAGINA - 1)
+    if (bus.trim()) q = q.ilike('nombre', `%${bus.trim()}%`)
+    if (dep)        q = q.eq('departamento', dep)
+    if (nat)        q = q.eq('naturaleza', nat)
+    if (jorn)       q = q.ilike('jornada', `%${jorn}%`)
+    if (cal)        q = q.eq('calendario', cal)
+    const { data: rows, count, error } = await q
+    if (!error) { setData(rows || []); setTotal(count || 0) }
+    setLoading(false)
+  }
 
-  // Reset página al cambiar año o filtros
-  const prevAnioRef = useState(2024)
   useEffect(() => {
-    if (prevAnioRef[0] !== anio) { prevAnioRef[0] = anio; setPagina(1) }
-  }, [anio])
-  useEffect(() => { setPagina(1) },
-    [buscar, filtroDepto, filtroNat, filtroJorn, filtroCalend])
+    doLoad(anio, pagina, buscar, filtroDepto, filtroNat, filtroJorn, filtroCalend)
+  }, [anio, pagina, buscar, filtroDepto, filtroNat, filtroJorn, filtroCalend])
 
   const totalPags = Math.ceil(total / POR_PAGINA)
 
