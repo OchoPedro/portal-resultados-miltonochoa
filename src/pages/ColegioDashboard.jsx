@@ -716,7 +716,7 @@ export default function ColegioDashboard({session, onLogout}) {
   const radarData = [
     {area:'Matemáticas',    plantel: Math.round(avgArr(students.map(s=>(s.mat_cuantitativo+s.mat_especifico)/2).filter(Boolean)))},
     {area:'Cs. Naturales',  plantel: Math.round(avgArr(students.map(s=>(s.cn_quimica+s.cn_fisica+s.cn_biologia+s.cn_cts)/4).filter(Boolean)))},
-    {area:'Soc. y Ciudad.', plantel: Math.round(avgArr(students.map(s=>s.sociales).filter(Boolean)))},
+    {area:'Soc. y Ciudad.', plantel: Math.round(avgArr(students.map(s=>((s.sociales||0)+(s.ciudadanas||0))/2).filter(Boolean)))},
     {area:'Lect. Crítica',  plantel: Math.round(avgArr(students.map(s=>s.lectura_critica).filter(Boolean)))},
     {area:'Inglés',         plantel: Math.round(avgArr(students.map(s=>s.ingles).filter(Boolean)))},
   ]
@@ -730,6 +730,7 @@ export default function ColegioDashboard({session, onLogout}) {
     {area:'Biología',    plan: Math.round(avgArr(students.map(s=>s.cn_biologia).filter(Boolean)))},
     {area:'CTS',         plan: Math.round(avgArr(students.map(s=>s.cn_cts).filter(Boolean)))},
     {area:'Sociales',    plan: Math.round(avgArr(students.map(s=>s.sociales).filter(Boolean)))},
+    {area:'Ciudadanas',  plan: Math.round(avgArr(students.map(s=>s.ciudadanas).filter(Boolean)))},
     {area:'Lect. Crít.', plan: Math.round(avgArr(students.map(s=>s.lectura_critica).filter(Boolean)))},
     {area:'Inglés',      plan: Math.round(avgArr(students.map(s=>s.ingles).filter(Boolean)))},
   ]
@@ -748,7 +749,7 @@ export default function ColegioDashboard({session, onLogout}) {
   const nivelesData = [
     {materia:'Matemáticas',  ...calcNiveles(students.map(s=>(s.mat_cuantitativo+s.mat_especifico)/2))},
     {materia:'Cs. Naturales',...calcNiveles(students.map(s=>(s.cn_quimica+s.cn_fisica+s.cn_biologia+s.cn_cts)/4))},
-    {materia:'Sociales',     ...calcNiveles(students.map(s=>s.sociales))},
+    {materia:'Soc. y Ciudad.',...calcNiveles(students.map(s=>((s.sociales||0)+(s.ciudadanas||0))/2))},
     {materia:'Lect. Crítica',...calcNiveles(students.map(s=>s.lectura_critica))},
     {materia:'Inglés',       ...calcNiveles(students.map(s=>s.ingles))},
   ]
@@ -774,7 +775,7 @@ export default function ColegioDashboard({session, onLogout}) {
       if (a.area==='Física')      return s.cn_fisica
       if (a.area==='Biología')    return s.cn_biologia
       if (a.area==='CTS')         return s.cn_cts
-      if (a.area==='Sociales')    return s.sociales
+      if (a.area==='Sociales')    return ((s.sociales||0)+(s.ciudadanas||0))/2
       if (a.area==='Lect. Crít.') return s.lectura_critica
       if (a.area==='Inglés')      return s.ingles
       return null
@@ -1371,7 +1372,7 @@ export default function ColegioDashboard({session, onLogout}) {
               <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter'}}>
                 <thead>
                   <tr style={{borderBottom:`2px solid ${C.bg2}`}}>
-                    {['#','Estudiante','Global','Def.%','Mat.C','Mat.E','Quím.','Fís.','Bio.','CTS','Soc.','L.Crít.','Inglés'].map(h => (
+                    {['#','Estudiante','Global','Def.%','Mat.C','Mat.E','Quím.','Fís.','Bio.','CTS','Soc.','Ciud.','L.Crít.','Inglés'].map(h => (
                       <th key={h} style={{textAlign:'left', padding:'8px 10px', fontSize:10,
                         color:C.gray, fontWeight:600, textTransform:'uppercase',
                         letterSpacing:'0.04em', whiteSpace:'nowrap'}}>{h}</th>
@@ -1395,7 +1396,7 @@ export default function ColegioDashboard({session, onLogout}) {
                         <Badge color={semaforoColor(s.desempeno_pct)}>{s.desempeno_pct?.toFixed(1)}%</Badge>
                       </td>
                       {[s.mat_cuantitativo, s.mat_especifico, s.cn_quimica, s.cn_fisica,
-                        s.cn_biologia, s.cn_cts, s.sociales, s.lectura_critica, s.ingles].map((v,j) => (
+                        s.cn_biologia, s.cn_cts, s.sociales, s.ciudadanas, s.lectura_critica, s.ingles].map((v,j) => (
                         <td key={j} style={{padding:'8px 10px', fontSize:12,
                           color:semaforoColor(v), fontWeight:v>=65?600:400}}>
                           {v?.toFixed(0)||'—'}
