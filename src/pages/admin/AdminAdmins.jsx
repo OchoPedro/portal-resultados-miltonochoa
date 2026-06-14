@@ -37,15 +37,33 @@ const Badge = ({children, color}) => (
     padding:'2px 8px', borderRadius:20, fontSize:11, fontWeight:500 }}>{children}</span>
 )
 
+const MODULOS_DISP = [
+  { id:'colegios',    label:'Colegios',           icon:'🏫' },
+  { id:'estudiantes', label:'Estudiantes',         icon:'👥' },
+  { id:'pruebas',     label:'Pruebas',             icon:'📋' },
+  { id:'resultados',  label:'Resultados',          icon:'📊' },
+  { id:'ranking',     label:'Ranking',             icon:'🏆' },
+  { id:'hojas',       label:'Hojas de Respuesta',  icon:'📝' },
+  { id:'analisis',    label:'Análisis IA',         icon:'🤖' },
+]
+
 const ModalAdmin = ({admin, onClose, onSave}) => {
   const [form, setForm] = useState(admin || { nombre:'', usuario:'', password_hash:'' })
+  // null = acceso total (solo para superadmin); array = módulos seleccionados
+  const [modulos, setModulos] = useState(admin?.modulos || [])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const set = (k,v) => setForm(f=>({...f,[k]:v}))
 
+  const toggleMod = (id) =>
+    setModulos(prev => prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id])
+
   const handleSave = async () => {
     if (!form.nombre || !form.usuario || (!admin && !form.password_hash)) {
       setError('Todos los campos son obligatorios.'); return
+    }
+    if (modulos.length === 0) {
+      setError('Selecciona al menos un módulo.'); return
     }
     setSaving(true)
     try {
@@ -54,7 +72,7 @@ const ModalAdmin = ({admin, onClose, onSave}) => {
         const { data: hashed } = await supabase.rpc('hashear_password', { p_password: form.password_hash })
         pwdField = { password_hash: hashed }
       }
-      const payload = { nombre: form.nombre, usuario: form.usuario, ...pwdField }
+      const payload = { nombre: form.nombre, usuario: form.usuario, modulos, ...pwdField }
       const { error: err } = admin
         ? await supabase.from('administradores').update(payload).eq('id', admin.id)
         : await supabase.from('administradores').insert({ ...payload, activo: true })
@@ -67,7 +85,7 @@ const ModalAdmin = ({admin, onClose, onSave}) => {
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)',
       display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999, padding:24 }}>
       <div style={{ background:C.white, borderRadius:12, padding:32,
-        width:'100%', maxWidth:480, boxShadow:'0 20px 60px rgba(0,0,0,0.3)' }}>
+        width:'100%', maxWidth:520, boxShadow:'0 20px 60px rgba(0,0,0,0.3)', maxHeight:'90vh', overflowY:'auto' }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:24 }}>
           <h2 style={{ fontFamily:'Playfair Display, serif', fontSize:20, color:C.navy }}>
             {admin ? 'Editar Administrador' : 'Nuevo Administrador'}
@@ -82,6 +100,45 @@ const ModalAdmin = ({admin, onClose, onSave}) => {
           value={form.password_hash} onChange={v=>set('password_hash',v)}
           placeholder={admin ? 'Dejar en blanco para mantener la actual' : 'Contraseña de acceso'}
           required={!admin}/>
+
+        {/* Módulos visibles */}
+        <div style={{ marginBottom:20 }}>
+          <div style={{ fontSize:10, letterSpacing:'0.12em', textTransform:'uppercase',
+            color:C.gray, marginBottom:10, fontFamily:'Inter' }}>
+            Módulos visibles <span style={{ color:C.red }}>*</span>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+            {MODULOS_DISP.map(m => {
+              const activo = modulos.includes(m.id)
+              return (
+                <label key={m.id} style={{ display:'flex', alignItems:'center', gap:10,
+                  padding:'10px 14px', borderRadius:8, cursor:'pointer',
+                  border: `1px solid ${activo ? C.green : C.grayLt}`,
+                  background: activo ? C.green + '0E' : C.bg,
+                  transition:'all 0.15s' }}>
+                  <input type="checkbox" checked={activo} onChange={() => toggleMod(m.id)}
+                    style={{ accentColor: C.green, width:16, height:16, cursor:'pointer' }} />
+                  <span style={{ fontSize:12, fontFamily:'Inter',
+                    color: activo ? C.navy : C.gray, fontWeight: activo ? 600 : 400 }}>
+                    {m.icon} {m.label}
+                  </span>
+                </label>
+              )
+            })}
+          </div>
+          <div style={{ marginTop:8, display:'flex', justifyContent:'flex-end', gap:8 }}>
+            <button onClick={() => setModulos(MODULOS_DISP.map(m=>m.id))}
+              style={{ fontSize:11, color:C.green, background:'none', border:'none', cursor:'pointer', fontFamily:'Inter' }}>
+              Seleccionar todos
+            </button>
+            <span style={{ color:C.grayLt }}>·</span>
+            <button onClick={() => setModulos([])}
+              style={{ fontSize:11, color:C.red, background:'none', border:'none', cursor:'pointer', fontFamily:'Inter' }}>
+              Limpiar
+            </button>
+          </div>
+        </div>
+
         {error && <div style={{ background:'#FEF2F2', border:'1px solid #FECACA',
           borderRadius:6, padding:'10px 14px', marginBottom:16,
           fontSize:13, color:C.red, fontFamily:'Inter' }}>{error}</div>}
@@ -104,7 +161,7 @@ export default function AdminAdmins({ session }) {
 
   const loadAdmins = async () => {
     setLoading(true)
-    const { data } = await supabase.from('administradores').select('id, nombre, usuario, activo, ultima_sesion').order('nombre')
+    const { data } = await supabase.from('administradores').select('id, nombre, usuario, activo, ultima_sesion, modulos').order('nombre')
     setAdmins(data || [])
     setLoading(false)
   }

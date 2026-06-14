@@ -10,7 +10,7 @@ import AdminAnalisis from './AdminAnalisis'
 import AdminRanking from './AdminRanking'
 import HojasRespuesta from '../../components/HojasRespuesta'
 
-const MENU = [
+const MENU_ALL = [
   { id:'colegios',     label:'Colegios',           icon:'🏫', desc:'Gestión de instituciones' },
   { id:'estudiantes',  label:'Estudiantes',         icon:'👥', desc:'Carga masiva de estudiantes' },
   { id:'pruebas',      label:'Pruebas',             icon:'📋', desc:'Tipos y referencias' },
@@ -22,7 +22,16 @@ const MENU = [
 ]
 
 export default function AdminDashboard({ session, onLogout }) {
-  const [section, setSection] = useState('colegios')
+  // session.modulos === null → superadmin (todo acceso)
+  // session.modulos === [...] → solo esos módulos; 'admins' nunca aparece para sub-admins
+  const esSuperadmin = !session?.modulos
+  const MENU = esSuperadmin
+    ? MENU_ALL
+    : MENU_ALL.filter(m => m.id !== 'admins' && session.modulos.includes(m.id))
+
+  const [section, setSection] = useState(
+    esSuperadmin ? 'colegios' : (session.modulos?.[0] || 'colegios')
+  )
   const [stats, setStats] = useState({ colegios: 0, estudiantes: 0, pruebas: 0 })
 
   useEffect(() => { loadStats() }, [])

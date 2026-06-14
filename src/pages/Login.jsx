@@ -59,7 +59,7 @@ export default function Login({ onLogin }) {
       // ── Modo legado ────────────────────────────────────────────────
       const { data: admin } = await supabase
         .from('administradores')
-        .select('id, nombre, usuario, password_hash, activo, ultima_sesion')
+        .select('id, nombre, usuario, password_hash, activo, ultima_sesion, modulos')
         .eq('usuario', u.trim()).eq('activo', true).single()
       if (admin) {
         if (admin.password_hash !== p) { wrongCreds(); return }
