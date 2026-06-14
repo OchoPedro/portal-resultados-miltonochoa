@@ -179,22 +179,46 @@ function ModalVerExcel({ referencia, onClose }) {
   const allRows = excel.rows    || excel.raw?.slice(1) || []
   const meta    = excel.meta    || []
 
-  // Índices de columnas filtrables (las que tienen pocos valores únicos)
-  const FILTER_COLS = ['Área', 'Asignatura', 'Ciclo MEN', 'Competencia', 'Componente', 'Dificultad', 'Sesión']
-  const filterableCols = headers
-    .map((h, i) => ({ name: String(h), idx: i }))
-    .filter(c => FILTER_COLS.includes(c.name))
+  // Índices de columnas filtrables en orden de cascada
+  const FILTER_COLS = ['Sesión', 'Área', 'Asignatura', 'Ciclo MEN', 'Competencia', 'Componente', 'Dificultad']
+  const filterableCols = FILTER_COLS
+    .map(name => ({ name, idx: headers.findIndex(h => String(h) === name) }))
+    .filter(c => c.idx !== -1)
 
   const [filters, setFilters] = useState({})
 
-  // Opciones únicas por columna filtrable
-  const getOptions = (colIdx) => {
-    const vals = [...new Set(allRows.map(r => String(r[colIdx] ?? '')))]
+  // Filas que pasan los filtros HASTA la columna anterior (para cascada)
+  const getRowsUpTo = (colName) => {
+    const colsBeforeThis = filterableCols.slice(0, filterableCols.findIndex(c => c.name === colName))
+    return allRows.filter(row =>
+      colsBeforeThis.every(col => {
+        const active = filters[col.name]
+        if (!active) return true
+        return String(row[col.idx] ?? '') === active
+      })
+    )
+  }
+
+  // Opciones únicas por columna — solo de filas que pasan filtros anteriores (cascada)
+  const getOptions = (col) => {
+    const relevantRows = getRowsUpTo(col.name)
+    const vals = [...new Set(relevantRows.map(r => String(r[col.idx] ?? '')))]
       .filter(v => v !== '').sort()
     return vals
   }
 
-  // Filas filtradas
+  // Cuando cambia un filtro, limpiar los filtros de columnas posteriores
+  const handleFilterChange = (colName, value) => {
+    const colOrder = filterableCols.findIndex(c => c.name === colName)
+    const newFilters = { ...filters }
+    // Limpiar filtros de columnas posteriores
+    filterableCols.slice(colOrder + 1).forEach(c => delete newFilters[c.name])
+    if (value) newFilters[colName] = value
+    else delete newFilters[colName]
+    setFilters(newFilters)
+  }
+
+  // Filas filtradas con todos los filtros activos
   const filteredRows = allRows.filter(row =>
     filterableCols.every(col => {
       const active = filters[col.name]
@@ -309,21 +333,28 @@ function ModalVerExcel({ referencia, onClose }) {
             background:C.bg }}>
             <span style={{ fontSize:11, fontWeight:600, color:C.gray, fontFamily:'Inter',
               textTransform:'uppercase', letterSpacing:'0.05em' }}>Filtrar:</span>
-            {filterableCols.map(col => (
-              <select key={col.name}
-                value={filters[col.name] || ''}
-                onChange={e => setFilters(f => ({ ...f, [col.name]: e.target.value || undefined }))}
-                style={{ padding:'5px 10px', borderRadius:6, border:`1px solid ${C.grayLt}`,
-                  fontSize:12, fontFamily:'Inter', color:C.text, background:C.white,
-                  cursor:'pointer', outline:'none',
-                  borderColor: filters[col.name] ? C.green : C.grayLt,
-                  fontWeight: filters[col.name] ? 600 : 400 }}>
-                <option value="">{col.name} (todos)</option>
-                {getOptions(col.idx).map(opt => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
-            ))}
+            {filterableCols.map(col => {
+              const options = getOptions(col)
+              const isDisabled = options.length === 0
+              return (
+                <select key={col.name}
+                  value={filters[col.name] || ''}
+                  disabled={isDisabled}
+                  onChange={e => handleFilterChange(col.name, e.target.value)}
+                  style={{ padding:'5px 10px', borderRadius:6, border:`1px solid ${C.grayLt}`,
+                    fontSize:12, fontFamily:'Inter', color: isDisabled ? C.gray : C.text,
+                    background: isDisabled ? C.bg2 : C.white,
+                    cursor: isDisabled ? 'not-allowed' : 'pointer', outline:'none',
+                    borderColor: filters[col.name] ? C.green : C.grayLt,
+                    fontWeight: filters[col.name] ? 600 : 400,
+                    opacity: isDisabled ? 0.5 : 1 }}>
+                  <option value="">{col.name} ({options.length})</option>
+                  {options.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              )
+            })}
             {activeFilters.length > 0 && (
               <button onClick={() => setFilters({})}
                 style={{ padding:'5px 12px', borderRadius:6, border:`1px solid ${C.red}`,
