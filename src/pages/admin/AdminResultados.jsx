@@ -109,80 +109,93 @@ async function visionImagen(file) {
   const b64 = await toBase64(file)
   const mediaType = file.type === 'image/png' ? 'image/png' : 'image/jpeg'
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const res = await fetch('/api/vision', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
       max_tokens: 2000,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type:'image', source:{ type:'base64', media_type:mediaType, data:b64 } },
-            { type:'text', text:'Analiza esta hoja de respuesta de examen colombiano. Las burbujas MARCADAS son círculos completamente rellenos de negro sin letra visible. Las NO marcadas muestran la letra (A, B, C o D). Lee en orden: arriba a abajo, izquierda a derecha. Extrae: usuario (número de documento), sesion (1 o 2), respuestas (string con letra marcada de cada pregunta). Responde SOLO JSON sin texto:' },
-          ],
-        },
-        { role:'assistant', content:'{"usuario":"' },
-      ],
+      messages: [{
+        role: 'user',
+        content: [
+          { type:'image', source:{ type:'base64', media_type:mediaType, data:b64 } },
+          { type:'text', text:`Eres un lector de hojas de respuesta. Esta imagen es una hoja de respuesta de examen.
+Las burbujas MARCADAS son círculos completamente rellenos de negro.
+Las NO marcadas muestran la letra A, B, C o D en su interior.
+
+Extrae estos datos:
+- usuario: el número de 10 dígitos del campo "USUARIO (NO. DOCUMENTO)"
+- sesion: 1 o 2 según diga "Sesión 1" o "Sesión 2" en el encabezado
+- respuestas: string con la letra marcada de cada pregunta en orden estricto
+
+Responde ÚNICAMENTE con un objeto JSON válido, sin explicaciones:
+{"usuario":"1098765432","sesion":1,"respuestas":"AACBBDCA..."}` },
+        ],
+      }],
     }),
   })
 
-  if (!res.ok) {
-    const errText = await res.text()
-    throw new Error(`API ${res.status}: ${errText}`)
-  }
+  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`)
   const data = await res.json()
-  const txt = data.content?.find(b => b.type === 'text')?.text || ''
-  const full = '{"usuario":"' + txt
-  console.log('Vision response:', full.substring(0, 200))
+  const txt = (data.content?.find(b => b.type === 'text')?.text || '').trim()
+  console.log('Vision imagen raw:', txt.substring(0, 200))
 
-  // Intentar múltiples estrategias de parseo
-  const candidates = [full, full + '}', full.replace(/,\s*$/, '}'), full.replace(/[^}]*$/, '}')]
-  for (const c of candidates) {
-    try { return JSON.parse(c) } catch { /* continuar */ }
+  // Extraer JSON aunque venga con texto alrededor
+  const match = txt.match(/\{[^{}]*"usuario"[^{}]*\}/)
+  if (match) {
+    try { return JSON.parse(match[0]) } catch {}
   }
-  // Si falla el parseo, mostrar qué devolvió Claude
-  throw new Error('Respuesta de Claude (primeros 150 chars): ' + full.substring(0, 150))
+  // Limpiar y parsear directamente
+  const clean = txt.replace(/```json|```/g, '').trim()
+  try { return JSON.parse(clean) } catch {}
+
+  throw new Error('No pudo leer la hoja. Respuesta: ' + txt.substring(0, 120))
 }
 
 // ── Llamar a Claude Vision con PDF ───────────────────────
 async function visionPDF(archivo) {
   const b64 = await toBase64(archivo)
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const res = await fetch('/api/vision', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
       max_tokens: 4000,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type:'document', source:{ type:'base64', media_type:'application/pdf', data:b64 } },
-            { type:'text', text:'Analiza cada página de este PDF. Son hojas de respuesta de examen colombiano. Las burbujas MARCADAS son círculos completamente rellenos de negro. Lee en orden. Para cada página extrae: usuario (número de documento del campo "Usuario (No. Documento)"), sesion (1 o 2 según el encabezado), respuestas (string con letra marcada de cada pregunta en orden). Responde SOLO JSON sin texto:' },
-          ],
-        },
-        { role:'assistant', content:'{"paginas":[' },
-      ],
+      messages: [{
+        role: 'user',
+        content: [
+          { type:'document', source:{ type:'base64', media_type:'application/pdf', data:b64 } },
+          { type:'text', text:`Eres un lector de hojas de respuesta. Este PDF contiene hojas de respuesta de examen colombiano.
+Las burbujas MARCADAS son círculos completamente rellenos de negro.
+Las NO marcadas muestran la letra A, B, C o D en su interior.
+
+Para CADA página del PDF extrae:
+- usuario: número de 10 dígitos del campo "USUARIO (NO. DOCUMENTO)"
+- sesion: 1 o 2 según diga "Sesión 1" o "Sesión 2"
+- respuestas: string con la letra marcada de cada pregunta en orden estricto
+
+Responde ÚNICAMENTE con JSON válido sin explicaciones:
+{"paginas":[{"usuario":"1098765432","sesion":1,"respuestas":"AACBB..."},{"usuario":"1098765432","sesion":2,"respuestas":"BCDAA..."}]}` },
+        ],
+      }],
     }),
   })
 
-  if (!res.ok) {
-    const errText = await res.text()
-    throw new Error(`API ${res.status}: ${errText}`)
-  }
+  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`)
   const data = await res.json()
-  const txt = data.content?.find(b => b.type === 'text')?.text || ''
-  const full = '{"paginas":[' + txt
-  console.log('Vision PDF response:', full.substring(0, 300))
+  const txt = (data.content?.find(b => b.type === 'text')?.text || '').trim()
+  console.log('Vision PDF raw:', txt.substring(0, 300))
 
-  const candidates = [full, full + ']}', full.replace(/,\s*$/, ']}'), full.replace(/[^\]]*$/, ']}')]
-  for (const c of candidates) {
-    try { return JSON.parse(c) } catch { /* continuar */ }
+  // Extraer JSON del texto
+  const match = txt.match(/\{[\s\S]*"paginas"[\s\S]*\}/)
+  if (match) {
+    try { return JSON.parse(match[0]) } catch {}
   }
-  throw new Error('Respuesta PDF (primeros 200 chars): ' + full.substring(0, 200))
+  const clean = txt.replace(/```json|```/g, '').trim()
+  try { return JSON.parse(clean) } catch {}
+
+  throw new Error('No pudo leer el PDF. Respuesta: ' + txt.substring(0, 150))
 }
 
 // ── Buscar estudiantes y calcular resultados ──────────────
