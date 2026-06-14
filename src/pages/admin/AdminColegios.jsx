@@ -972,29 +972,41 @@ export default function AdminColegios({ onUpdate }) {
     setTotal(count || 0)
     setLoading(false)
 
-    // Fetch tendencia from ranking_colegios (codigo = colegio.usuario)
+    // Tendencia: comparar puesto_anio del año más reciente vs año anterior
     const codigos = (data || []).map(c => c.usuario).filter(Boolean)
     if (codigos.length > 0) {
-      const { data: ranks } = await supabase
+      // 1. Año más reciente que existe para estos códigos
+      const { data: maxAnioRow } = await supabase
         .from('ranking_colegios')
-        .select('codigo, anio, puesto_anio')
+        .select('anio')
         .in('codigo', codigos)
         .order('anio', { ascending: false })
-      const map = {}
-      ;(ranks || []).forEach(r => {
-        if (!map[r.codigo]) map[r.codigo] = []
-        map[r.codigo].push(r)
-      })
-      const tend = {}
-      codigos.forEach(code => {
-        const rows = map[code] || []
-        if (rows.length < 2) { tend[code] = '—'; return }
-        const [newer, older] = rows  // sorted desc already
-        if (newer.puesto_anio < older.puesto_anio) tend[code] = '↑'
-        else if (newer.puesto_anio > older.puesto_anio) tend[code] = '↓'
-        else tend[code] = '→'
-      })
-      setTendencias(tend)
+        .limit(1)
+      const anioMax = maxAnioRow?.[0]?.anio
+      if (anioMax) {
+        // 2. Puestos del año actual y del año anterior en paralelo
+        const [{ data: curr }, { data: prev }] = await Promise.all([
+          supabase.from('ranking_colegios').select('codigo, puesto_anio').eq('anio', anioMax).in('codigo', codigos),
+          supabase.from('ranking_colegios').select('codigo, puesto_anio').eq('anio', anioMax - 1).in('codigo', codigos),
+        ])
+        const currMap = {}
+        ;(curr || []).forEach(r => { currMap[r.codigo] = r.puesto_anio })
+        const prevMap = {}
+        ;(prev || []).forEach(r => { prevMap[r.codigo] = r.puesto_anio })
+        const tend = {}
+        codigos.forEach(code => {
+          const c = currMap[code]
+          const p = prevMap[code]
+          if (c == null || p == null) { tend[code] = '—'; return }
+          // puesto más bajo = mejor posición
+          if (c < p) tend[code] = '↑'
+          else if (c > p) tend[code] = '↓'
+          else tend[code] = '→'
+        })
+        setTendencias(tend)
+      } else {
+        setTendencias({})
+      }
     } else {
       setTendencias({})
     }
