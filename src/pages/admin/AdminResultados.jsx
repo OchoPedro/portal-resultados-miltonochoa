@@ -251,6 +251,18 @@ export default function AdminResultados({ onUpdate }) {
 
   useEffect(() => { cargarDatos() }, [])
 
+  // Cargar grados cuando se entra a modo manual con colegio ya seleccionado
+  useEffect(() => {
+    if (metodo === 'manual' && colegioId) {
+      supabase.from('estudiantes')
+        .select('grado').eq('colegio_id', colegioId).eq('estado', 'activo')
+        .then(({ data }) => {
+          const grados = [...new Set((data||[]).map(e => e.grado).filter(Boolean))].sort()
+          setGradosDisp(grados)
+        })
+    }
+  }, [metodo, colegioId])
+
   async function cargarDatos() {
     setCargando(true)
     const [colRes, prbRes] = await Promise.all([
