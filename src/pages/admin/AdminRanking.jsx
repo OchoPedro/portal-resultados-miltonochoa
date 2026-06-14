@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { C } from '../../components/ui'
 import ReportePlantel from './ReportePlantel'
@@ -75,7 +75,7 @@ const Score = ({ val }) => {
 }
 
 export default function AdminRanking() {
-  const [anio, setAnio]         = useState(2025)
+  const [anio, setAnio]         = useState(2024)
   const [data, setData]         = useState([])
   const [total, setTotal]       = useState(0)
   const [loading, setLoading]   = useState(false)
@@ -85,33 +85,38 @@ export default function AdminRanking() {
   const [filtroNat, setFiltroNat]       = useState('')
   const [filtroJorn, setFiltroJorn]     = useState('')
   const [filtroCalend, setFiltroCalend] = useState('')
-  const [reporte, setReporte] = useState(null) // { codigo, nombre }
+  const [reporte, setReporte] = useState(null)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const offset = (pagina - 1) * POR_PAGINA
-
-    let q = supabase
-      .from('ranking_colegios')
-      .select('*', { count: 'exact' })
-      .eq('anio', anio)
-      .order('puesto_anio', { ascending: true })
-      .range(offset, offset + POR_PAGINA - 1)
-
-    if (buscar.trim())     q = q.ilike('nombre', `%${buscar.trim()}%`)
-    if (filtroDepto)       q = q.eq('departamento', filtroDepto)
-    if (filtroNat)         q = q.eq('naturaleza', filtroNat)
-    if (filtroJorn)        q = q.ilike('jornada', `%${filtroJorn}%`)
-    if (filtroCalend)      q = q.eq('calendario', filtroCalend)
-
-    const { data: rows, count, error } = await q
-    if (!error) { setData(rows || []); setTotal(count || 0) }
-    setLoading(false)
+  useEffect(() => {
+    let cancelled = false
+    const fetchData = async () => {
+      setLoading(true)
+      const offset = (pagina - 1) * POR_PAGINA
+      let q = supabase
+        .from('ranking_colegios')
+        .select('*', { count: 'exact' })
+        .eq('anio', anio)
+        .order('puesto_anio', { ascending: true })
+        .range(offset, offset + POR_PAGINA - 1)
+      if (buscar.trim())  q = q.ilike('nombre', `%${buscar.trim()}%`)
+      if (filtroDepto)    q = q.eq('departamento', filtroDepto)
+      if (filtroNat)      q = q.eq('naturaleza', filtroNat)
+      if (filtroJorn)     q = q.ilike('jornada', `%${filtroJorn}%`)
+      if (filtroCalend)   q = q.eq('calendario', filtroCalend)
+      const { data: rows, count, error } = await q
+      if (!cancelled && !error) { setData(rows || []); setTotal(count || 0) }
+      if (!cancelled) setLoading(false)
+    }
+    fetchData()
+    return () => { cancelled = true }
   }, [anio, pagina, buscar, filtroDepto, filtroNat, filtroJorn, filtroCalend])
 
-  useEffect(() => { setPagina(1); load() }, [anio])
-  useEffect(() => { load() }, [pagina])
-  useEffect(() => { setPagina(1); load() },
+  // Reset página al cambiar año o filtros
+  const prevAnioRef = useState(2024)
+  useEffect(() => {
+    if (prevAnioRef[0] !== anio) { prevAnioRef[0] = anio; setPagina(1) }
+  }, [anio])
+  useEffect(() => { setPagina(1) },
     [buscar, filtroDepto, filtroNat, filtroJorn, filtroCalend])
 
   const totalPags = Math.ceil(total / POR_PAGINA)
