@@ -266,12 +266,12 @@ export default function AdminResultados({ onUpdate }) {
   function reset() {
     setMetodo(null); setArchivo(null); setArchivos([]); setPreview(null); setResultado(null)
     setError(''); setColegioId(''); setPruebaId(''); setProgreso({ actual:0, total:0, msg:'' })
-    setManualDoc(''); setManualResp(''); setManualPrev(''); setManualGrado(''); setManualEstId(''); setGradosDisp([]); setEstDisp([]); cancelarRef.current = false
+    setManualDoc(''); setManualResp(''); setManualPrev(''); setManualGrado(''); setManualEstId(''); setEstDisp([]); cancelarRef.current = false
   }
   function resetForm() {
     setArchivo(null); setArchivos([]); setPreview(null); setResultado(null)
     setError(''); setConfirmar(false); setProgreso({ actual:0, total:0, msg:'' })
-    setManualDoc(''); setManualResp(''); setManualPrev(''); setManualGrado(''); setManualEstId(''); setGradosDisp([]); setEstDisp([])
+    setManualDoc(''); setManualResp(''); setManualPrev(''); setManualGrado(''); setManualEstId(''); setEstDisp([])
   }
 
   function getClave() {
@@ -581,14 +581,20 @@ export default function AdminResultados({ onUpdate }) {
           <Label>Colegio</Label>
           <select style={selectStyle} value={colegioId} onChange={async e => {
             const cid = e.target.value
-            setColegioId(cid); resetForm()
+            setColegioId(cid)
+            setArchivo(null); setArchivos([]); setPreview(null); setResultado(null)
+            setError(''); setConfirmar('')
+            setManualGrado(''); setManualEstId(''); setManualDoc(''); setEstDisp([])
+            setManualResp(''); setManualPrev('')
             if (cid) {
               const { data } = await supabase.from('estudiantes')
                 .select('grado').eq('colegio_id', cid).eq('activo', true)
               const unicos = [...new Set((data||[]).map(r => r.grado).filter(Boolean))]
               unicos.sort((a,b) => String(a).localeCompare(String(b), undefined, {numeric:true}))
-              console.log('Grados cargados para colegio:', unicos)
+              console.log('Grados cargados:', unicos)
               setGradosDisp(unicos)
+            } else {
+              setGradosDisp([])
             }
           }} disabled={cargando}>
             <option value="">{cargando?'Cargando…':'Selecciona un colegio'}</option>
