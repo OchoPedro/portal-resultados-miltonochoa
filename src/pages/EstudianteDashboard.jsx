@@ -38,8 +38,8 @@ export default function EstudianteDashboard({ session, onLogout }) {
         // Cargar compañeros del mismo colegio y prueba
         const { data: todos } = await supabase
           .from('resultados_estudiante')
-          .select('puntaje_global, puesto, estudiante_id, estudiantes(nombre)')
-          .eq('colegio_id', session.colegio_id)
+          .select('puntaje_global, estudiante_id, estudiantes(nombre)')
+          .eq('colegio_id', res.colegio_id)
           .eq('prueba_id', res.prueba_id)
           .order('puntaje_global', { ascending: false })
 
