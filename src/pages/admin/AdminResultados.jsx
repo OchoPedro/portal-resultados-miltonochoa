@@ -90,15 +90,18 @@ function Badge({ pct }) {
   return <span style={{ background:color+'22', color, fontSize:11, fontWeight:700, padding:'2px 9px', borderRadius:20 }}>{nivel} ({pct}%)</span>
 }
 
-// ── Convertir archivo a base64 ────────────────────────────
+// ── Convertir archivo a base64 (compatible Safari) ────────
 async function toBase64(file) {
-  const buf = await file.arrayBuffer()
-  const bytes = new Uint8Array(buf)
-  let binary = ''
-  const chunk = 8192
-  for (let i = 0; i < bytes.length; i += chunk)
-    binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + chunk, bytes.length)))
-  return btoa(binary)
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result
+      // dataUrl = "data:application/pdf;base64,XXXXX"
+      resolve(dataUrl.split(',')[1])
+    }
+    reader.onerror = () => reject(new Error('No se pudo leer el archivo'))
+    reader.readAsDataURL(file)
+  })
 }
 
 // ── Llamar a Claude Vision con imagen ────────────────────
