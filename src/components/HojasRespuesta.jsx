@@ -226,7 +226,8 @@ export default function HojasRespuesta() {
   const printRef = useRef();
 
   useEffect(() => {
-    supabase.from("pruebas").select("tipo").then(({ data }) => {
+    supabase.from("pruebas").select("tipo").then(({ data, error }) => {
+      console.log("pruebas data:", data, "error:", error);
       if (data) {
         const unique = [...new Set(data.map(r => r.tipo))].filter(Boolean);
         setPruebas(unique);
@@ -236,9 +237,10 @@ export default function HojasRespuesta() {
 
   useEffect(() => {
     if (!selectedPrueba) { setReferencias([]); setSelectedRef(""); return; }
-    supabase.from("pruebas").select("referencia").eq("tipo", selectedPrueba).then(({ data }) => {
+    supabase.from("pruebas").select("codigo, nombre").ilike("tipo", selectedPrueba).then(({ data, error }) => {
+      console.log("referencias data:", data, "error:", error, "prueba:", selectedPrueba);
       if (data) {
-        const unique = [...new Set(data.map(r => r.referencia))].filter(Boolean);
+        const unique = [...new Set(data.map(r => r.codigo))].filter(r => Boolean(r) && r !== "_tipo_");
         setReferencias(unique);
         setSelectedRef("");
       }
