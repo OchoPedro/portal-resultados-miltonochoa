@@ -103,8 +103,10 @@ export default function AdminRanking() {
   const [vista, setVista] = useState('colegios') // 'colegios' | 'departamentos' | 'regiones'
   const [agrupado, setAgrupado] = useState([])
   const [loadingAgrp, setLoadingAgrp] = useState(false)
+  const [filtroNatAgrp, setFiltroNatAgrp]   = useState('')
+  const [filtroCalAgrp, setFiltroCalAgrp]   = useState('')
 
-  const loadAgrupado = async (a, modo, dep='') => {
+  const loadAgrupado = async (a, modo, dep='', nat='', cal='') => {
     setLoadingAgrp(true)
 
     const buildQ = (year) => {
@@ -114,6 +116,8 @@ export default function AdminRanking() {
         .eq('anio', year)
         .limit(50000)
       if (modo === 'municipios' && dep) q = q.eq('departamento', dep)
+      if (nat) q = q.eq('naturaleza', nat)
+      if (cal) q = q.eq('calendario', cal)
       return q
     }
 
@@ -183,8 +187,8 @@ export default function AdminRanking() {
   }
 
   useEffect(() => {
-    if (vista !== 'colegios') loadAgrupado(anio, vista, filtroDepto)
-  }, [vista, anio, filtroDepto])
+    if (vista !== 'colegios') loadAgrupado(anio, vista, filtroDepto, filtroNatAgrp, filtroCalAgrp)
+  }, [vista, anio, filtroDepto, filtroNatAgrp, filtroCalAgrp])
 
   const doLoad = async (a, p, bus, dep, nat, jorn, cal, reg) => {
     setLoading(true)
@@ -284,6 +288,21 @@ export default function AdminRanking() {
               )}
             </div>
           )}
+          {/* Filtros Naturaleza + Calendario para vistas agrupadas */}
+          <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:12, flexWrap:'wrap' }}>
+            <SelectF value={filtroNatAgrp} onChange={setFiltroNatAgrp}
+              options={['OFICIAL','NO OFICIAL','OFICIAL(C)']} placeholder="Naturaleza" />
+            <SelectF value={filtroCalAgrp} onChange={setFiltroCalAgrp}
+              options={['A','B','O']} placeholder="Calendario" />
+            {(filtroNatAgrp || filtroCalAgrp) && (
+              <button onClick={() => { setFiltroNatAgrp(''); setFiltroCalAgrp('') }}
+                style={{ padding:'7px 12px', border:`1px solid ${C.red}`, borderRadius:7,
+                  background:'transparent', color:C.red, fontFamily:'Inter', fontSize:12, cursor:'pointer' }}>
+                Limpiar ✕
+              </button>
+            )}
+          </div>
+
           <div style={{ background:C.white, borderRadius:10, border:`1px solid ${C.grayLt}`,
             overflow:'hidden', boxShadow:'0 1px 4px rgba(10,31,61,0.05)' }}>
             {loadingAgrp ? (
