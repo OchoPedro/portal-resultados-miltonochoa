@@ -106,53 +106,78 @@ export default function AdminRanking() {
 
   const loadAgrupado = async (a, modo, dep='') => {
     setLoadingAgrp(true)
-    let q = supabase
-      .from('ranking_colegios')
-      .select('departamento,ciudad,eval_estudiantes,lectura_critica,matematicas,ciencias_sociales,ciencias_naturales,ingles,ponderado,puntaje_global')
-      .eq('anio', a)
-      .limit(50000)
 
-    if (modo === 'municipios' && dep) q = q.eq('departamento', dep)
+    const buildQ = (year) => {
+      let q = supabase
+        .from('ranking_colegios')
+        .select('departamento,ciudad,eval_estudiantes,lectura_critica,matematicas,ciencias_sociales,ciencias_naturales,ingles,ponderado,puntaje_global')
+        .eq('anio', year)
+        .limit(50000)
+      if (modo === 'municipios' && dep) q = q.eq('departamento', dep)
+      return q
+    }
 
-    const { data: rows } = await q
+    const groupKey = (r) =>
+      modo === 'regiones'    ? (DEPTO_REGION[r.departamento] || 'Sin región')
+      : modo === 'municipios' ? `${r.ciudad}|||${r.departamento}`
+      : r.departamento
 
-    const grupos = {}
-    ;(rows || []).forEach(r => {
-      let key
-      if (modo === 'regiones')    key = DEPTO_REGION[r.departamento] || 'Sin región'
-      else if (modo === 'municipios') key = `${r.ciudad}|||${r.departamento}`
-      else                        key = r.departamento
+    const aggregate = (rows) => {
+      const grupos = {}
+      ;(rows || []).forEach(r => {
+        const key = groupKey(r)
+        if (!grupos[key]) grupos[key] = {
+          nombre: modo === 'municipios' ? r.ciudad : key,
+          departamento: r.departamento,
+          colegios:0, estudiantes:0, lc:0, mat:0, cs:0, cn:0, ing:0, pond:0, glob:0
+        }
+        const g = grupos[key]
+        g.colegios++
+        g.estudiantes += parseInt(r.eval_estudiantes || 0)
+        g.lc   += parseFloat(r.lectura_critica || 0)
+        g.mat  += parseFloat(r.matematicas || 0)
+        g.cs   += parseFloat(r.ciencias_sociales || 0)
+        g.cn   += parseFloat(r.ciencias_naturales || 0)
+        g.ing  += parseFloat(r.ingles || 0)
+        g.pond += parseFloat(r.ponderado || 0)
+        g.glob += parseFloat(r.puntaje_global || 0)
+      })
+      return Object.values(grupos)
+        .map(g => ({
+          nombre: g.nombre, departamento: g.departamento,
+          colegios: g.colegios, estudiantes: g.estudiantes,
+          lc:   g.colegios ? g.lc/g.colegios   : 0,
+          mat:  g.colegios ? g.mat/g.colegios  : 0,
+          cs:   g.colegios ? g.cs/g.colegios   : 0,
+          cn:   g.colegios ? g.cn/g.colegios   : 0,
+          ing:  g.colegios ? g.ing/g.colegios  : 0,
+          pond: g.colegios ? g.pond/g.colegios : 0,
+          glob: g.colegios ? g.glob/g.colegios : 0,
+        }))
+        .sort((a, b) => b.pond - a.pond)
+    }
 
-      if (!grupos[key]) grupos[key] = {
-        key,
-        nombre: modo === 'municipios' ? r.ciudad : key,
-        departamento: r.departamento,
-        colegios:0, estudiantes:0, lc:0, mat:0, cs:0, cn:0, ing:0, pond:0, glob:0
-      }
-      const g = grupos[key]
-      g.colegios++
-      g.estudiantes += parseInt(r.eval_estudiantes || 0)
-      g.lc   += parseFloat(r.lectura_critica || 0)
-      g.mat  += parseFloat(r.matematicas || 0)
-      g.cs   += parseFloat(r.ciencias_sociales || 0)
-      g.cn   += parseFloat(r.ciencias_naturales || 0)
-      g.ing  += parseFloat(r.ingles || 0)
-      g.pond += parseFloat(r.ponderado || 0)
-      g.glob += parseFloat(r.puntaje_global || 0)
+    const [{ data: currRows }, { data: prevRows }] = await Promise.all([
+      buildQ(a), buildQ(a - 1)
+    ])
+
+    const current = aggregate(currRows)
+    const prev    = aggregate(prevRows)
+
+    // Mapa: clave → puesto en año anterior
+    const prevRankMap = {}
+    prev.forEach((g, i) => {
+      const k = modo === 'municipios' ? `${g.nombre}|||${g.departamento}` : g.nombre
+      prevRankMap[k] = i + 1
     })
-    const result = Object.values(grupos).map(g => ({
-      nombre: g.nombre,
-      departamento: g.departamento,
-      colegios: g.colegios,
-      estudiantes: g.estudiantes,
-      lc:   g.colegios ? g.lc/g.colegios   : 0,
-      mat:  g.colegios ? g.mat/g.colegios  : 0,
-      cs:   g.colegios ? g.cs/g.colegios   : 0,
-      cn:   g.colegios ? g.cn/g.colegios   : 0,
-      ing:  g.colegios ? g.ing/g.colegios  : 0,
-      pond: g.colegios ? g.pond/g.colegios : 0,
-      glob: g.colegios ? g.glob/g.colegios : 0,
-    })).sort((a,b) => b.pond - a.pond)
+
+    const result = current.map((g, i) => {
+      const k = modo === 'municipios' ? `${g.nombre}|||${g.departamento}` : g.nombre
+      const prevRank = prevRankMap[k]
+      const diff = prevRank != null ? prevRank - (i + 1) : null // positivo = subió
+      return { ...g, comportamiento: diff }
+    })
+
     setAgrupado(result)
     setLoadingAgrp(false)
   }
@@ -256,6 +281,7 @@ export default function AdminRanking() {
                       <Th style={{width:40}}>#</Th>
                       <Th>{vista==='regiones' ? 'Región' : vista==='municipios' ? 'Municipio' : 'Departamento'}</Th>
                       {vista === 'municipios' && <Th>Departamento</Th>}
+                      <Th style={{textAlign:'center'}}>Comportamiento</Th>
                       <Th style={{textAlign:'center'}}>Colegios</Th>
                       <Th style={{textAlign:'center'}}>Estudiantes</Th>
                       <Th style={{textAlign:'center'}}>L.C.</Th>
@@ -280,6 +306,16 @@ export default function AdminRanking() {
                         {vista === 'municipios' && (
                           <Td style={{ color:C.gray, fontSize:11 }}>{g.departamento}</Td>
                         )}
+                        <Td style={{ textAlign:'center' }}>
+                          {g.comportamiento == null
+                            ? <span style={{ color:C.gray, fontSize:11 }}>—</span>
+                            : g.comportamiento > 0
+                            ? <span style={{ color:C.green, fontWeight:700, fontSize:12 }}>↑ Subió {g.comportamiento}</span>
+                            : g.comportamiento < 0
+                            ? <span style={{ color:C.red, fontWeight:700, fontSize:12 }}>↓ Bajó {Math.abs(g.comportamiento)}</span>
+                            : <span style={{ color:C.gray, fontSize:12 }}>→ Igual</span>
+                          }
+                        </Td>
                         <Td style={{ textAlign:'center', color:C.gray }}>{g.colegios.toLocaleString('es-CO')}</Td>
                         <Td style={{ textAlign:'center', color:C.gray }}>{g.estudiantes.toLocaleString('es-CO')}</Td>
                         <Td style={{ textAlign:'center' }}><Score val={g.lc}/></Td>
