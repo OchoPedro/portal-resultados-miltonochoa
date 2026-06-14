@@ -49,13 +49,15 @@ export default function AdminDashboard({ session, onLogout }) {
       <div style={{ width:240, minHeight:'100vh', background:C.navy,
         display:'flex', flexDirection:'column', flexShrink:0 }}>
 
-        {/* Header */}
-        <div style={{ padding:'28px 20px 20px', borderBottom:'1px solid rgba(255,255,255,0.08)' }}>
-          <div style={{ fontSize:15, fontFamily:'Playfair Display, serif', color:C.white, marginBottom:2 }}>
-            Milton Ochoa
+        {/* Header con logo */}
+        <div style={{ padding:'20px 16px 16px', borderBottom:'1px solid rgba(255,255,255,0.08)' }}>
+          <div style={{ background:C.white, borderRadius:10, padding:'10px 12px',
+            display:'flex', alignItems:'center', justifyContent:'center', marginBottom:10 }}>
+            <img src="/logo-milton-ochoa.png" alt="Milton Ochoa"
+              style={{ width:'100%', maxWidth:172, height:'auto', display:'block' }} />
           </div>
           <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', fontFamily:'Inter',
-            letterSpacing:'0.12em', textTransform:'uppercase' }}>Panel Administrador</div>
+            letterSpacing:'0.12em', textTransform:'uppercase', textAlign:'center' }}>Panel Administrador</div>
         </div>
 
         {/* Menú */}
