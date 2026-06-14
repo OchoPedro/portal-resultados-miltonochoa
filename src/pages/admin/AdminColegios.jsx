@@ -972,36 +972,36 @@ export default function AdminColegios({ onUpdate }) {
     setTotal(count || 0)
     setLoading(false)
 
-    // Tendencia: comparar puesto_anio del año más reciente vs año anterior
-    const codigos = (data || []).map(c => c.usuario).filter(Boolean)
-    if (codigos.length > 0) {
-      // 1. Año más reciente que existe para estos códigos
+    // Tendencia: cruzar por nombre+departamento+municipio (único combinado)
+    // porque colegios.usuario != ranking_colegios.codigo (son códigos distintos)
+    const nombres = (data || []).map(c => c.nombre).filter(Boolean)
+    if (nombres.length > 0) {
+      // 1. Año más reciente disponible para estos nombres
       const { data: maxAnioRow } = await supabase
-        .from('ranking_colegios')
-        .select('anio')
-        .in('codigo', codigos)
-        .order('anio', { ascending: false })
-        .limit(1)
+        .from('ranking_colegios').select('anio')
+        .in('nombre', nombres).order('anio', { ascending: false }).limit(1)
       const anioMax = maxAnioRow?.[0]?.anio
       if (anioMax) {
-        // 2. Puestos del año actual y del año anterior en paralelo
+        // 2. Puestos del año actual y anterior, filtrando por los nombres de la página
         const [{ data: curr }, { data: prev }] = await Promise.all([
-          supabase.from('ranking_colegios').select('codigo, puesto_anio').eq('anio', anioMax).in('codigo', codigos),
-          supabase.from('ranking_colegios').select('codigo, puesto_anio').eq('anio', anioMax - 1).in('codigo', codigos),
+          supabase.from('ranking_colegios').select('nombre, departamento, ciudad, puesto_anio')
+            .eq('anio', anioMax).in('nombre', nombres),
+          supabase.from('ranking_colegios').select('nombre, departamento, ciudad, puesto_anio')
+            .eq('anio', anioMax - 1).in('nombre', nombres),
         ])
+        // Clave compuesta normalizada: nombre|departamento|ciudad
+        const mk = (n, d, c) =>
+          `${(n||'').trim().toUpperCase()}|${(d||'').trim().toUpperCase()}|${(c||'').trim().toUpperCase()}`
         const currMap = {}
-        ;(curr || []).forEach(r => { currMap[r.codigo] = r.puesto_anio })
+        ;(curr || []).forEach(r => { currMap[mk(r.nombre, r.departamento, r.ciudad)] = r.puesto_anio })
         const prevMap = {}
-        ;(prev || []).forEach(r => { prevMap[r.codigo] = r.puesto_anio })
+        ;(prev || []).forEach(r => { prevMap[mk(r.nombre, r.departamento, r.ciudad)] = r.puesto_anio })
         const tend = {}
-        codigos.forEach(code => {
-          const c = currMap[code]
-          const p = prevMap[code]
-          if (c == null || p == null) { tend[code] = '—'; return }
-          // puesto más bajo = mejor posición
-          if (c < p) tend[code] = '↑'
-          else if (c > p) tend[code] = '↓'
-          else tend[code] = '→'
+        ;(data || []).forEach(c => {
+          const key = mk(c.nombre, c.departamento_nombre, c.municipio)
+          const cp = currMap[key]; const pp = prevMap[key]
+          if (cp == null || pp == null) { tend[c.id] = '—'; return }
+          tend[c.id] = cp < pp ? '↑' : cp > pp ? '↓' : '→'
         })
         setTendencias(tend)
       } else {
@@ -1142,9 +1142,9 @@ export default function AdminColegios({ onUpdate }) {
                       <Badge color={c.activo?C.green:C.red}>{c.activo?'Activo':'Inactivo'}</Badge>
                     </td>
                     <td style={{ padding:'12px', textAlign:'center', fontSize:18, fontWeight:600,
-                      color: tendencias[c.usuario] === '↑' ? C.green
-                           : tendencias[c.usuario] === '↓' ? C.red : C.gray }}>
-                      {tendencias[c.usuario] || '—'}
+                      color: tendencias[c.id] === '↑' ? C.green
+                           : tendencias[c.id] === '↓' ? C.red : C.gray }}>
+                      {tendencias[c.id] || '—'}
                     </td>
                     <td style={{ padding:'12px' }}>
                       <AccionesMenu
