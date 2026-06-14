@@ -1,13 +1,8 @@
 import { useState, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
+import { C } from '../../components/ui'
+import { generateCredentials } from '../../lib/utils'
 import * as XLSX from 'xlsx'
-
-const C = {
-  navy:'#0A1F3D', green:'#2D9B6F', greenLt:'#3AB882',
-  bg:'#F8F9FB', bg2:'#EFF1F5', white:'#FFFFFF',
-  text:'#1A1A2E', gray:'#6B7280', grayLt:'#D1D5DB',
-  red:'#E05252', amber:'#F59E0B',
-}
 
 const Card = ({children, style={}}) => (
   <div style={{ background:C.white, borderRadius:12, padding:24,
@@ -18,15 +13,6 @@ const Badge = ({children, color}) => (
   <span style={{ background:color+'18', color, border:`1px solid ${color}40`,
     padding:'2px 8px', borderRadius:20, fontSize:11, fontWeight:500 }}>{children}</span>
 )
-
-const generateCredentials = (nombre, documento) => {
-  const partes = nombre.trim().split(' ')
-  // Formato: Nombre(s) Apellido(s) — tomamos el penúltimo o último segmento como primer apellido
-  const apellido = partes.length >= 2 ? partes[partes.length - 2] : partes[partes.length - 1]
-  const prefijo = apellido.normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-    .replace(/[^A-Za-z]/g,'').substring(0,4).toUpperCase()
-  return { usuario: documento, password: prefijo + documento.slice(-4) }
-}
 
 export default function AdminEstudiantes({ onUpdate }) {
   const [archivos, setArchivos] = useState([]) // [{nombre, codigo, estudiantes, estado}]

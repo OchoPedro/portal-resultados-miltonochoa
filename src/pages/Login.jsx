@@ -1,11 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
-
-const C = {
-  navy: '#0A1F3D', green: '#2D9B6F',
-  bg: '#F8F9FB', bg2: '#EFF1F5', white: '#FFFFFF',
-  text: '#1A1A2E', gray: '#6B7280', grayLt: '#D1D5DB', red: '#E05252',
-}
+import { C } from '../components/ui'
 
 export default function Login({ onLogin }) {
   const [usuario, setUsuario] = useState('')
@@ -20,7 +15,7 @@ export default function Login({ onLogin }) {
       // 1. Buscar en administradores
       const { data: admin } = await supabase
         .from('administradores')
-        .select('*')
+        .select('id, nombre, usuario, password_hash, activo, ultima_sesion')
         .eq('usuario', u.trim())
         .eq('activo', true)
         .single()
@@ -41,7 +36,9 @@ export default function Login({ onLogin }) {
 
       // 2. Buscar en colegios
       const { data: colegio } = await supabase
-        .from('colegios').select('*').eq('usuario', u.trim()).eq('activo', true).single()
+        .from('colegios')
+        .select('id, nombre, usuario, password_hash, activo, ciudad, municipio, departamento_nombre, contactos, ultima_sesion')
+        .eq('usuario', u.trim()).eq('activo', true).single()
 
       if (colegio) {
         if (colegio.password_hash !== p) {
@@ -59,7 +56,9 @@ export default function Login({ onLogin }) {
 
       // 3. Buscar en estudiantes
       const { data: estudiante } = await supabase
-        .from('estudiantes').select('*, colegios(nombre, ciudad)').eq('usuario', u.trim()).eq('activo', true).single()
+        .from('estudiantes')
+        .select('id, nombre, usuario, password_hash, activo, grado, salon, colegio_id, ultima_sesion, colegios(nombre, ciudad)')
+        .eq('usuario', u.trim()).eq('activo', true).single()
 
       if (estudiante) {
         if (estudiante.password_hash !== p) {
@@ -87,14 +86,16 @@ export default function Login({ onLogin }) {
     }
   }, [onLogin])
 
-  // Auto-login desde URL params (viene de la homepage)
+  // Auto-login desde hash fragment (viene de la homepage; hash no se envía al servidor)
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
+    const hash = window.location.hash.slice(1)
+    if (!hash) return
+    const params = new URLSearchParams(hash)
     const u = params.get('u')
     const p = params.get('p')
     if (u && p) {
       window.history.replaceState({}, document.title, window.location.pathname)
-      doLogin(u, p, true) // true = autoLogin, redirige inmediatamente si falla
+      doLogin(u, p, true)
     }
   }, [doLogin])
 
@@ -167,7 +168,7 @@ export default function Login({ onLogin }) {
               <div style={{ background: '#FEF2F2', border: '1px solid #FECACA',
                 borderRadius: 6, padding: '10px 14px', marginBottom: 16,
                 fontSize: 13, color: C.red, fontFamily: 'Inter' }}>
-                {error} Redirigiendo...
+                {error}
               </div>
             )}
 

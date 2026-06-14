@@ -6,8 +6,9 @@ export const C = {
   red: '#E05252', amber: '#F59E0B', blue: '#3B82F6',
 }
 
-export const getColor = v => v >= 85 ? C.green : v >= 70 ? C.blue : v >= 55 ? C.amber : C.red
-export const getLevel = v => v >= 85 ? 'Superior' : v >= 70 ? 'Alto' : v >= 55 ? 'Básico' : 'Bajo'
+// Niveles estándar ICFES/Saber Colombia (escala de porcentaje 0–100)
+export const getColor = v => v >= 65 ? C.green : v >= 45 ? C.amber : v >= 25 ? '#F97316' : C.red
+export const getLevel = v => v >= 65 ? 'Avanzado' : v >= 45 ? 'Satisfactorio' : v >= 25 ? 'Mínimo' : 'Insuficiente'
 export const avg = arr => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length * 10) / 10 : 0
 
 export const Card = ({ children, style = {} }) => (

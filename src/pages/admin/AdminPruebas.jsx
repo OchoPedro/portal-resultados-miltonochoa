@@ -1,13 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
+import { C } from '../../components/ui'
 import * as XLSX from 'xlsx'
-
-const C = {
-  navy:'#0A1F3D', green:'#2D9B6F', greenLt:'#3AB882',
-  bg:'#F8F9FB', bg2:'#EFF1F5', white:'#FFFFFF',
-  text:'#1A1A2E', gray:'#6B7280', grayLt:'#D1D5DB',
-  red:'#E05252', amber:'#F59E0B',
-}
 
 const GRADOS = Array.from({ length: 12 }, (_, i) => i)
 

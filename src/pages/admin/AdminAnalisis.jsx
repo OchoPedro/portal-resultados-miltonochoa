@@ -1,12 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-
-const C = {
-  navy:'#0A1F3D', green:'#2D9B6F', greenLt:'#3AB882',
-  bg:'#F8F9FB', bg2:'#EFF1F5', white:'#FFFFFF',
-  text:'#1A1A2E', gray:'#6B7280', grayLt:'#D1D5DB',
-  red:'#E05252', amber:'#F59E0B',
-}
+import { C } from '../../components/ui'
 
 const Card = ({children, style={}}) => (
   <div style={{ background:C.white, borderRadius:12, padding:24,
@@ -164,20 +158,22 @@ Genera un informe estructurado con:
 Sé específico, práctico y orientado a la acción. Tono profesional pero cercano.`
 
     try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      const response = await fetch('/api/vision', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
           max_tokens: 1500,
-          messages: [{ role:'user', content: prompt }]
-        })
+          messages: [{ role: 'user', content: prompt }],
+        }),
       })
+      if (!response.ok) throw new Error(`Error ${response.status}`)
       const data = await response.json()
-      const texto = data.content?.filter(b=>b.type==='text').map(b=>b.text).join('') || ''
+      const texto = data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || ''
+      if (!texto) throw new Error('Respuesta vacía del modelo')
       setBorrador(texto)
     } catch(e) {
-      setMsg('Error al generar el análisis. Intenta de nuevo.')
+      setMsg('Error al generar el análisis: ' + e.message)
     } finally {
       setGenerando(false)
     }

@@ -10,46 +10,53 @@ import {
 } from 'recharts'
 
 export default function EstudianteDashboard({ session, onLogout }) {
-  const [resultado, setResultado] = useState(null)
-  const [prueba, setPrueba] = useState(null)
+  const [todos, setTodos] = useState([])          // todos los resultados del estudiante
+  const [selectedIdx, setSelectedIdx] = useState(0) // prueba activa
   const [compañeros, setCompañeros] = useState([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('resumen')
 
-  useEffect(() => {
-    loadData()
-  }, [])
+  useEffect(() => { loadData() }, [])
 
   const loadData = async () => {
     try {
-      // Cargar resultado del estudiante
-      const { data: res } = await supabase
+      const { data: resultados } = await supabase
         .from('resultados_estudiante')
         .select('*, pruebas(codigo, nombre, fecha, grado)')
         .eq('estudiante_id', session.id)
         .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
 
-      if (res) {
-        setResultado(res)
-        setPrueba(res.pruebas)
+      setTodos(resultados || [])
 
-        // Cargar compañeros del mismo colegio y prueba
-        const { data: todos } = await supabase
+      if (resultados?.length) {
+        const r = resultados[0]
+        const { data: colegioPares } = await supabase
           .from('resultados_estudiante')
           .select('puntaje_global, estudiante_id, estudiantes(nombre)')
-          .eq('colegio_id', res.colegio_id)
-          .eq('prueba_id', res.prueba_id)
+          .eq('colegio_id', r.colegio_id)
+          .eq('prueba_id', r.prueba_id)
           .order('puntaje_global', { ascending: false })
-
-        setCompañeros(todos || [])
+        setCompañeros(colegioPares || [])
       }
     } catch (e) {
-      console.error(e)
+      // error de red — la UI muestra estado vacío
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleSelectPrueba = async (idx) => {
+    setSelectedIdx(idx)
+    setTab('resumen')
+    const r = todos[idx]
+    if (!r) return
+    const { data: colegioPares } = await supabase
+      .from('resultados_estudiante')
+      .select('puntaje_global, estudiante_id, estudiantes(nombre)')
+      .eq('colegio_id', r.colegio_id)
+      .eq('prueba_id', r.prueba_id)
+      .order('puntaje_global', { ascending: false })
+    setCompañeros(colegioPares || [])
   }
 
   if (loading) return (
@@ -59,7 +66,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
     </div>
   )
 
-  if (!resultado) return (
+  if (!todos.length) return (
     <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'center',
       justifyContent: 'center', background: C.bg, flexDirection: 'column', gap: 12 }}>
       <div style={{ fontSize: 48 }}>📋</div>
@@ -75,7 +82,8 @@ export default function EstudianteDashboard({ session, onLogout }) {
     </div>
   )
 
-  const r = resultado
+  const r = todos[selectedIdx] || todos[0]
+  const prueba = r.pruebas
   const promColegio = compañeros.length
     ? Math.round(avg(compañeros.map(c => c.puntaje_global)))
     : 0
@@ -125,20 +133,34 @@ export default function EstudianteDashboard({ session, onLogout }) {
       <Sidebar role="estudiante" session={session} onLogout={onLogout}>
         <div style={{ padding: '8px 4px' }}>
           <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', fontFamily: 'Inter',
-            letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 8 }}>Prueba</div>
-          <div style={{ background: 'rgba(45,155,111,0.15)', border: '1px solid rgba(45,155,111,0.3)',
-            borderRadius: 8, padding: '10px 12px' }}>
-            <div style={{ fontSize: 11, color: C.greenLt, fontFamily: 'Inter', fontWeight: 600, marginBottom: 2 }}>
-              {prueba?.codigo}
-            </div>
-            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', fontFamily: 'Inter' }}>
-              {prueba?.nombre}
-            </div>
-            <div style={{ marginTop: 8, fontSize: 14, fontFamily: 'Playfair Display, serif',
-              color: C.white, fontWeight: 700 }}>
-              {r.puntaje_global} pts
-            </div>
+            letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 8 }}>
+            Mis Pruebas ({todos.length})
           </div>
+          {todos.map((res, idx) => (
+            <button key={res.id} onClick={() => handleSelectPrueba(idx)} style={{
+              width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer',
+              borderRadius: 8, padding: '10px 12px', marginBottom: 6, transition: 'all 0.15s',
+              background: idx === selectedIdx
+                ? 'rgba(45,155,111,0.25)'
+                : 'rgba(255,255,255,0.05)',
+              borderLeft: idx === selectedIdx
+                ? '3px solid #3AB882'
+                : '3px solid transparent',
+            }}>
+              <div style={{ fontSize: 11, color: idx === selectedIdx ? '#3AB882' : 'rgba(255,255,255,0.6)',
+                fontFamily: 'Inter', fontWeight: 600, marginBottom: 2 }}>
+                {res.pruebas?.codigo}
+              </div>
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', fontFamily: 'Inter',
+                marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {res.pruebas?.nombre}
+              </div>
+              <div style={{ fontSize: 13, fontFamily: 'Playfair Display, serif',
+                color: C.white, fontWeight: 700 }}>
+                {res.puntaje_global} pts
+              </div>
+            </button>
+          ))}
         </div>
       </Sidebar>
 

@@ -1,13 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
-import { PDFDocument } from 'pdf-lib'
-
-const C = {
-  navy:'#0A1F3D', green:'#2D9B6F', greenLt:'#3AB882',
-  bg:'#F8F9FB', bg2:'#EFF1F5', white:'#FFFFFF',
-  text:'#1A1A2E', gray:'#6B7280', grayLt:'#D1D5DB',
-  red:'#E05252', amber:'#F59E0B',
-}
+import { C } from '../../components/ui'
 
 const METODOS = [
   { id:'optico',  icon:'🧾', titulo:'Lector óptico',     sub:'Archivo .txt',                  badge:'Recomendado', desc:'Sube el archivo de texto que exporta el lector óptico. Cada línea es un estudiante con su cadena de respuestas. Es el método más confiable y rápido.' },
@@ -138,7 +131,6 @@ Responde ÚNICAMENTE con un objeto JSON válido, sin explicaciones:
   if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`)
   const data = await res.json()
   const txt = (data.content?.find(b => b.type === 'text')?.text || '').trim()
-  console.log('Vision imagen raw:', txt.substring(0, 200))
 
   // Extraer JSON aunque venga con texto alrededor
   const match = txt.match(/\{[^{}]*"usuario"[^{}]*\}/)
@@ -185,7 +177,6 @@ Responde ÚNICAMENTE con JSON válido sin explicaciones:
   if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`)
   const data = await res.json()
   const txt = (data.content?.find(b => b.type === 'text')?.text || '').trim()
-  console.log('Vision PDF raw:', txt.substring(0, 300))
 
   // Extraer JSON del texto
   const match = txt.match(/\{[\s\S]*"paginas"[\s\S]*\}/)
@@ -436,7 +427,6 @@ export default function AdminResultados({ onUpdate }) {
                 .select('grado').eq('colegio_id', cid).eq('activo', true)
               const unicos = [...new Set((data||[]).map(r => r.grado).filter(Boolean))]
               unicos.sort((a,b) => String(a).localeCompare(String(b), undefined, {numeric:true}))
-              console.log('Grados al entrar manual:', unicos)
               setGradosDisp([...unicos])
             }
           }} style={{
@@ -591,7 +581,6 @@ export default function AdminResultados({ onUpdate }) {
                 .select('grado').eq('colegio_id', cid).eq('activo', true)
               const unicos = [...new Set((data||[]).map(r => r.grado).filter(Boolean))]
               unicos.sort((a,b) => String(a).localeCompare(String(b), undefined, {numeric:true}))
-              console.log('Grados cargados:', unicos)
               setGradosDisp(unicos)
             } else {
               setGradosDisp([])
@@ -607,7 +596,7 @@ export default function AdminResultados({ onUpdate }) {
           <Label>Prueba y referencia</Label>
           <select style={selectStyle} value={pruebaId} onChange={e => { setPruebaId(e.target.value); resetForm() }} disabled={cargando}>
             <option value="">{cargando?'Cargando…':'Selecciona la prueba'}</option>
-            {pruebas.map(p => <option key={p.id} value={p.id}>{p.nombre}{p.referencia?` — ${p.referencia}`:''}</option>)}
+            {pruebas.filter(p => p.codigo !== '_tipo_').map(p => <option key={p.id} value={p.id}>{p.nombre}{p.referencia?` — ${p.referencia}`:''}</option>)}
           </select>
           {pruebaActiva && (
             <div style={{ fontSize:12, color:C.green, marginTop:6, fontWeight:600 }}>

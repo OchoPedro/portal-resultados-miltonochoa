@@ -1,14 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
+import { C } from '../../components/ui'
+import { generateCredentials } from '../../lib/utils'
 import { COLOMBIA } from '../../lib/colombia'
 import * as XLSX from 'xlsx'
-
-const C = {
-  navy:'#0A1F3D', green:'#2D9B6F', greenLt:'#3AB882',
-  bg:'#F8F9FB', bg2:'#EFF1F5', white:'#FFFFFF',
-  text:'#1A1A2E', gray:'#6B7280', grayLt:'#D1D5DB',
-  red:'#E05252', amber:'#F59E0B', blue:'#3B82F6',
-}
 
 const DEPARTAMENTOS = Object.keys(COLOMBIA).sort()
 
@@ -298,14 +293,6 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
     await loadEstudiantes(); onSave()
   }
 
-  const generateCredentials = (nombre, documento) => {
-    const partes = nombre.trim().split(' ')
-    const apellido = partes.length>=2 ? partes[partes.length-2] : partes[partes.length-1]
-    const prefijo = apellido.normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-      .replace(/[^A-Za-z]/g,'').substring(0,4).toUpperCase()
-    return { usuario: documento, password: prefijo + documento.slice(-4) }
-  }
-
   const handleFile = (e) => {
     const file = e.target.files[0]
     if (!file) return
@@ -424,7 +411,7 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
                               <input value={editForm.usuario} onChange={ev=>setEditForm({...editForm,usuario:ev.target.value})} style={inStyle}/>
                             </td>
                             <td style={{ padding:'6px' }}>
-                              <input value={editForm.password_hash} onChange={ev=>setEditForm({...editForm,password_hash:ev.target.value})} style={inStyle}/>
+                              <input type="password" value={editForm.password_hash} onChange={ev=>setEditForm({...editForm,password_hash:ev.target.value})} style={inStyle}/>
                             </td>
                             <td style={{ padding:'6px' }}>
                               <Badge color={e.activo?C.green:C.red}>{e.activo?'Activo':'Inactivo'}</Badge>
@@ -444,7 +431,7 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
                             <td style={{ padding:'10px', fontSize:12, color:C.gray }}>{e.grado}</td>
                             <td style={{ padding:'10px', fontSize:12, color:C.gray }}>{e.salon}</td>
                             <td style={{ padding:'10px', fontSize:12, color:C.navy, fontWeight:500 }}>{e.usuario}</td>
-                            <td style={{ padding:'10px', fontSize:12, color:C.gray }}>{e.password_hash}</td>
+                            <td style={{ padding:'10px', fontSize:12, color:C.gray, letterSpacing:'0.12em' }}>••••••••</td>
                             <td style={{ padding:'10px' }}>
                               <Badge color={e.activo?C.green:C.red}>{e.activo?'Activo':'Inactivo'}</Badge>
                             </td>
@@ -634,7 +621,7 @@ export default function AdminColegios({ onUpdate }) {
       await supabase.from('comparativos_salon').delete().eq('colegio_id', c.id)
       await supabase.from('analisis_preguntas').delete().eq('colegio_id', c.id)
       await supabase.from('resultados_estudiante').delete().eq('colegio_id', c.id)
-      await supabase.from('comparativos_gestion').delete()
+      await supabase.from('comparativos_gestion').delete().eq('colegio_id', c.id)
       alert('✅ Resultados eliminados correctamente.')
       loadColegios(); onUpdate()
     } catch(e) { alert('Error: ' + e.message) }
@@ -649,6 +636,7 @@ export default function AdminColegios({ onUpdate }) {
       await supabase.from('comparativos_salon').delete().eq('colegio_id', c.id)
       await supabase.from('analisis_preguntas').delete().eq('colegio_id', c.id)
       await supabase.from('resultados_estudiante').delete().eq('colegio_id', c.id)
+      await supabase.from('comparativos_gestion').delete().eq('colegio_id', c.id)
       await supabase.from('estudiantes').delete().eq('colegio_id', c.id)
       await supabase.from('colegios').delete().eq('id', c.id)
       alert('✅ Colegio eliminado.')
@@ -704,7 +692,7 @@ export default function AdminColegios({ onUpdate }) {
                     <td style={{ padding:'12px', fontSize:12, color:C.gray }}>{c.departamento_nombre||'—'}</td>
                     <td style={{ padding:'12px', fontSize:12, color:C.gray }}>{c.municipio||'—'}</td>
                     <td style={{ padding:'12px', fontSize:12, color:C.navy, fontWeight:600 }}>{c.usuario}</td>
-                    <td style={{ padding:'12px', fontSize:12, color:C.gray }}>{c.password_hash}</td>
+                    <td style={{ padding:'12px', fontSize:12, color:C.gray, letterSpacing:'0.12em' }}>••••••••</td>
                     <td style={{ padding:'12px' }}>
                       <Badge color={c.activo?C.green:C.red}>{c.activo?'Activo':'Inactivo'}</Badge>
                     </td>

@@ -1,11 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-
-const C = {
-  navy:'#0A1F3D', green:'#2D9B6F',
-  bg:'#F8F9FB', bg2:'#EFF1F5', white:'#FFFFFF',
-  text:'#1A1A2E', gray:'#6B7280', grayLt:'#D1D5DB', red:'#E05252',
-}
+import { C } from '../../components/ui'
 
 const Card = ({children, style={}}) => (
   <div style={{ background:C.white, borderRadius:12, padding:24,
