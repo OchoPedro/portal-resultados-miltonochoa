@@ -94,9 +94,9 @@ function ExcelUploader({ onParsed, parsed }) {
     const reader = new FileReader()
     reader.onload = (evt) => {
       try {
-        const wb = XLSX.read(evt.target.result, { type: 'binary' })
+        const binary = evt.target.result
+        const wb = XLSX.read(binary, { type: 'binary' })
         const ws = wb.Sheets[wb.SheetNames[0]]
-        // Leer todas las filas como array de arrays
         const allRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
 
         // Detectar fila de headers: buscar la fila con más celdas no vacías
@@ -107,8 +107,7 @@ function ExcelUploader({ onParsed, parsed }) {
           if (filled > maxFilled) { maxFilled = filled; headerRowIndex = i }
         })
 
-        // Separar metadata (filas antes del header), headers y datos
-        const metaRows = allRows.slice(0, headerRowIndex)   // ej: fila "Referencia: DB-A"
+        const metaRows = allRows.slice(0, headerRowIndex)
         const headers = allRows[headerRowIndex]
         const dataRows = allRows.slice(headerRowIndex + 1).filter(r =>
           r.some(c => c !== '' && c !== null && c !== undefined)
@@ -121,8 +120,8 @@ function ExcelUploader({ onParsed, parsed }) {
           totalRows: dataRows.length,
           cols: headers.length,
           fileName: file.name,
-          // También guardamos raw completo para reconstruir el Excel al descargar
           raw: allRows,
+          file, // archivo original para subir a Storage
         })
       } catch {
         setError('Error al leer el archivo. Verifica que sea un Excel válido.')
@@ -234,8 +233,19 @@ function ModalVerExcel({ referencia, onClose }) {
     '#4472C4','#FFD966','#FFD966',
   ]
 
-  // Descarga con formato y colores
-  const handleDownload = () => {
+  // Descarga — usa el archivo original de Storage si existe
+  const handleDownload = async () => {
+    if (referencia.excel_url) {
+      // Descargar el archivo original con formato completo
+      const link = document.createElement('a')
+      link.href = referencia.excel_url
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      return
+    }
+    // Fallback: reconstruir desde datos parseados
     const wb = XLSX.utils.book_new()
     const dataToExport = [
       ...(meta.length > 0 ? meta : []),
@@ -243,52 +253,8 @@ function ModalVerExcel({ referencia, onClose }) {
       ...filteredRows,
     ]
     const ws = XLSX.utils.aoa_to_sheet(dataToExport)
-
-    // Ancho de columnas
-    ws['!cols'] = headers.map((h, i) => ({
-      wch: i === 5 ? 60 : i >= 6 ? 30 : 16 // Estándar más ancho
-    }))
-
-    // Estilos de header (fila de headers)
-    const headerRowIdx = meta.length > 0 ? meta.length : 0
-    headers.forEach((_, ci) => {
-      const cellRef = XLSX.utils.encode_cell({ r: headerRowIdx, c: ci })
-      if (!ws[cellRef]) ws[cellRef] = { v: headers[ci], t: 's' }
-      ws[cellRef].s = {
-        fill: { fgColor: { rgb: (COL_COLORS[ci] || '#4472C4').replace('#','') } },
-        font: { bold: true, color: { rgb: COL_COLORS[ci] === '#FFD966' ? '1A1A2E' : 'FFFFFF' } },
-        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
-        border: {
-          top: { style:'thin', color:{ rgb:'FFFFFF' } },
-          bottom: { style:'thin', color:{ rgb:'FFFFFF' } },
-          left: { style:'thin', color:{ rgb:'FFFFFF' } },
-          right: { style:'thin', color:{ rgb:'FFFFFF' } },
-        }
-      }
-    })
-
-    // Estilos de filas de datos (alternado)
-    filteredRows.forEach((_, ri) => {
-      const rowIdx = headerRowIdx + 1 + ri
-      const bgColor = ri % 2 === 0 ? 'FFFFFF' : 'EFF4FB'
-      headers.forEach((_, ci) => {
-        const cellRef = XLSX.utils.encode_cell({ r: rowIdx, c: ci })
-        if (!ws[cellRef]) ws[cellRef] = { v: '', t: 's' }
-        ws[cellRef].s = {
-          fill: { fgColor: { rgb: bgColor } },
-          alignment: { vertical: 'center', wrapText: ci === 5 },
-          border: {
-            top: { style:'thin', color:{ rgb:'D1D5DB' } },
-            bottom: { style:'thin', color:{ rgb:'D1D5DB' } },
-            left: { style:'thin', color:{ rgb:'D1D5DB' } },
-            right: { style:'thin', color:{ rgb:'D1D5DB' } },
-          }
-        }
-      })
-    })
-
     XLSX.utils.book_append_sheet(wb, ws, 'Prueba')
-    XLSX.writeFile(wb, fileName, { cellStyles: true })
+    XLSX.writeFile(wb, fileName)
   }
 
   const activeFilters = Object.entries(filters).filter(([,v]) => v)
@@ -455,13 +421,34 @@ function ModalReferencia({ pruebaTipo, refData, onClose, onSaved }) {
     setSaving(true)
     setError('')
 
+    // Subir archivo original a Storage si hay uno nuevo
+    let excelUrl = refData?.excel_url || null
+    let excelData = excelParsed ? { ...excelParsed } : (refData?.estructura_excel || null)
+
+    if (excelParsed?.file) {
+      const filePath = `${pruebaTipo}/${form.codigo.trim()}_${Date.now()}.xlsx`
+      const { data: uploadData, error: uploadErr } = await supabase.storage
+        .from('pruebas-excel')
+        .upload(filePath, excelParsed.file, { upsert: true, contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+
+      if (uploadErr) { setSaving(false); return setError(`Error al subir Excel: ${uploadErr.message}`) }
+
+      const { data: urlData } = supabase.storage.from('pruebas-excel').getPublicUrl(filePath)
+      excelUrl = urlData.publicUrl
+
+      // Guardar datos parseados sin el objeto File (no serializable)
+      const { file: _, ...parsedWithoutFile } = excelParsed
+      excelData = parsedWithoutFile
+    }
+
     const payload = {
       tipo: pruebaTipo,
       codigo: form.codigo.trim(),
       nombre: form.nombre.trim(),
       descripcion: form.descripcion.trim(),
       grados: form.grados,
-      estructura_excel: excelParsed ? excelParsed : (refData?.estructura_excel || null),
+      estructura_excel: excelData,
+      excel_url: excelUrl,
     }
 
     let err
