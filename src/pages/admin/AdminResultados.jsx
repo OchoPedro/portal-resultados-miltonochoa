@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { PDFDocument } from 'pdf-lib'
 
 const C = {
   navy:'#0A1F3D', green:'#2D9B6F', greenLt:'#3AB882',
@@ -20,6 +21,11 @@ const METODOS = [
     id:'pdf', icon:'📄', titulo:'Hojas escaneadas', sub:'Archivo .pdf — Claude Vision',
     desc:'Sube el PDF con todas las hojas escaneadas. El sistema procesa lotes de páginas con Claude Vision. Funciona aunque falten hojas de algún estudiante.',
     badge:'IA',
+  },
+  {
+    id:'manual', icon:'✏️', titulo:'Ingreso manual', sub:'Digitar respuestas directamente',
+    desc:'Ingresa las respuestas de un estudiante manualmente. Usa números para mayor rapidez: 0=A, 1=B, 2=C, 3=D.',
+    badge:'Manual',
   },
 ]
 
@@ -96,7 +102,6 @@ function Badge({ pct }) {
 
 /* ── Extraer páginas individuales como base64 ─────────────── */
 async function extraerPaginas(arrayBuffer) {
-  const { PDFDocument } = await import('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js')
   const pdfDoc    = await PDFDocument.load(arrayBuffer)
   const totalPag  = pdfDoc.getPageCount()
   const paginas   = []
@@ -208,6 +213,10 @@ export default function AdminResultados({ onUpdate }) {
   const [resultado, setResultado]   = useState(null)
   const [error, setError]           = useState('')
   const [cancelarRef]               = useState({ value: false })
+  const [manualDoc, setManualDoc]   = useState('')
+  const [manualGrado, setManualGrado] = useState('')
+  const [manualRespuestas, setManualRespuestas] = useState('')
+  const [manualPreview, setManualPreview] = useState('')
 
   useEffect(() => { cargarDatos() }, [])
 
@@ -230,6 +239,7 @@ export default function AdminResultados({ onUpdate }) {
     setArchivo(null); setPreview(null); setResultado(null)
     setError(''); setConfirmar(false)
     setProgreso({ actual:0, total:0, msg:'' }); cancelarRef.value = false
+    setManualDoc(''); setManualGrado(''); setManualRespuestas(''); setManualPreview('')
   }
 
   /* ── Procesar TXT ──────────────────────────────────────── */
@@ -405,9 +415,60 @@ export default function AdminResultados({ onUpdate }) {
     finally { setGuardando(false) }
   }
 
+  /* ── Convertir string manual a letras ─────────────────── */
+  function convertirRespuestas(raw) {
+    return raw.trim().split('').map(c => {
+      if (/[0-3]/.test(c)) return ['A','B','C','D'][parseInt(c)]
+      if (/[AaBbCcDd]/.test(c)) return c.toUpperCase()
+      return null
+    }).filter(Boolean).join('')
+  }
+
+  function onManualChange(val) {
+    setManualRespuestas(val)
+    setManualPreview(convertirRespuestas(val))
+  }
+
+  /* ── Procesar ingreso manual ───────────────────────────── */
+  async function procesarManual() {
+    setError('')
+    if (!colegioId || !pruebaId || !manualDoc) { setError('Completa colegio, prueba y número de documento.'); return }
+    const respuestas = convertirRespuestas(manualRespuestas)
+    if (!respuestas) { setError('Ingresa al menos una respuesta.'); return }
+
+    setProcesando(true)
+    try {
+      const prueba = pruebas.find(p => p.id === pruebaId)
+      const raw    = prueba?.estructura_excel?.raw
+      if (!raw || raw.length < 3) { setError('La prueba no tiene preguntas cargadas.'); return }
+
+      const clave       = raw.slice(2).map(f => (f[9]||'').toString().trim().toUpperCase())
+      const areas       = raw.slice(2).map(f => (f[2]||'').toString().trim())
+      const asignaturas = raw.slice(2).map(f => (f[3]||'').toString().trim())
+
+      const { data: estudiantesDB } = await supabase
+        .from('estudiantes').select('id,nombre,usuario,grado,salon,colegio_id')
+        .eq('usuario', manualDoc).eq('colegio_id', colegioId)
+
+      const est  = estudiantesDB?.[0] || null
+      const calc = calcularResultado(respuestas, clave, areas, asignaturas)
+      const fila = { documento:manualDoc, respuestas, encontrado:!!est, estudiante:est||null, ...calc }
+
+      let yaGuardado = false
+      if (est) {
+        const { data:ex } = await supabase.from('resultados_estudiante')
+          .select('estudiante_id').eq('estudiante_id', est.id).eq('prueba_id', pruebaId)
+        yaGuardado = (ex||[]).length > 0
+      }
+
+      setPreview({ clave, filas:[{ ...fila, yaGuardado }], prueba, via:'manual' })
+    } catch(e) { setError('Error: ' + e.message) }
+    finally { setProcesando(false) }
+  }
+
   const metodoActivo = METODOS.find(m => m.id === metodo)
   const pruebaActiva = pruebas.find(p => p.id === pruebaId)
-  const listo        = colegioId && pruebaId && archivo
+  const listo        = colegioId && pruebaId && (metodo === 'manual' ? manualDoc && manualRespuestas : archivo)
   const pctProgreso  = progreso.total > 0 ? Math.round((progreso.actual / progreso.total) * 100) : 0
 
   /* ── Pantalla 1 ────────────────────────────────────────── */
@@ -591,6 +652,7 @@ export default function AdminResultados({ onUpdate }) {
           )}
         </div>
 
+        {metodo !== 'manual' && (
         <div style={{ marginBottom:6 }}>
           <Label>{metodo==='optico'?'Archivo del lector óptico (.txt)':'Hojas escaneadas (.pdf)'}</Label>
           <input type="file" accept={metodoActivo.accept}
@@ -610,6 +672,7 @@ export default function AdminResultados({ onUpdate }) {
           </p>
         </div>
 
+        )}
         {archivo && (
           <div style={{ marginTop:12, padding:'10px 14px', background:C.bg2, borderRadius:9,
             fontSize:13, color:C.text, display:'flex', justifyContent:'space-between' }}>
@@ -645,8 +708,47 @@ export default function AdminResultados({ onUpdate }) {
         {error && <div style={{ marginTop:14, padding:'12px 14px', background:'#FEE2E2',
           borderRadius:9, fontSize:13, color:C.red }}>{error}</div>}
 
+        {/* Formulario manual */}
+        {metodo === 'manual' && (
+          <div>
+            <div style={{ marginBottom:18 }}>
+              <Label>Número de documento del estudiante</Label>
+              <input type="text" value={manualDoc}
+                onChange={e => { setManualDoc(e.target.value); setPreview(null); setError('') }}
+                placeholder="Ej: 1098765432"
+                style={{ ...selectStyle, padding:'11px 13px' }} />
+            </div>
+
+            <div style={{ marginBottom:18 }}>
+              <Label>Respuestas</Label>
+              <div style={{ fontSize:12, color:C.gray, marginBottom:8, lineHeight:1.6 }}>
+                Puedes usar números o letras indistintamente:<br/>
+                <strong style={{color:C.navy}}>0 = A &nbsp;·&nbsp; 1 = B &nbsp;·&nbsp; 2 = C &nbsp;·&nbsp; 3 = D</strong><br/>
+                Ejemplo: <code>0132</code> → <strong>ABDC</strong> &nbsp;|&nbsp; <code>ABDC</code> también es válido
+              </div>
+              <textarea
+                value={manualRespuestas}
+                onChange={e => onManualChange(e.target.value)}
+                placeholder="Ingresa las respuestas: ej. 013201320132..."
+                rows={5}
+                style={{ width:'100%', padding:'11px 13px', borderRadius:9, fontSize:14,
+                  border:`1px solid ${C.grayLt}`, background:C.white, color:C.text,
+                  outline:'none', resize:'vertical', fontFamily:'monospace', letterSpacing:'0.08em' }}
+              />
+              {manualPreview && (
+                <div style={{ marginTop:8, padding:'10px 14px', background:C.bg2, borderRadius:8 }}>
+                  <div style={{ fontSize:11, color:C.gray, marginBottom:4 }}>Vista previa de respuestas ({manualPreview.length} preguntas):</div>
+                  <div style={{ fontFamily:'monospace', fontSize:13, color:C.navy, letterSpacing:'0.1em', wordBreak:'break-all' }}>
+                    {manualPreview}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <div style={{ marginTop:24, borderTop:`1px solid ${C.bg2}`, paddingTop:20 }}>
-          <button disabled={!listo||procesando} onClick={metodo==='optico'?procesarTXT:procesarPDF}
+          <button disabled={!listo||procesando} onClick={metodo==='optico'?procesarTXT:metodo==='pdf'?procesarPDF:procesarManual}
             style={{ width:'100%', padding:'13px', borderRadius:10, fontSize:15, fontWeight:700,
               border:'none', cursor:listo&&!procesando?'pointer':'not-allowed',
               background:listo&&!procesando?C.green:C.grayLt,
