@@ -106,57 +106,43 @@ function Badge({ pct }) {
 }
 
 /* ── Extraer páginas individuales como base64 ─────────────── */
-async function extraerPaginas(arrayBuffer) {
-  // Cargar PDF.js desde CDN para renderizar páginas como imágenes
-  const script = document.createElement('script')
-  script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'
-  await new Promise((res, rej) => { script.onload = res; script.onerror = rej; document.head.appendChild(script) })
-
-  const pdfjsLib = window.pdfjsLib
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
-
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
-  const totalPag = pdf.numPages
-  const paginas = []
-
-  for (let i = 1; i <= totalPag; i++) {
-    const page = await pdf.getPage(i)
-    const scale = 1.5
-    const viewport = page.getViewport({ scale })
-    const canvas = document.createElement('canvas')
-    canvas.width  = viewport.width
-    canvas.height = viewport.height
-    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
-    paginas.push(dataUrl.split(',')[1])
-  }
-  return paginas
+/* ── Contar páginas del PDF sin librerías externas ────────── */
+async function contarPaginasPDF(arrayBuffer) {
+  // Buscar el contador de páginas en el PDF binario
+  const bytes = new Uint8Array(arrayBuffer)
+  const str = new TextDecoder('latin1').decode(bytes)
+  // Contar objetos /Page (sin /Pages) para estimar páginas
+  const matches = str.match(/\/Type\s*\/Page[^s]/g)
+  return matches ? matches.length : 1
 }
 
-/* ── Llamar a Claude Vision con un lote de páginas ────────── */
-async function visionLote(paginasB64) {
-  const content = []
+/* ── Enviar PDF completo a Claude Vision ──────────────────── */
+async function visionPDF(arrayBuffer, paginaInicio, paginaFin) {
+  // Convertir ArrayBuffer a base64
+  const bytes = new Uint8Array(arrayBuffer)
+  let binary = ''
+  // Procesar en chunks para evitar stack overflow
+  const chunkSize = 8192
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize))
+  }
+  const b64 = btoa(binary)
 
-  // Agregar cada página como documento
-  paginasB64.forEach((b64, idx) => {
-    content.push({ type: 'text', text: `PÁGINA ${idx + 1}:` })
-    content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } })
-  })
-
-  content.push({
-    type: 'text',
-    text: `Analiza estas ${paginasB64.length} hojas de respuesta de examen colombiano.
+  const prompt = `Analiza estas hojas de respuesta de examen colombiano (páginas ${paginaInicio} a ${paginaFin}).
 
 INSTRUCCIONES:
-- Cada página es una hoja con burbujas A B C D. La burbuja marcada es un círculo negro sólido completamente relleno.
-- Cada página tiene en la cabecera: "Sesión 1" o "Sesión 2", y el campo "Usuario (No. Documento)" con un número.
-- Lee TODAS las preguntas en orden de arriba a abajo, de izquierda a derecha.
-- Para cada pregunta anota la letra cuya burbuja está rellena en negro.
-- Si no hay burbuja marcada usa X.
+- Cada página es una hoja con burbujas A B C D. La burbuja marcada es un CÍRCULO NEGRO SÓLIDO completamente relleno en negro.
+- Las burbujas NO marcadas muestran la letra (A, B, C o D) en su interior.
+- Las burbujas MARCADAS están completamente rellenas de negro sin letra visible.
+- Cada página tiene en la cabecera: "Sesión 1" o "Sesión 2" y el campo "Usuario (No. Documento)".
+- Lee TODAS las preguntas en orden: arriba a abajo, izquierda a derecha.
 
-FORMATO DE RESPUESTA — devuelve SOLO este JSON, sin texto antes ni después, sin bloques de código:
-{"paginas":[{"usuario":"1098765432","sesion":1,"respuestas":"AACBBDCA..."},{"usuario":"1098765432","sesion":2,"respuestas":"BCDAACB..."}]}`,
-  })
+Para cada página extrae:
+- usuario: el número de documento
+- sesion: 1 o 2
+- respuestas: string con la letra de cada burbuja marcada en orden
+
+Responde SOLO JSON sin texto adicional:`
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -165,27 +151,34 @@ FORMATO DE RESPUESTA — devuelve SOLO este JSON, sin texto antes ni después, s
       model: 'claude-sonnet-4-6',
       max_tokens: 4000,
       messages: [
-        { role: 'user', content },
-        // Forzar inicio de respuesta JSON
+        {
+          role: 'user',
+          content: [
+            { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } },
+            { type: 'text', text: prompt },
+          ],
+        },
         { role: 'assistant', content: '{"paginas":[' },
       ],
     }),
   })
 
-  if (!res.ok) throw new Error(`Claude API ${res.status}: ${await res.text()}`)
+  if (!res.ok) {
+    const errText = await res.text()
+    throw new Error(`Claude API ${res.status}: ${errText}`)
+  }
+
   const data = await res.json()
   const txt  = data.content?.find(b => b.type === 'text')?.text || ''
+  const full = '{"paginas":[' + txt
 
-  // Reconstruir el JSON completo (prefill + respuesta)
-  const fullJson = '{"paginas":[' + txt
   try {
-    return JSON.parse(fullJson)
-  } catch(e) {
-    // Intentar limpiar y parsear
-    const clean = fullJson.replace(/```json|```/g, '').trim()
-    // Si termina incompleto, intentar cerrar el JSON
-    const fixed = clean.endsWith(']}') ? clean : clean.replace(/,?\s*$/, ']}')
-    return JSON.parse(fixed)
+    return JSON.parse(full)
+  } catch {
+    // Reparar JSON incompleto
+    const clean = full.replace(/,\s*$/, '').replace(/}\s*$/, '}') + ']}'
+    try { return JSON.parse(clean) }
+    catch { return { paginas: [] } }
   }
 }
 
@@ -314,52 +307,33 @@ export default function AdminResultados({ onUpdate }) {
       const areas       = raw.slice(2).map(f => (f[2]||'').toString().trim())
       const asignaturas = raw.slice(2).map(f => (f[3]||'').toString().trim())
 
-      // 1. Extraer páginas individuales
-      setProgreso({ actual:0, total:0, msg:'📂 Extrayendo páginas del PDF…' })
+      // 1. Analizar PDF y enviarlo directamente a Claude Vision
+      setProgreso({ actual:0, total:0, msg:'📂 Leyendo PDF…' })
       const arrayBuffer = await archivo.arrayBuffer()
-      const paginas     = await extraerPaginas(arrayBuffer)
-      const totalPag    = paginas.length
-      const totalLotes  = Math.ceil(totalPag / PAGINAS_POR_LOTE)
+      const totalPag    = await contarPaginasPDF(arrayBuffer)
 
-      setProgreso({ actual:0, total:totalLotes, msg:`📋 ${totalPag} páginas → ${totalLotes} lotes de ${PAGINAS_POR_LOTE}. Iniciando…` })
-      await new Promise(r => setTimeout(r, 500))
+      setProgreso({ actual:0, total:1, msg:`📋 ~${totalPag} páginas detectadas. Enviando a Claude Vision…` })
+      await new Promise(r => setTimeout(r, 300))
 
-      // 2. Procesar lotes
+      // 2. Enviar PDF completo a Claude Vision
       const todasLasPaginas = []
-      for (let i = 0; i < totalLotes; i++) {
-        if (cancelarRef.value) break
+      setProgreso({ actual:1, total:1, msg:`🔍 Claude Vision leyendo ${totalPag} página(s) — ${(archivo.size/1024/1024).toFixed(1)} MB…` })
 
-        const inicio  = i * PAGINAS_POR_LOTE
-        const lote    = paginas.slice(inicio, inicio + PAGINAS_POR_LOTE)
-        const numPag  = inicio + 1
-        const finPag  = Math.min(inicio + PAGINAS_POR_LOTE, totalPag)
-
-        setProgreso({
-          actual: i + 1, total: totalLotes,
-          msg: `🔍 Lote ${i+1}/${totalLotes} — páginas ${numPag}–${finPag} (${lote.length} páginas, ~${Math.round(lote.length/2)} estudiantes)`,
-        })
-
-        try {
-          const resultado = await visionLote(lote)
-          todasLasPaginas.push(...(resultado.paginas || []))
-        } catch(e) {
-          // Si un lote falla, registrar y continuar con el siguiente
-          console.warn(`Lote ${i+1} falló:`, e.message)
-          for (let p = 0; p < lote.length; p++) {
-            todasLasPaginas.push({ usuario: null, sesion: null, respuestas: '', error: e.message })
-          }
-        }
-
-        // Pausa entre lotes para respetar rate limits
-        if (i < totalLotes - 1) await new Promise(r => setTimeout(r, 300))
+      try {
+        const resultado = await visionPDF(arrayBuffer, 1, totalPag)
+        todasLasPaginas.push(...(resultado.paginas || []))
+      } catch(e) {
+        setError('Error al leer el PDF: ' + e.message)
+        setProcesando(false)
+        return
       }
 
       // 3. Agrupar por estudiante
-      setProgreso({ actual:totalLotes, total:totalLotes, msg:'📊 Agrupando respuestas por estudiante…' })
+      setProgreso({ actual:1, total:1, msg:'📊 Agrupando respuestas por estudiante…' })
       const estudiantesLeidos = agruparPorEstudiante(todasLasPaginas)
 
       // 4. Buscar en Supabase
-      setProgreso({ actual:totalLotes, total:totalLotes, msg:'🔎 Buscando estudiantes en el sistema…' })
+      setProgreso({ actual:1, total:1, msg:'🔎 Buscando estudiantes en el sistema…' })
       const documentos = estudiantesLeidos.map(e => e.documento).filter(Boolean)
       const { data: estudiantesDB } = await supabase
         .from('estudiantes').select('id,nombre,usuario,grado,salon,colegio_id')
@@ -367,7 +341,7 @@ export default function AdminResultados({ onUpdate }) {
 
       // 5. Calcular resultados
       const filas = estudiantesLeidos.map(e => {
-        const est = estudiantesDB?.find(db => db.usuario === e.documento)
+        const est  = estudiantesDB?.find(db => db.usuario === e.documento)
         const calc = calcularResultado(e.respuestas, clave, areas, asignaturas)
         return {
           documento:  e.documento,
@@ -389,185 +363,12 @@ export default function AdminResultados({ onUpdate }) {
         yaGuardados = (ex||[]).map(e=>e.estudiante_id)
       }
 
-      const cancelado = cancelarRef.value
-      setProgreso({ actual:totalLotes, total:totalLotes,
-        msg: cancelado ? '⛔ Procesamiento cancelado' : `✅ Completado — ${filas.length} estudiante(s) detectados` })
-
+      setProgreso({ actual:1, total:1, msg:`✅ Completado — ${filas.length} estudiante(s) detectados` })
       setPreview({
         clave, prueba, via:'pdf',
         filas: filas.map(f=>({...f, yaGuardado:f.encontrado&&yaGuardados.includes(f.estudiante?.id)})),
         paginasNoLeidas: todasLasPaginas.filter(p=>!p.usuario).length,
       })
-    } catch(e) { setError('Error al procesar el PDF: ' + e.message) }
-    finally { setProcesando(false) }
-  }
-
-  /* ── Guardar ───────────────────────────────────────────── */
-  async function guardar() {
-    if (!preview) return
-    setGuardando(true); setError('')
-    try {
-      const filasValidas = preview.filas.filter(f => f.encontrado)
-      let guardados = 0, errores = 0
-      for (const f of filasValidas) {
-        const { error:err } = await supabase.from('resultados_estudiante').upsert({
-          estudiante_id:f.estudiante.id, prueba_id:pruebaId, colegio_id:colegioId,
-          respuestas:f.respuestas, correctas:f.correctas, total:f.total,
-          desempeno_pct:f.porcentaje, puntaje_global:f.puntaje,
-          mat_cuantitativo:f.pctAsig?.mat_cuantitativo??null, mat_especifico:f.pctAsig?.mat_especifico??null,
-          cn_quimica:f.pctAsig?.cn_quimica??null, cn_fisica:f.pctAsig?.cn_fisica??null,
-          cn_biologia:f.pctAsig?.cn_biologia??null, cn_cts:f.pctAsig?.cn_cts??null,
-          sociales:f.pctAsig?.sociales??null, ciudadanas:f.pctAsig?.ciudadanas??null,
-          lectura_critica:f.pctAsig?.lectura_critica??null, ingles:f.pctAsig?.ingles??null,
-          detalle:f.detalle, cargado_via: preview.via || 'optico',
-        }, { onConflict:'estudiante_id,prueba_id' })
-        if (err) errores++; else guardados++
-      }
-      setResultado({ guardados, errores,
-        noEncontrados:preview.filas.filter(f=>!f.encontrado).length, total:preview.filas.length })
-      setPreview(null)
-      if (onUpdate) onUpdate()
-    } catch(e) { setError('Error guardando: ' + e.message) }
-    finally { setGuardando(false) }
-  }
-
-  /* ── Convertir string manual a letras ─────────────────── */
-  function convertirRespuestas(raw) {
-    return raw.trim().split('').map(c => {
-      if (/[0-3]/.test(c)) return ['A','B','C','D'][parseInt(c)]
-      if (/[AaBbCcDd]/.test(c)) return c.toUpperCase()
-      return null
-    }).filter(Boolean).join('')
-  }
-
-  function onManualChange(val) {
-    setManualRespuestas(val)
-    setManualPreview(convertirRespuestas(val))
-  }
-
-  /* ── Procesar ingreso manual ───────────────────────────── */
-  async function procesarManual() {
-    setError('')
-    if (!colegioId || !pruebaId || !manualDoc) { setError('Completa colegio, prueba y número de documento.'); return }
-    const respuestas = convertirRespuestas(manualRespuestas)
-    if (!respuestas) { setError('Ingresa al menos una respuesta.'); return }
-
-    setProcesando(true)
-    try {
-      const prueba = pruebas.find(p => p.id === pruebaId)
-      const raw    = prueba?.estructura_excel?.raw
-      if (!raw || raw.length < 3) { setError('La prueba no tiene preguntas cargadas.'); return }
-
-      const clave       = raw.slice(2).map(f => (f[9]||'').toString().trim().toUpperCase())
-      const areas       = raw.slice(2).map(f => (f[2]||'').toString().trim())
-      const asignaturas = raw.slice(2).map(f => (f[3]||'').toString().trim())
-
-      const { data: estudiantesDB } = await supabase
-        .from('estudiantes').select('id,nombre,usuario,grado,salon,colegio_id')
-        .eq('usuario', manualDoc).eq('colegio_id', colegioId)
-
-      const est  = estudiantesDB?.[0] || null
-      const calc = calcularResultado(respuestas, clave, areas, asignaturas)
-      const fila = { documento:manualDoc, respuestas, encontrado:!!est, estudiante:est||null, ...calc }
-
-      let yaGuardado = false
-      if (est) {
-        const { data:ex } = await supabase.from('resultados_estudiante')
-          .select('estudiante_id').eq('estudiante_id', est.id).eq('prueba_id', pruebaId)
-        yaGuardado = (ex||[]).length > 0
-      }
-
-      setPreview({ clave, filas:[{ ...fila, yaGuardado }], prueba, via:'manual' })
-    } catch(e) { setError('Error: ' + e.message) }
-    finally { setProcesando(false) }
-  }
-
-  /* ── Claude Vision para una imagen ───────────────────────── */
-  async function visionImagen(file) {
-    const arrayBuffer = await file.arrayBuffer()
-    const bytes = new Uint8Array(arrayBuffer)
-    let binary = ''
-    bytes.forEach(b => binary += String.fromCharCode(b))
-    const b64 = btoa(binary)
-    const mediaType = file.type === 'image/png' ? 'image/png' : 'image/jpeg'
-
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 2000,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } },
-              { type: 'text', text: `Analiza esta foto de una hoja de respuesta de examen colombiano.
-Las burbujas marcadas son círculos negros sólidos completamente rellenos. Las opciones son A B C D.
-La hoja tiene en la cabecera: "Sesión 1" o "Sesión 2" y el campo "Usuario (No. Documento)" con el número del estudiante.
-Lee todas las preguntas en orden de arriba a abajo, izquierda a derecha.
-
-Responde SOLO este JSON sin texto adicional:` },
-            ],
-          },
-          { role: 'assistant', content: '{"usuario":' },
-        ],
-      }),
-    })
-
-    if (!res.ok) throw new Error(`Claude API ${res.status}`)
-    const data = await res.json()
-    const txt  = data.content?.find(b => b.type === 'text')?.text || ''
-    const full = '{"usuario":' + txt
-    try {
-      return JSON.parse(full.replace(/```json|```/g, '').trim())
-    } catch {
-      const fixed = full.replace(/,?\s*$/, '}')
-      return JSON.parse(fixed)
-    }
-  }
-
-  /* ── Procesar fotos con Claude Vision ─────────────────────── */
-  async function procesarFotos() {
-    setError('')
-    if (!colegioId || !pruebaId || archivos.length === 0) {
-      setError('Completa todos los campos y selecciona al menos una imagen.'); return
-    }
-    setProcesando(true); cancelarRef.value = false
-
-    try {
-      const prueba = pruebas.find(p => p.id === pruebaId)
-      const raw    = prueba?.estructura_excel?.raw
-      if (!raw || raw.length < 3) { setError('La prueba no tiene preguntas cargadas.'); return }
-
-      const clave       = raw.slice(2).map(f => (f[9]||'').toString().trim().toUpperCase())
-      const areas       = raw.slice(2).map(f => (f[2]||'').toString().trim())
-      const asignaturas = raw.slice(2).map(f => (f[3]||'').toString().trim())
-
-      const total = archivos.length
-      setProgreso({ actual:0, total, msg:`📷 ${total} imagen(es) seleccionada(s). Iniciando lectura…` })
-      await new Promise(r => setTimeout(r, 400))
-
-      const todasLasPaginas = []
-      for (let i = 0; i < archivos.length; i++) {
-        if (cancelarRef.value) break
-        const file = archivos[i]
-        setProgreso({ actual:i+1, total, msg:`🔍 Leyendo imagen ${i+1}/${total}: ${file.name}…` })
-
-        try {
-          const result = await visionImagen(file)
-          todasLasPaginas.push({
-            usuario:    result.usuario,
-            sesion:     result.sesion,
-            respuestas: result.respuestas || '',
-          })
-        } catch(e) {
-          todasLasPaginas.push({ usuario: null, sesion: null, respuestas: '', error: e.message })
-        }
-
-        if (i < archivos.length - 1) await new Promise(r => setTimeout(r, 200))
-      }
-
       // Agrupar por estudiante
       setProgreso({ actual:total, total, msg:'📊 Agrupando respuestas por estudiante…' })
       const estudiantesLeidos = agruparPorEstudiante(todasLasPaginas)
