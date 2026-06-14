@@ -128,17 +128,22 @@ async function visionImagen(file) {
     }),
   })
 
-  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`)
+  if (!res.ok) {
+    const errText = await res.text()
+    throw new Error(`API ${res.status}: ${errText}`)
+  }
   const data = await res.json()
   const txt = data.content?.find(b => b.type === 'text')?.text || ''
   const full = '{"usuario":"' + txt
+  console.log('Vision response:', full.substring(0, 200))
 
   // Intentar múltiples estrategias de parseo
   const candidates = [full, full + '}', full.replace(/,\s*$/, '}'), full.replace(/[^}]*$/, '}')]
   for (const c of candidates) {
     try { return JSON.parse(c) } catch { /* continuar */ }
   }
-  throw new Error('No se pudo parsear respuesta: ' + full.substring(0, 80))
+  // Si falla el parseo, mostrar qué devolvió Claude
+  throw new Error('Respuesta de Claude (primeros 150 chars): ' + full.substring(0, 150))
 }
 
 // ── Llamar a Claude Vision con PDF ───────────────────────
@@ -164,16 +169,20 @@ async function visionPDF(archivo) {
     }),
   })
 
-  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`)
+  if (!res.ok) {
+    const errText = await res.text()
+    throw new Error(`API ${res.status}: ${errText}`)
+  }
   const data = await res.json()
   const txt = data.content?.find(b => b.type === 'text')?.text || ''
   const full = '{"paginas":[' + txt
+  console.log('Vision PDF response:', full.substring(0, 300))
 
   const candidates = [full, full + ']}', full.replace(/,\s*$/, ']}'), full.replace(/[^\]]*$/, ']}')]
   for (const c of candidates) {
     try { return JSON.parse(c) } catch { /* continuar */ }
   }
-  return { paginas: [] }
+  throw new Error('Respuesta PDF (primeros 200 chars): ' + full.substring(0, 200))
 }
 
 // ── Buscar estudiantes y calcular resultados ──────────────
