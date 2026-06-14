@@ -4,7 +4,7 @@ import { C } from '../../components/ui'
 import { DEPTO_REGION } from './AdminRanking'
 
 const REGIONES_DEPTS = {
-  'Andina':    ['ANTIOQUIA','BOYACÁ','CALDAS','CUNDINAMARCA','HUILA','NORTE SANTANDER','QUINDÍO','RISARALDA','SANTANDER','TOLIMA'],
+  'Andina':    ['ANTIOQUIA','BOGOTÁ D.C.','BOYACÁ','CALDAS','CUNDINAMARCA','HUILA','NORTE SANTANDER','QUINDÍO','RISARALDA','SANTANDER','TOLIMA'],
   'Caribe':    ['ATLÁNTICO','BOLÍVAR','CESAR','CÓRDOBA','LA GUAJIRA','MAGDALENA','SUCRE','SAN ANDRÉS'],
   'Pacífica':  ['CAUCA','CHOCÓ','NARIÑO','VALLE DEL CAUCA'],
   'Orinoquía': ['ARAUCA','CASANARE','META','VICHADA'],
@@ -117,7 +117,7 @@ export default function ReportePlantel({ codigo, nombre, onClose }) {
 
     // 2. Promedios departamento (para los años y departamento del plantel)
     if (rows?.length) {
-      const depto = rows[0].departamento
+      const depto = rows[rows.length - 1].departamento
       const anios = rows.map(r => r.anio)
 
       const { data: dRows } = await supabase
@@ -348,7 +348,7 @@ export default function ReportePlantel({ codigo, nombre, onClose }) {
             { id: 'departamento', label: 'Comparativo Departamento' },
             { id: 'promedios',    label: 'Promedios Plantel' },
             { id: 'ranking',      label: 'Tendencia Ranking' },
-            { id: 'region',       label: `Comparativo ${regionNombre || 'Regional'}` },
+            { id: 'region',       label: 'Comparativo Región' },
             { id: 'radar',        label: 'Perfil por Áreas' },
           ].map(t => <Tab key={t.id} label={t.label} active={tab===t.id} onClick={() => setTab(t.id)} />)}
         </div>
