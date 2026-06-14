@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { PDFDocument } from 'pdf-lib'
 
@@ -247,7 +247,7 @@ export default function AdminResultados({ onUpdate }) {
   const [manualEstId, setManualEstId]     = useState('')
   const [gradosDisp, setGradosDisp]       = useState([])
   const [estudiantesDisp, setEstDisp]     = useState([])
-  const cancelarRef                   = { value: false }
+  const cancelarRef                   = useRef(false)
 
   useEffect(() => { cargarDatos() }, [])
 
@@ -283,7 +283,7 @@ export default function AdminResultados({ onUpdate }) {
   function reset() {
     setMetodo(null); setArchivo(null); setArchivos([]); setPreview(null); setResultado(null)
     setError(''); setColegioId(''); setPruebaId(''); setProgreso({ actual:0, total:0, msg:'' })
-    setManualDoc(''); setManualResp(''); setManualPrev(''); setManualGrado(''); setManualEstId(''); setGradosDisp([]); setEstDisp([]); cancelarRef.value = false
+    setManualDoc(''); setManualResp(''); setManualPrev(''); setManualGrado(''); setManualEstId(''); setGradosDisp([]); setEstDisp([]); cancelarRef.current = false
   }
   function resetForm() {
     setArchivo(null); setArchivos([]); setPreview(null); setResultado(null)
@@ -326,7 +326,7 @@ export default function AdminResultados({ onUpdate }) {
     if (!colegioId || !pruebaId || !archivo) { setError('Completa todos los campos.'); return }
     const kd = getClave()
     if (!kd) { setError('La prueba no tiene preguntas cargadas.'); return }
-    setProcesando(true); cancelarRef.value = false
+    setProcesando(true); cancelarRef.current = false
     try {
       setProgreso({ actual:0, total:1, msg:`🔍 Claude Vision leyendo PDF (${(archivo.size/1024/1024).toFixed(1)} MB)…` })
       const result = await visionPDF(archivo)
@@ -348,13 +348,13 @@ export default function AdminResultados({ onUpdate }) {
     if (!colegioId || !pruebaId || archivos.length === 0) { setError('Completa todos los campos y selecciona imágenes.'); return }
     const kd = getClave()
     if (!kd) { setError('La prueba no tiene preguntas cargadas.'); return }
-    setProcesando(true); cancelarRef.value = false
+    setProcesando(true); cancelarRef.current = false
     try {
       const total = archivos.length
       const todasLasPaginas = []
 
       for (let i = 0; i < archivos.length; i++) {
-        if (cancelarRef.value) break
+        if (cancelarRef.current) break
         setProgreso({ actual:i+1, total, msg:`🔍 Leyendo imagen ${i+1}/${total}: ${archivos[i].name}…` })
         try {
           const r = await visionImagen(archivos[i])
@@ -729,7 +729,7 @@ export default function AdminResultados({ onUpdate }) {
               </div>
             )}
             {(metodo==='pdf'||metodo==='fotos') && (
-              <button onClick={() => { cancelarRef.value = true }}
+              <button onClick={() => { cancelarRef.current = true }}
                 style={{ marginTop:10, padding:'6px 16px', borderRadius:8, border:`1px solid ${C.red}`, background:'transparent', color:C.red, fontSize:12, fontWeight:600, cursor:'pointer' }}>
                 ⛔ Cancelar
               </button>
