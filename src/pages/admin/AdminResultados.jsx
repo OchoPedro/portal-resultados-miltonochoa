@@ -152,6 +152,7 @@ export default function AdminResultados({ onUpdate }) {
   const [procesando, setProcesando] = useState(false)
   const [preview, setPreview]       = useState(null)   // { clave, filas }
   const [guardando, setGuardando]   = useState(false)
+  const [confirmar, setConfirmar]   = useState(false)
   const [resultado, setResultado]   = useState(null)   // resumen final
   const [error, setError]           = useState('')
 
@@ -174,7 +175,7 @@ export default function AdminResultados({ onUpdate }) {
   }
 
   function resetForm() {
-    setArchivo(null); setPreview(null); setResultado(null); setError('')
+    setArchivo(null); setPreview(null); setResultado(null); setError(''); setConfirmar(false)
   }
 
   /* ── Procesar TXT ─────────────────────────────────────────── */
@@ -225,7 +226,22 @@ export default function AdminResultados({ onUpdate }) {
         }
       })
 
-      setPreview({ clave, filas, prueba })
+      // Verificar cuáles ya tienen resultados en Supabase
+      const idsEncontrados = filas.filter(f => f.encontrado).map(f => f.estudiante.id)
+      let yaGuardados = []
+      if (idsEncontrados.length > 0) {
+        const { data: existentes } = await supabase
+          .from('resultados_estudiante')
+          .select('estudiante_id')
+          .in('estudiante_id', idsEncontrados)
+          .eq('prueba_id', pruebaId)
+        yaGuardados = (existentes || []).map(e => e.estudiante_id)
+      }
+      const filasConEstado = filas.map(f => ({
+        ...f,
+        yaGuardado: f.encontrado && yaGuardados.includes(f.estudiante?.id),
+      }))
+      setPreview({ clave, filas: filasConEstado, prueba })
     } catch (e) {
       setError('Error al procesar el archivo: ' + e.message)
     } finally {
@@ -382,7 +398,7 @@ export default function AdminResultados({ onUpdate }) {
           <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter', fontSize:13 }}>
             <thead>
               <tr style={{ background:C.navy }}>
-                {['Documento','Nombre','Grado','Salón','Correctas','Puntaje','Nivel','Estado'].map(h => (
+                {['Documento','Nombre','Grado','Salón','Correctas','Puntaje','Nivel','Registro','Estado'].map(h => (
                   <th key={h} style={{ padding:'11px 14px', color:'rgba(255,255,255,0.8)',
                     fontWeight:600, textAlign:'left', whiteSpace:'nowrap' }}>{h}</th>
                 ))}
@@ -404,6 +420,13 @@ export default function AdminResultados({ onUpdate }) {
                   <td style={{ padding:'10px 14px', color:C.navy, fontWeight:700 }}>{f.puntaje}</td>
                   <td style={{ padding:'10px 14px' }}><Badge pct={f.porcentaje} /></td>
                   <td style={{ padding:'10px 14px' }}>
+                    {f.yaGuardado
+                      ? <span style={{ color:C.amber, fontWeight:600, fontSize:12 }}>⚠ Ya existe</span>
+                      : f.encontrado
+                        ? <span style={{ color:C.green, fontWeight:600, fontSize:12 }}>✦ Nuevo</span>
+                        : <span style={{ color:C.gray, fontSize:12 }}>—</span>}
+                  </td>
+                  <td style={{ padding:'10px 14px' }}>
                     {f.encontrado
                       ? <span style={{ color:C.green, fontWeight:600, fontSize:12 }}>✓ Listo</span>
                       : <span style={{ color:C.amber, fontWeight:600, fontSize:12 }}>⚠ No hallado</span>}
@@ -417,8 +440,25 @@ export default function AdminResultados({ onUpdate }) {
 
       {preview.filas.some(f => !f.encontrado) && (
         <div style={{ padding:'12px 16px', background:'#FEF3C7', borderRadius:9,
-          fontSize:13, color:'#92400E', marginBottom:16 }}>
+          fontSize:13, color:'#92400E', marginBottom:12 }}>
           ⚠️ Los estudiantes "No hallados" no se guardarán — verifica que estén registrados en el colegio seleccionado.
+        </div>
+      )}
+      {preview.filas.some(f => f.yaGuardado) && !confirmar && (
+        <div style={{ padding:'14px 16px', background:'#FEF3C7', borderRadius:9,
+          fontSize:13, color:'#92400E', marginBottom:12,
+          display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
+          <span>⚠️ <strong>{preview.filas.filter(f => f.yaGuardado).length} estudiante(s)</strong> ya tienen resultados para esta prueba. ¿Deseas sobreescribirlos?</span>
+          <button onClick={() => setConfirmar(true)} style={{
+            padding:'7px 16px', borderRadius:8, border:'none', cursor:'pointer',
+            background:'#92400E', color:'white', fontWeight:700, fontSize:12, whiteSpace:'nowrap',
+          }}>Sí, sobreescribir</button>
+        </div>
+      )}
+      {preview.filas.some(f => f.yaGuardado) && confirmar && (
+        <div style={{ padding:'12px 16px', background:'#D1FAE5', borderRadius:9,
+          fontSize:13, color:'#065F46', marginBottom:12 }}>
+          ✓ Confirmado — los resultados existentes serán reemplazados.
         </div>
       )}
 
@@ -432,7 +472,8 @@ export default function AdminResultados({ onUpdate }) {
         }}>Cancelar</button>
         <button
           onClick={guardar}
-          disabled={guardando || preview.filas.filter(f=>f.encontrado).length === 0}
+          disabled={guardando || preview.filas.filter(f=>f.encontrado).length === 0
+            || (preview.filas.some(f=>f.yaGuardado) && !confirmar)}
           style={{
             padding:'12px 32px', borderRadius:10, border:'none', fontSize:14, fontWeight:700,
             cursor: guardando ? 'wait' : 'pointer',
