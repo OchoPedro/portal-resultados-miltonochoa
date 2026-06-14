@@ -50,27 +50,52 @@ const selectStyle = {
 
 /* ── Pesos por área ───────────────────────────────────────── */
 const PESOS_AREA = {
-  'Matemáticas':          3,
-  'Lectura Crítica':      3,
-  'Sociales y Ciudadanas':3,
-  'Ciencias Naturales':   3,
-  'Inglés':               1,
+  'Matemáticas':      3,
+  'Lectura Crítica':  3,
+  'Ciencias Sociales':3,
+  'Ciencias Naturales':3,
+  'Inglés':           1,
 }
 function pesoArea(area) { return PESOS_AREA[area] || 1 }
 
+// Mapeo asignatura → columna de la tabla
+const ASIG_COLUMNA = {
+  // Matemáticas
+  'Contenidos genéricos':              'mat_cuantitativo',
+  'Contenidos no genéricos':           'mat_especifico',
+  // Ciencias Naturales
+  'Química':                           'cn_quimica',
+  'Física':                            'cn_fisica',
+  'Biología':                          'cn_biologia',
+  'Ciencia, Tecnología y Sociedad':    'cn_cts',
+  // Ciencias Sociales
+  'Ciencias Sociales':                 'sociales',
+  'Competencias Ciudadanas':           'ciudadanas',
+  // Lectura Crítica e Inglés
+  'Lectura Crítica':                   'lectura_critica',
+  'Inglés':                            'ingles',
+}
+
 /* ── Calificación con promedio ponderado por área ─────────── */
-function calcularResultado(respuestasEstudiante, clave, areas) {
+function calcularResultado(respuestasEstudiante, clave, areas, asignaturas) {
   const detalle = []
-  const porArea = {}
+  const porArea  = {}
+  const porAsig  = {}
   for (let i = 0; i < clave.length; i++) {
     const marcada    = (respuestasEstudiante[i] || 'X').toUpperCase()
     const correcta   = (clave[i] || '').toUpperCase()
-    const area       = areas ? (areas[i] || 'Sin área') : 'Sin área'
+    const area       = areas       ? (areas[i]       || 'Sin área') : 'Sin área'
+    const asignatura = asignaturas ? (asignaturas[i] || '')         : ''
     const esCorrecto = marcada === correcta && marcada !== 'X'
+    // Por área
     if (!porArea[area]) porArea[area] = { correctas:0, total:0, peso: pesoArea(area) }
     porArea[area].total++
     if (esCorrecto) porArea[area].correctas++
-    detalle.push({ pregunta:i+1, marcada, correcta, correcto:esCorrecto, area })
+    // Por asignatura
+    if (!porAsig[asignatura]) porAsig[asignatura] = { correctas:0, total:0 }
+    porAsig[asignatura].total++
+    if (esCorrecto) porAsig[asignatura].correctas++
+    detalle.push({ pregunta:i+1, marcada, correcta, correcto:esCorrecto, area, asignatura })
   }
   // Promedio ponderado: Σ(pct_area * peso) / Σ(pesos)
   let sumaPonderada = 0, sumaPesos = 0
@@ -83,7 +108,13 @@ function calcularResultado(respuestasEstudiante, clave, areas) {
   const total      = clave.length
   const porcentaje = sumaPesos > 0 ? Math.round((sumaPonderada / sumaPesos) * 100) : 0
   const puntaje    = Math.round(porcentaje * 5) // escala 0-500
-  return { correctas, total, puntaje, porcentaje, detalle, porArea }
+  // Pct por asignatura → columna tabla
+  const pctAsig = {}
+  for (const [asig, d] of Object.entries(porAsig)) {
+    const col = ASIG_COLUMNA[asig]
+    if (col) pctAsig[col] = d.total > 0 ? Math.round((d.correctas / d.total) * 100) : 0
+  }
+  return { correctas, total, puntaje, porcentaje, detalle, porArea, pctAsig }
 }
 
 /* ── Parser TXT ───────────────────────────────────────────── */
@@ -169,8 +200,9 @@ export default function AdminResultados({ onUpdate }) {
       }
       // raw[0] = metadata, raw[1] = headers, raw[2..] = preguntas
       // Respuesta Correcta está en índice 9 de cada fila
-      const clave = raw.slice(2).map(fila => (fila[9] || '').toString().trim().toUpperCase())
-      const areas = raw.slice(2).map(fila => (fila[2] || '').toString().trim())
+      const clave       = raw.slice(2).map(fila => (fila[9] || '').toString().trim().toUpperCase())
+      const areas       = raw.slice(2).map(fila => (fila[2] || '').toString().trim())
+      const asignaturas = raw.slice(2).map(fila => (fila[3] || '').toString().trim())
 
       // 3. Buscar estudiantes en Supabase por documento
       const documentos = filasTXT.map(f => f.documento)
@@ -183,7 +215,7 @@ export default function AdminResultados({ onUpdate }) {
       // 4. Calcular resultados
       const filas = filasTXT.map(f => {
         const estudianteDB = estudiantesDB?.find(e => e.usuario === f.documento)
-        const resultado    = calcularResultado(f.respuestas, clave, areas)
+        const resultado    = calcularResultado(f.respuestas, clave, areas, asignaturas)
         return {
           documento:  f.documento,
           respuestas: f.respuestas,
@@ -211,20 +243,29 @@ export default function AdminResultados({ onUpdate }) {
       let guardados = 0, errores = 0
 
       for (const f of filasValidas) {
-        // Guardar en tabla resultados_estudiante (o la que uses)
         const { error: err } = await supabase
           .from('resultados_estudiante')
           .upsert({
-            estudiante_id: f.estudiante.id,
-            prueba_id:     pruebaId,
-            colegio_id:    colegioId,
-            respuestas:    f.respuestas,
-            correctas:     f.correctas,
-            total:         f.total,
-            puntaje:       f.puntaje,
-            porcentaje:    f.porcentaje,
-            detalle:       f.detalle,
-            cargado_via:   'optico',
+            estudiante_id:    f.estudiante.id,
+            prueba_id:        pruebaId,
+            colegio_id:       colegioId,
+            respuestas:       f.respuestas,
+            correctas:        f.correctas,
+            total:            f.total,
+            desempeno_pct:    f.porcentaje,
+            puntaje_global:   f.puntaje,
+            mat_cuantitativo: f.pctAsig?.mat_cuantitativo ?? null,
+            mat_especifico:   f.pctAsig?.mat_especifico   ?? null,
+            cn_quimica:       f.pctAsig?.cn_quimica       ?? null,
+            cn_fisica:        f.pctAsig?.cn_fisica         ?? null,
+            cn_biologia:      f.pctAsig?.cn_biologia       ?? null,
+            cn_cts:           f.pctAsig?.cn_cts            ?? null,
+            sociales:         f.pctAsig?.sociales          ?? null,
+            ciudadanas:       f.pctAsig?.ciudadanas        ?? null,
+            lectura_critica:  f.pctAsig?.lectura_critica   ?? null,
+            ingles:           f.pctAsig?.ingles            ?? null,
+            detalle:          f.detalle,
+            cargado_via:      'optico',
           }, { onConflict: 'estudiante_id,prueba_id' })
 
         if (err) errores++
