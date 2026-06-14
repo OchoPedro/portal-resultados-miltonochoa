@@ -35,11 +35,12 @@ CREATE OR REPLACE FUNCTION verificar_login(p_usuario text, p_password text)
 RETURNS json
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
   v_row  record;
-  ts     text := to_char(now() AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD"T"HH24:MI:SS');
+  ts     timestamptz := now();
+  ts_str text        := to_char(ts AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD"T"HH24:MI:SS');
 BEGIN
   -- 1. Administradores
   SELECT id, nombre, usuario, password_hash, activo, ultima_sesion INTO v_row
@@ -47,15 +48,11 @@ BEGIN
   IF FOUND THEN
     IF crypt(p_password, v_row.password_hash) = v_row.password_hash THEN
       UPDATE administradores SET ultima_sesion = ts WHERE id = v_row.id;
-      RETURN json_build_object(
-        'role', 'admin',
-        'data', json_build_object(
-          'id', v_row.id, 'nombre', v_row.nombre, 'usuario', v_row.usuario,
-          'activo', v_row.activo, 'ultima_sesion', ts
-        )
-      );
+      RETURN json_build_object('role', 'admin', 'data', json_build_object(
+        'id', v_row.id, 'nombre', v_row.nombre, 'usuario', v_row.usuario,
+        'activo', v_row.activo, 'ultima_sesion', ts_str));
     END IF;
-    RETURN NULL;  -- usuario encontrado, contraseña incorrecta
+    RETURN NULL;
   END IF;
 
   -- 2. Colegios
@@ -65,15 +62,11 @@ BEGIN
   IF FOUND THEN
     IF crypt(p_password, v_row.password_hash) = v_row.password_hash THEN
       UPDATE colegios SET ultima_sesion = ts WHERE id = v_row.id;
-      RETURN json_build_object(
-        'role', 'colegio',
-        'data', json_build_object(
-          'id', v_row.id, 'nombre', v_row.nombre, 'usuario', v_row.usuario,
-          'activo', v_row.activo, 'ciudad', v_row.ciudad, 'municipio', v_row.municipio,
-          'departamento_nombre', v_row.departamento_nombre,
-          'contactos', v_row.contactos, 'ultima_sesion', ts
-        )
-      );
+      RETURN json_build_object('role', 'colegio', 'data', json_build_object(
+        'id', v_row.id, 'nombre', v_row.nombre, 'usuario', v_row.usuario,
+        'activo', v_row.activo, 'ciudad', v_row.ciudad, 'municipio', v_row.municipio,
+        'departamento_nombre', v_row.departamento_nombre,
+        'contactos', v_row.contactos, 'ultima_sesion', ts_str));
     END IF;
     RETURN NULL;
   END IF;
@@ -88,20 +81,16 @@ BEGIN
   IF FOUND THEN
     IF crypt(p_password, v_row.password_hash) = v_row.password_hash THEN
       UPDATE estudiantes SET ultima_sesion = ts WHERE id = v_row.id;
-      RETURN json_build_object(
-        'role', 'estudiante',
-        'data', json_build_object(
-          'id', v_row.id, 'nombre', v_row.nombre, 'usuario', v_row.usuario,
-          'activo', v_row.activo, 'grado', v_row.grado, 'salon', v_row.salon,
-          'colegio_id', v_row.colegio_id, 'ultima_sesion', ts,
-          'colegios', v_row.colegio_info
-        )
-      );
+      RETURN json_build_object('role', 'estudiante', 'data', json_build_object(
+        'id', v_row.id, 'nombre', v_row.nombre, 'usuario', v_row.usuario,
+        'activo', v_row.activo, 'grado', v_row.grado, 'salon', v_row.salon,
+        'colegio_id', v_row.colegio_id, 'ultima_sesion', ts_str,
+        'colegios', v_row.colegio_info));
     END IF;
     RETURN NULL;
   END IF;
 
-  RETURN NULL;  -- usuario no encontrado
+  RETURN NULL;
 END;
 $$;
 
