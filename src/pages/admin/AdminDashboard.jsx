@@ -7,6 +7,7 @@ import AdminPruebas from './AdminPruebas'
 import AdminResultados from './AdminResultados'
 import AdminAdmins from './AdminAdmins'
 import AdminAnalisis from './AdminAnalisis'
+import AdminRanking from './AdminRanking'
 import HojasRespuesta from '../../components/HojasRespuesta'
 
 const MENU = [
@@ -14,6 +15,7 @@ const MENU = [
   { id:'estudiantes',  label:'Estudiantes',         icon:'👥', desc:'Carga masiva de estudiantes' },
   { id:'pruebas',      label:'Pruebas',             icon:'📋', desc:'Tipos y referencias' },
   { id:'resultados',   label:'Resultados',          icon:'📊', desc:'Cargar resultados de pruebas' },
+  { id:'ranking',      label:'Ranking',             icon:'🏆', desc:'Ranking Colombia · Saber 11' },
   { id:'hojas',        label:'Hojas de Respuesta',  icon:'📝', desc:'Generar hojas por referencia' },
   { id:'analisis',     label:'Análisis IA',         icon:'🤖', desc:'Recomendaciones con Claude' },
   { id:'admins',       label:'Administradores',     icon:'👤', desc:'Usuarios admin' },
@@ -119,6 +121,7 @@ export default function AdminDashboard({ session, onLogout }) {
         {section==='estudiantes' && <AdminEstudiantes onUpdate={loadStats} />}
         {section==='pruebas'     && <AdminPruebas     onUpdate={loadStats} />}
         {section==='resultados'  && <AdminResultados  onUpdate={loadStats} />}
+        {section==='ranking'     && <AdminRanking />}
         {section==='hojas'       && <HojasRespuesta />}
         {section==='analisis'    && <AdminAnalisis />}
         {section==='admins'      && <AdminAdmins      session={session}    onUpdate={loadStats} />}
