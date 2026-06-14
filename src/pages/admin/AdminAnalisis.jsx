@@ -4,8 +4,13 @@ import { C } from '../../components/ui'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
+// En la BD los colegios de Bogotá tienen departamento='BOGOTÁ D.C.' pero en la UI
+// se tratan como municipio de Cundinamarca. BOGOTA_DB se mantiene en REGIONES_COL
+// para que el filtro por región siga funcionando.
+const BOGOTA_DB = 'BOGOTÁ D.C.'
+
 const REGIONES_COL = {
-  'Andina':    ['ANTIOQUIA','BOGOTÁ D.C.','BOYACÁ','CALDAS','CUNDINAMARCA','HUILA','NORTE SANTANDER','QUINDÍO','RISARALDA','SANTANDER','TOLIMA'],
+  'Andina':    ['ANTIOQUIA', BOGOTA_DB,'BOYACÁ','CALDAS','CUNDINAMARCA','HUILA','NORTE SANTANDER','QUINDÍO','RISARALDA','SANTANDER','TOLIMA'],
   'Caribe':    ['ATLÁNTICO','BOLÍVAR','CESAR','CÓRDOBA','LA GUAJIRA','MAGDALENA','SUCRE','SAN ANDRÉS'],
   'Pacífica':  ['CAUCA','CHOCÓ','NARIÑO','VALLE DEL CAUCA'],
   'Orinoquía': ['ARAUCA','CASANARE','META','VICHADA'],
@@ -438,8 +443,10 @@ function AnalisisRanking() {
     setSelectedDepto(d)
     setSelectedMunicipio(''); setSeleccionado(null); setBusqueda(''); setBorrador(null)
     if (!d) { setMunicipios([]); return }
-    const { data } = await supabase.from('ranking_colegios')
-      .select('ciudad').eq('departamento', d).order('ciudad').limit(2000)
+    // Cundinamarca: incluir también registros con departamento='BOGOTÁ D.C.' (son Bogotá en la BD)
+    let q = supabase.from('ranking_colegios').select('ciudad').order('ciudad').limit(2000)
+    q = d === 'CUNDINAMARCA' ? q.in('departamento', ['CUNDINAMARCA', BOGOTA_DB]) : q.eq('departamento', d)
+    const { data } = await q
     const uniq = [...new Set((data||[]).map(r => r.ciudad).filter(Boolean))].sort()
     setMunicipios(uniq)
   }
@@ -609,8 +616,12 @@ Sé específico, apóyate en los números. Tono profesional y propositivo.`
         .eq('anio', anio).order('puesto_anio')
       if (nivel === 'region' && selectedRegion)
         q = q.in('departamento', REGIONES_COL[selectedRegion])
-      if ((nivel === 'departamento' || nivel === 'municipio') && selectedDepto)
-        q = q.eq('departamento', selectedDepto)
+      if ((nivel === 'departamento' || nivel === 'municipio') && selectedDepto) {
+        // Cundinamarca: incluir también registros con departamento='BOGOTÁ D.C.'
+        q = selectedDepto === 'CUNDINAMARCA'
+          ? q.in('departamento', ['CUNDINAMARCA', BOGOTA_DB])
+          : q.eq('departamento', selectedDepto)
+      }
       if (nivel === 'municipio' && selectedMunicipio)
         q = q.eq('ciudad', selectedMunicipio)
       // Nacional: limitar muestra representativa; resto: traer todo
@@ -752,6 +763,7 @@ Basa el análisis exclusivamente en los datos proporcionados. Tono profesional y
                 disabled={nivel !== 'departamento' && !selectedRegion && nivel !== 'colegio'}>
                 <option value="">Seleccionar departamento...</option>
                 {(selectedRegion ? deptosDeRegion : Object.values(REGIONES_COL).flat().sort())
+                  .filter(d => d !== BOGOTA_DB)
                   .map(d => <option key={d} value={d}>{d}</option>)}
               </select>
             </div>
