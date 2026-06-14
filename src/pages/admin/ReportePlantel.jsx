@@ -326,7 +326,7 @@ export default function ReportePlantel({ codigo, nombre, anioRef, onClose }) {
           <div style={{ background: C.white, borderBottom: `1px solid ${C.grayLt}`,
             padding: '12px 28px', display: 'flex', gap: 32, flexWrap: 'wrap' }}>
             {[
-              { label: 'Último año', value: ultimo.anio },
+              { label: anioRef && anioRef !== data[data.length-1]?.anio ? 'Año consultado' : 'Último año', value: ultimo.anio },
               { label: 'Puesto Nacional', value: `#${ultimo.puesto_anio}` },
               { label: 'Puntaje Global', value: ultimo.puntaje_global },
               { label: 'Ponderado', value: parseFloat(ultimo.ponderado || 0).toFixed(3) },
