@@ -104,20 +104,31 @@ export default function AdminRanking() {
   const [agrupado, setAgrupado] = useState([])
   const [loadingAgrp, setLoadingAgrp] = useState(false)
 
-  const loadAgrupado = async (a, modo) => {
+  const loadAgrupado = async (a, modo, dep='') => {
     setLoadingAgrp(true)
-    const { data: rows } = await supabase
+    let q = supabase
       .from('ranking_colegios')
-      .select('departamento,eval_estudiantes,lectura_critica,matematicas,ciencias_sociales,ciencias_naturales,ingles,ponderado,puntaje_global')
+      .select('departamento,ciudad,eval_estudiantes,lectura_critica,matematicas,ciencias_sociales,ciencias_naturales,ingles,ponderado,puntaje_global')
       .eq('anio', a)
       .limit(50000)
 
+    if (modo === 'municipios' && dep) q = q.eq('departamento', dep)
+
+    const { data: rows } = await q
+
     const grupos = {}
     ;(rows || []).forEach(r => {
-      const key = modo === 'regiones'
-        ? (DEPTO_REGION[r.departamento] || 'Sin región')
-        : r.departamento
-      if (!grupos[key]) grupos[key] = { key, colegios:0, estudiantes:0, lc:0, mat:0, cs:0, cn:0, ing:0, pond:0, glob:0 }
+      let key
+      if (modo === 'regiones')    key = DEPTO_REGION[r.departamento] || 'Sin región'
+      else if (modo === 'municipios') key = `${r.ciudad}|||${r.departamento}`
+      else                        key = r.departamento
+
+      if (!grupos[key]) grupos[key] = {
+        key,
+        nombre: modo === 'municipios' ? r.ciudad : key,
+        departamento: r.departamento,
+        colegios:0, estudiantes:0, lc:0, mat:0, cs:0, cn:0, ing:0, pond:0, glob:0
+      }
       const g = grupos[key]
       g.colegios++
       g.estudiantes += parseInt(r.eval_estudiantes || 0)
@@ -130,7 +141,8 @@ export default function AdminRanking() {
       g.glob += parseFloat(r.puntaje_global || 0)
     })
     const result = Object.values(grupos).map(g => ({
-      nombre: g.key,
+      nombre: g.nombre,
+      departamento: g.departamento,
       colegios: g.colegios,
       estudiantes: g.estudiantes,
       lc:   g.colegios ? g.lc/g.colegios   : 0,
@@ -146,8 +158,8 @@ export default function AdminRanking() {
   }
 
   useEffect(() => {
-    if (vista !== 'colegios') loadAgrupado(anio, vista)
-  }, [vista, anio])
+    if (vista !== 'colegios') loadAgrupado(anio, vista, filtroDepto)
+  }, [vista, anio, filtroDepto])
 
   const doLoad = async (a, p, bus, dep, nat, jorn, cal, reg) => {
     setLoading(true)
@@ -185,7 +197,7 @@ export default function AdminRanking() {
           ))}
         </div>
         <div style={{ display:'flex', gap:4, background:C.bg, borderRadius:8, padding:4 }}>
-          {[['colegios','🏫 Colegios'],['departamentos','🗺 Departamentos'],['regiones','🌎 Regiones']].map(([v,l]) => (
+          {[['colegios','🏫 Colegios'],['departamentos','🗺 Departamentos'],['regiones','🌎 Regiones'],['municipios','🏙 Municipios']].map(([v,l]) => (
             <button key={v} onClick={() => setVista(v)} style={{
               padding:'7px 14px', borderRadius:6, border:'none', fontFamily:'Inter', fontSize:12,
               fontWeight: vista===v ? 600 : 400,
@@ -199,53 +211,71 @@ export default function AdminRanking() {
 
       {/* Vista agrupada Departamentos / Regiones */}
       {vista !== 'colegios' && (
-        <div style={{ background:C.white, borderRadius:10, border:`1px solid ${C.grayLt}`,
-          overflow:'hidden', boxShadow:'0 1px 4px rgba(10,31,61,0.05)' }}>
-          {loadingAgrp ? (
-            <div style={{ textAlign:'center', padding:60, color:C.gray, fontFamily:'Inter' }}>Cargando...</div>
-          ) : (
-            <div style={{ overflowX:'auto' }}>
-              <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter' }}>
-                <thead>
-                  <tr>
-                    <Th style={{width:40}}>#</Th>
-                    <Th>{vista==='regiones' ? 'Región' : 'Departamento'}</Th>
-                    <Th style={{textAlign:'center'}}>Colegios</Th>
-                    <Th style={{textAlign:'center'}}>Estudiantes</Th>
-                    <Th style={{textAlign:'center'}}>L.C.</Th>
-                    <Th style={{textAlign:'center'}}>Mat.</Th>
-                    <Th style={{textAlign:'center'}}>C.S.</Th>
-                    <Th style={{textAlign:'center'}}>C.N.</Th>
-                    <Th style={{textAlign:'center'}}>Inglés</Th>
-                    <Th style={{textAlign:'center'}}>Ponderado</Th>
-                    <Th style={{textAlign:'center'}}>Global</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {agrupado.map((g, i) => (
-                    <tr key={g.nombre} style={{
-                      borderBottom:`1px solid ${C.bg2}`,
-                      background: i===0 ? '#FFFDE7' : i===1 ? '#FFF8E1' : i===2 ? '#F9FBE7' : i%2===0?`${C.bg}80`:'transparent'
-                    }}>
-                      <Td style={{ fontWeight:700, color:C.navy, textAlign:'center' }}>
-                        {i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}
-                      </Td>
-                      <Td style={{ fontWeight:600, color:C.navy }}>{g.nombre}</Td>
-                      <Td style={{ textAlign:'center', color:C.gray }}>{g.colegios.toLocaleString('es-CO')}</Td>
-                      <Td style={{ textAlign:'center', color:C.gray }}>{g.estudiantes.toLocaleString('es-CO')}</Td>
-                      <Td style={{ textAlign:'center' }}><Score val={g.lc}/></Td>
-                      <Td style={{ textAlign:'center' }}><Score val={g.mat}/></Td>
-                      <Td style={{ textAlign:'center' }}><Score val={g.cs}/></Td>
-                      <Td style={{ textAlign:'center' }}><Score val={g.cn}/></Td>
-                      <Td style={{ textAlign:'center' }}><Score val={g.ing}/></Td>
-                      <Td style={{ textAlign:'center', fontWeight:700, color:C.navy }}>{g.pond.toFixed(3)}</Td>
-                      <Td style={{ textAlign:'center', fontWeight:700, color:C.navy }}>{g.glob.toFixed(1)}</Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <div>
+          {/* Aviso contexto municipios */}
+          {vista === 'municipios' && (
+            <div style={{ display:'flex', alignItems:'center', gap:10, background:'#EFF6FF',
+              border:'1px solid #BFDBFE', borderRadius:8, padding:'10px 16px', marginBottom:12,
+              fontFamily:'Inter', fontSize:13, color:'#1E40AF' }}>
+              <span style={{ fontSize:16 }}>🏙</span>
+              {filtroDepto
+                ? <span>Mostrando municipios de <strong>{filtroDepto}</strong> — ordenados por ponderado</span>
+                : <span>Selecciona un <strong>Departamento</strong> en los filtros para ver sólo sus municipios, o consulta todos a continuación.</span>
+              }
             </div>
           )}
+          <div style={{ background:C.white, borderRadius:10, border:`1px solid ${C.grayLt}`,
+            overflow:'hidden', boxShadow:'0 1px 4px rgba(10,31,61,0.05)' }}>
+            {loadingAgrp ? (
+              <div style={{ textAlign:'center', padding:60, color:C.gray, fontFamily:'Inter' }}>Cargando...</div>
+            ) : (
+              <div style={{ overflowX:'auto' }}>
+                <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter' }}>
+                  <thead>
+                    <tr>
+                      <Th style={{width:40}}>#</Th>
+                      <Th>{vista==='regiones' ? 'Región' : vista==='municipios' ? 'Municipio' : 'Departamento'}</Th>
+                      {vista === 'municipios' && <Th>Departamento</Th>}
+                      <Th style={{textAlign:'center'}}>Colegios</Th>
+                      <Th style={{textAlign:'center'}}>Estudiantes</Th>
+                      <Th style={{textAlign:'center'}}>L.C.</Th>
+                      <Th style={{textAlign:'center'}}>Mat.</Th>
+                      <Th style={{textAlign:'center'}}>C.S.</Th>
+                      <Th style={{textAlign:'center'}}>C.N.</Th>
+                      <Th style={{textAlign:'center'}}>Inglés</Th>
+                      <Th style={{textAlign:'center'}}>Ponderado</Th>
+                      <Th style={{textAlign:'center'}}>Global</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {agrupado.map((g, i) => (
+                      <tr key={g.nombre + g.departamento} style={{
+                        borderBottom:`1px solid ${C.bg2}`,
+                        background: i===0 ? '#FFFDE7' : i===1 ? '#FFF8E1' : i===2 ? '#F9FBE7' : i%2===0?`${C.bg}80`:'transparent'
+                      }}>
+                        <Td style={{ fontWeight:700, color:C.navy, textAlign:'center' }}>
+                          {i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}
+                        </Td>
+                        <Td style={{ fontWeight:600, color:C.navy }}>{g.nombre}</Td>
+                        {vista === 'municipios' && (
+                          <Td style={{ color:C.gray, fontSize:11 }}>{g.departamento}</Td>
+                        )}
+                        <Td style={{ textAlign:'center', color:C.gray }}>{g.colegios.toLocaleString('es-CO')}</Td>
+                        <Td style={{ textAlign:'center', color:C.gray }}>{g.estudiantes.toLocaleString('es-CO')}</Td>
+                        <Td style={{ textAlign:'center' }}><Score val={g.lc}/></Td>
+                        <Td style={{ textAlign:'center' }}><Score val={g.mat}/></Td>
+                        <Td style={{ textAlign:'center' }}><Score val={g.cs}/></Td>
+                        <Td style={{ textAlign:'center' }}><Score val={g.cn}/></Td>
+                        <Td style={{ textAlign:'center' }}><Score val={g.ing}/></Td>
+                        <Td style={{ textAlign:'center', fontWeight:700, color:C.navy }}>{g.pond.toFixed(3)}</Td>
+                        <Td style={{ textAlign:'center', fontWeight:700, color:C.navy }}>{g.glob.toFixed(1)}</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
