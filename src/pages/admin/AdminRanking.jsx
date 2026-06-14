@@ -197,7 +197,7 @@ export default function AdminRanking() {
           ))}
         </div>
         <div style={{ display:'flex', gap:4, background:C.bg, borderRadius:8, padding:4 }}>
-          {[['colegios','🏫 Colegios'],['departamentos','🗺 Departamentos'],['regiones','🌎 Regiones'],['municipios','🏙 Municipios']].map(([v,l]) => (
+          {[['colegios','🏆 Nacional'],['regiones','🌎 Regiones'],['departamentos','🗺 Departamentos'],['municipios','🏙 Municipios']].map(([v,l]) => (
             <button key={v} onClick={() => setVista(v)} style={{
               padding:'7px 14px', borderRadius:6, border:'none', fontFamily:'Inter', fontSize:12,
               fontWeight: vista===v ? 600 : 400,
@@ -214,14 +214,34 @@ export default function AdminRanking() {
         <div>
           {/* Aviso contexto municipios */}
           {vista === 'municipios' && (
-            <div style={{ display:'flex', alignItems:'center', gap:10, background:'#EFF6FF',
+            <div style={{ display:'flex', alignItems:'center', gap:12, background:'#EFF6FF',
               border:'1px solid #BFDBFE', borderRadius:8, padding:'10px 16px', marginBottom:12,
-              fontFamily:'Inter', fontSize:13, color:'#1E40AF' }}>
+              fontFamily:'Inter', fontSize:13, color:'#1E40AF', flexWrap:'wrap' }}>
               <span style={{ fontSize:16 }}>🏙</span>
-              {filtroDepto
-                ? <span>Mostrando municipios de <strong>{filtroDepto}</strong> — ordenados por ponderado</span>
-                : <span>Selecciona un <strong>Departamento</strong> en los filtros para ver sólo sus municipios, o consulta todos a continuación.</span>
-              }
+              <span style={{ flex:1, minWidth:180 }}>
+                {filtroDepto
+                  ? <>Municipios de <strong>{filtroDepto}</strong> — ordenados por ponderado</>
+                  : <>Filtra por departamento o consulta todos los municipios</>
+                }
+              </span>
+              <select
+                value={filtroDepto}
+                onChange={e => { setFiltroDepto(e.target.value); setFiltroRegion('') }}
+                style={{
+                  padding:'7px 12px', border:'1px solid #BFDBFE', borderRadius:7,
+                  fontFamily:'Inter', fontSize:12, color: filtroDepto ? '#1E40AF' : '#60A5FA',
+                  background:'#EFF6FF', outline:'none', cursor:'pointer', fontWeight: filtroDepto ? 600 : 400,
+                }}
+              >
+                <option value="">Todos los departamentos</option>
+                {DEPARTAMENTOS_COL.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+              {filtroDepto && (
+                <button onClick={() => setFiltroDepto('')} style={{
+                  background:'none', border:'1px solid #BFDBFE', borderRadius:6,
+                  color:'#1E40AF', fontSize:11, padding:'5px 10px', cursor:'pointer', fontFamily:'Inter',
+                }}>✕ Limpiar</button>
+              )}
             </div>
           )}
           <div style={{ background:C.white, borderRadius:10, border:`1px solid ${C.grayLt}`,
