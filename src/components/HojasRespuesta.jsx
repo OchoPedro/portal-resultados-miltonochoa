@@ -27,7 +27,7 @@ function HojaImprimible({ prueba, referencia }) {
   const titulo = `SIMULACRO ${referencia}`;
 
   const pageStyle = {
-    width: "216mm", minHeight: "279mm", padding: "6mm 8mm",
+    width: "216mm", padding: "6mm 8mm",
     margin: "0 auto", background: "#fff", fontFamily: "Arial, sans-serif",
     fontSize: 10, color: "#111",
   };
@@ -177,40 +177,47 @@ function HojaImprimible({ prueba, referencia }) {
   }
 
   return (
-    <div style={pageStyle}>
-      {/* SESIÓN 1 */}
-      <Header sesLabel="Primera Sesión" totalPregs="120"/>
-      <DatosBlock sesNum={1} sesLabel="Primera" totalPregs="120"/>
-      <div style={sessionAreas}>
-        <BubbleArea name="MATEMÁTICAS"         qStart={1}  qEnd={25}  nCols={1}/>
-        <BubbleArea name="LECTURA CRÍTICA"      qStart={26} qEnd={66}  nCols={2}/>
-        <BubbleArea name="SOC. Y CIUDADANAS"    qStart={67} qEnd={91}  nCols={1}/>
-        <BubbleArea name="CIENCIAS NATURALES"   qStart={92} qEnd={120} nCols={1}/>
-      </div>
+    <div>
+      <style>{`
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+        @media print {
+          body { margin:0; padding:0; background:white; }
+          .session-page { page-break-after:always; break-after:page; -webkit-break-after:page; }
+          .session-page:last-child { page-break-after:auto; break-after:auto; }
+          @page { size: letter portrait; margin: 0; }
+        }
+      `}</style>
 
-      {/* LÍNEA DE CORTE */}
-      <div style={{ borderTop: "1.5px dashed #AAA", margin: "10px 0", position: "relative" }}>
-        <span style={{
-          position: "absolute", top: -7, left: "50%", transform: "translateX(-50%)",
-          background: "#fff", padding: "0 6px", fontSize: 6, color: "#AAA",
-          letterSpacing: "0.12em", textTransform: "uppercase",
-        }}>✂ &nbsp; línea de corte &nbsp; ✂</span>
+      {/* SESIÓN 1 */}
+      <div className="session-page" style={pageStyle}>
+        <Header sesLabel="Primera Sesión" totalPregs="120"/>
+        <DatosBlock sesNum={1} sesLabel="Primera" totalPregs="120"/>
+        <div style={sessionAreas}>
+          <BubbleArea name="MATEMÁTICAS"         qStart={1}  qEnd={25}  nCols={1}/>
+          <BubbleArea name="LECTURA CRÍTICA"      qStart={26} qEnd={66}  nCols={2}/>
+          <BubbleArea name="SOC. Y CIUDADANAS"    qStart={67} qEnd={91}  nCols={1}/>
+          <BubbleArea name="CIENCIAS NATURALES"   qStart={92} qEnd={120} nCols={1}/>
+        </div>
+        <div style={{ display:"flex", justifyContent:"space-between", borderTop:"1px solid #DDD", paddingTop:3, marginTop:3, fontSize:6, color:"#999" }}>
+          <div>Asesorías Académicas Milton Ochoa &mdash; Expertos en Evaluación</div>
+          <div>{titulo} &mdash; Sesión 1 de 2</div>
+        </div>
       </div>
 
       {/* SESIÓN 2 */}
-      <Header sesLabel="Segunda Sesión" totalPregs="134"/>
-      <DatosBlock sesNum={2} sesLabel="Segunda" totalPregs="134"/>
-      <div style={sessionAreas}>
-        <BubbleArea name="MATEMÁTICAS"         qStart={1}  qEnd={25}  nCols={1}/>
-        <BubbleArea name="SOC. Y CIUDADANAS"    qStart={26} qEnd={50}  nCols={1}/>
-        <BubbleArea name="CIENCIAS NATURALES"   qStart={51} qEnd={79}  nCols={1}/>
-        <BubbleArea name="INGLÉS"              qStart={80} qEnd={134} nCols={2}/>
-      </div>
-
-      {/* FOOTER */}
-      <div style={{ display:"flex", justifyContent:"space-between", borderTop:"1px solid #DDD", paddingTop:3, marginTop:3, fontSize:6, color:"#999" }}>
-        <div>Asesorías Académicas Milton Ochoa &mdash; Expertos en Evaluación</div>
-        <div>{titulo} &mdash; Hoja de Respuestas</div>
+      <div className="session-page" style={pageStyle}>
+        <Header sesLabel="Segunda Sesión" totalPregs="134"/>
+        <DatosBlock sesNum={2} sesLabel="Segunda" totalPregs="134"/>
+        <div style={sessionAreas}>
+          <BubbleArea name="MATEMÁTICAS"         qStart={1}  qEnd={25}  nCols={1}/>
+          <BubbleArea name="SOC. Y CIUDADANAS"    qStart={26} qEnd={50}  nCols={1}/>
+          <BubbleArea name="CIENCIAS NATURALES"   qStart={51} qEnd={79}  nCols={1}/>
+          <BubbleArea name="INGLÉS"              qStart={80} qEnd={134} nCols={2}/>
+        </div>
+        <div style={{ display:"flex", justifyContent:"space-between", borderTop:"1px solid #DDD", paddingTop:3, marginTop:3, fontSize:6, color:"#999" }}>
+          <div>Asesorías Académicas Milton Ochoa &mdash; Expertos en Evaluación</div>
+          <div>{titulo} &mdash; Sesión 2 de 2</div>
+        </div>
       </div>
     </div>
   );
