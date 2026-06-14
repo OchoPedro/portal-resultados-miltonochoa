@@ -134,8 +134,8 @@ export default function AdminRanking() {
         </div>
       )}
 
-      {/* Año 2025 */}
-      {anio === 2025 && (
+      {/* Tabla y controles */}
+      {data.length > 0 && (
         <>
           {/* Resumen */}
           <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16, marginBottom:24 }}>
@@ -315,7 +315,6 @@ export default function AdminRanking() {
           )}
         </>
       )}
-
       {reporte && (
         <ReportePlantel
           codigo={reporte.codigo}
