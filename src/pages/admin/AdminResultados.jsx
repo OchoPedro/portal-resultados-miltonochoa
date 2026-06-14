@@ -125,38 +125,23 @@ async function visionLote(paginasB64) {
 
   // Agregar cada página como documento
   paginasB64.forEach((b64, idx) => {
-    content.push({
-      type: 'text',
-      text: `--- PÁGINA ${idx + 1} ---`,
-    })
-    content.push({
-      type: 'document',
-      source: { type: 'base64', media_type: 'application/pdf', data: b64 },
-    })
+    content.push({ type: 'text', text: `PÁGINA ${idx + 1}:` })
+    content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } })
   })
 
   content.push({
     type: 'text',
-    text: `Analiza estas ${paginasB64.length} páginas de hojas de respuesta de examen colombiano.
+    text: `Analiza estas ${paginasB64.length} hojas de respuesta de examen colombiano.
 
-Cada página es una hoja de respuesta con burbujas marcadas (círculos negros sólidos = respuesta elegida).
-Cada página tiene: número de sesión (1 o 2), número de documento del estudiante, y respuestas por pregunta.
+INSTRUCCIONES:
+- Cada página es una hoja con burbujas A B C D. La burbuja marcada es un círculo negro sólido completamente relleno.
+- Cada página tiene en la cabecera: "Sesión 1" o "Sesión 2", y el campo "Usuario (No. Documento)" con un número.
+- Lee TODAS las preguntas en orden de arriba a abajo, de izquierda a derecha.
+- Para cada pregunta anota la letra cuya burbuja está rellena en negro.
+- Si no hay burbuja marcada usa X.
 
-Para CADA página extrae:
-- usuario: número de documento (campo "Usuario (No. Documento)")  
-- sesion: 1 o 2
-- respuestas: string con la letra marcada de cada pregunta en orden estricto (ej: "AACBBDCA...")
-
-Si una burbuja no está marcada o es ilegible, usa "X".
-
-Responde ÚNICAMENTE en JSON sin texto adicional ni bloques de código:
-{
-  "paginas": [
-    { "usuario": "1098765432", "sesion": 1, "respuestas": "AACBB..." },
-    { "usuario": "1098765432", "sesion": 2, "respuestas": "BCDAA..." },
-    { "usuario": "1087654321", "sesion": 1, "respuestas": "CDAAB..." }
-  ]
-}`,
+FORMATO DE RESPUESTA — devuelve SOLO este JSON, sin texto antes ni después, sin bloques de código:
+{"paginas":[{"usuario":"1098765432","sesion":1,"respuestas":"AACBBDCA..."},{"usuario":"1098765432","sesion":2,"respuestas":"BCDAACB..."}]}`,
   })
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -165,14 +150,29 @@ Responde ÚNICAMENTE en JSON sin texto adicional ni bloques de código:
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
       max_tokens: 4000,
-      messages: [{ role: 'user', content }],
+      messages: [
+        { role: 'user', content },
+        // Forzar inicio de respuesta JSON
+        { role: 'assistant', content: '{"paginas":[' },
+      ],
     }),
   })
 
   if (!res.ok) throw new Error(`Claude API ${res.status}: ${await res.text()}`)
   const data = await res.json()
   const txt  = data.content?.find(b => b.type === 'text')?.text || ''
-  return JSON.parse(txt.replace(/```json|```/g, '').trim())
+
+  // Reconstruir el JSON completo (prefill + respuesta)
+  const fullJson = '{"paginas":[' + txt
+  try {
+    return JSON.parse(fullJson)
+  } catch(e) {
+    // Intentar limpiar y parsear
+    const clean = fullJson.replace(/```json|```/g, '').trim()
+    // Si termina incompleto, intentar cerrar el JSON
+    const fixed = clean.endsWith(']}') ? clean : clean.replace(/,?\s*$/, ']}')
+    return JSON.parse(fixed)
+  }
 }
 
 /* ── Agrupar páginas por estudiante ───────────────────────── */
