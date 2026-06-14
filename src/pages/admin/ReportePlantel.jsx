@@ -248,6 +248,15 @@ export default function ReportePlantel({ codigo, nombre, onClose }) {
     return entry
   })
 
+  // Desviación estándar entre áreas (homogeneidad del plantel)
+  const calcDesv = (row) => {
+    const vals = ['lectura_critica','matematicas','ciencias_sociales','ciencias_naturales','ingles']
+      .map(k => parseFloat(row[k] || 0)).filter(v => v > 0)
+    if (vals.length < 2) return null
+    const mean = vals.reduce((s,v) => s+v, 0) / vals.length
+    return Math.sqrt(vals.reduce((s,v) => s + (v-mean)**2, 0) / vals.length)
+  }
+
   // Ranking histórico (línea invertida: puesto 1 = mejor)
   const rankingData = data.map(r => ({
     año: r.anio,
@@ -429,6 +438,7 @@ export default function ReportePlantel({ codigo, nombre, onClose }) {
                           <Th center>Inglés</Th>
                           <Th center>Ponderado</Th>
                           <Th center>Global</Th>
+                          <Th center>Desv. Áreas</Th>
                         </tr>
                       </thead>
                       <tbody>
@@ -456,6 +466,21 @@ export default function ReportePlantel({ codigo, nombre, onClose }) {
                               <Td center><ScoreChip val={r.ingles} /></Td>
                               <Td center bold color={C.navy}>{parseFloat(r.ponderado||0).toFixed(3)}</Td>
                               <Td center bold color={C.navy}>{r.puntaje_global}</Td>
+                              <Td center>
+                                {(() => {
+                                  const d = calcDesv(r)
+                                  if (d == null) return <span style={{color:C.gray}}>—</span>
+                                  const color = d <= 3 ? C.green : d <= 6 ? C.amber : C.red
+                                  return (
+                                    <span style={{ fontWeight:700, color }}>
+                                      {d.toFixed(2)}
+                                      <span style={{ fontSize:10, color:C.gray, fontWeight:400, marginLeft:4 }}>
+                                        {d <= 3 ? '✓' : d <= 6 ? '~' : '⚠'}
+                                      </span>
+                                    </span>
+                                  )
+                                })()}
+                              </Td>
                             </tr>
                           )
                         })}
@@ -585,6 +610,55 @@ export default function ReportePlantel({ codigo, nombre, onClose }) {
                       ))}
                     </LineChart>
                   </ResponsiveContainer>
+
+                  {/* Tabla de puntajes y desviación por año */}
+                  <div style={{ marginTop:24, overflowX:'auto' }}>
+                    <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter' }}>
+                      <thead>
+                        <tr>
+                          <Th>Año</Th>
+                          <Th center>L.C.</Th><Th center>Mat.</Th><Th center>C.S.</Th>
+                          <Th center>C.N.</Th><Th center>Inglés</Th>
+                          <Th center>Prom. Áreas</Th>
+                          <Th center>Desv. Áreas</Th>
+                          <Th center>Ponderado</Th><Th center>Global</Th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[...data].reverse().map((r,i) => {
+                          const desv = calcDesv(r)
+                          const areas = ['lectura_critica','matematicas','ciencias_sociales','ciencias_naturales','ingles']
+                          const vals = areas.map(k=>parseFloat(r[k]||0)).filter(v=>v>0)
+                          const prom = vals.length ? vals.reduce((s,v)=>s+v,0)/vals.length : 0
+                          const dc = desv == null ? C.gray : desv<=3 ? C.green : desv<=6 ? C.amber : C.red
+                          return (
+                            <tr key={r.anio} style={{ background: i===0 ? C.green+'0A' : i%2===0 ? C.bg : 'transparent' }}>
+                              <Td bold color={C.navy}>{r.anio}</Td>
+                              <Td center><ScoreChip val={r.lectura_critica}/></Td>
+                              <Td center><ScoreChip val={r.matematicas}/></Td>
+                              <Td center><ScoreChip val={r.ciencias_sociales}/></Td>
+                              <Td center><ScoreChip val={r.ciencias_naturales}/></Td>
+                              <Td center><ScoreChip val={r.ingles}/></Td>
+                              <Td center bold color={C.navy}>{prom.toFixed(1)}</Td>
+                              <Td center>
+                                {desv != null
+                                  ? <span style={{fontWeight:700,color:dc}}>{desv.toFixed(2)} {desv<=3?'✓':desv<=6?'~':'⚠'}</span>
+                                  : <span style={{color:C.gray}}>—</span>}
+                              </Td>
+                              <Td center bold color={C.navy}>{parseFloat(r.ponderado||0).toFixed(3)}</Td>
+                              <Td center bold color={C.navy}>{r.puntaje_global}</Td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                    <div style={{ marginTop:10, fontSize:11, color:C.gray, fontFamily:'Inter' }}>
+                      <strong>Desv. Áreas</strong>: desviación estándar entre las 5 áreas.
+                      <span style={{color:C.green,marginLeft:6}}>✓ ≤3 Homogéneo</span>
+                      <span style={{color:C.amber,marginLeft:6}}>~ 3-6 Moderado</span>
+                      <span style={{color:C.red,marginLeft:6}}>⚠ &gt;6 Heterogéneo</span>
+                    </div>
+                  </div>
 
                   {/* Puntaje ponderado */}
                   <div style={{ marginTop:28 }}>

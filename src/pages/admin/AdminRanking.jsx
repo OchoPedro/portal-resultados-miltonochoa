@@ -100,6 +100,54 @@ export default function AdminRanking() {
   const [filtroCalend, setFiltroCalend] = useState('')
   const [filtroRegion, setFiltroRegion] = useState('')
   const [reporte, setReporte] = useState(null)
+  const [vista, setVista] = useState('colegios') // 'colegios' | 'departamentos' | 'regiones'
+  const [agrupado, setAgrupado] = useState([])
+  const [loadingAgrp, setLoadingAgrp] = useState(false)
+
+  const loadAgrupado = async (a, modo) => {
+    setLoadingAgrp(true)
+    const { data: rows } = await supabase
+      .from('ranking_colegios')
+      .select('departamento,eval_estudiantes,lectura_critica,matematicas,ciencias_sociales,ciencias_naturales,ingles,ponderado,puntaje_global')
+      .eq('anio', a)
+      .limit(50000)
+
+    const grupos = {}
+    ;(rows || []).forEach(r => {
+      const key = modo === 'regiones'
+        ? (DEPTO_REGION[r.departamento] || 'Sin región')
+        : r.departamento
+      if (!grupos[key]) grupos[key] = { key, colegios:0, estudiantes:0, lc:0, mat:0, cs:0, cn:0, ing:0, pond:0, glob:0 }
+      const g = grupos[key]
+      g.colegios++
+      g.estudiantes += parseInt(r.eval_estudiantes || 0)
+      g.lc   += parseFloat(r.lectura_critica || 0)
+      g.mat  += parseFloat(r.matematicas || 0)
+      g.cs   += parseFloat(r.ciencias_sociales || 0)
+      g.cn   += parseFloat(r.ciencias_naturales || 0)
+      g.ing  += parseFloat(r.ingles || 0)
+      g.pond += parseFloat(r.ponderado || 0)
+      g.glob += parseFloat(r.puntaje_global || 0)
+    })
+    const result = Object.values(grupos).map(g => ({
+      nombre: g.key,
+      colegios: g.colegios,
+      estudiantes: g.estudiantes,
+      lc:   g.colegios ? g.lc/g.colegios   : 0,
+      mat:  g.colegios ? g.mat/g.colegios  : 0,
+      cs:   g.colegios ? g.cs/g.colegios   : 0,
+      cn:   g.colegios ? g.cn/g.colegios   : 0,
+      ing:  g.colegios ? g.ing/g.colegios  : 0,
+      pond: g.colegios ? g.pond/g.colegios : 0,
+      glob: g.colegios ? g.glob/g.colegios : 0,
+    })).sort((a,b) => b.pond - a.pond)
+    setAgrupado(result)
+    setLoadingAgrp(false)
+  }
+
+  useEffect(() => {
+    if (vista !== 'colegios') loadAgrupado(anio, vista)
+  }, [vista, anio])
 
   const doLoad = async (a, p, bus, dep, nat, jorn, cal, reg) => {
     setLoading(true)
@@ -129,14 +177,80 @@ export default function AdminRanking() {
 
   return (
     <div>
-      {/* Tabs de años */}
-      <div style={{ display:'flex', gap:8, marginBottom:28, flexWrap:'wrap' }}>
-        {ANIOS.map(a => (
-          <Pill key={a} active={anio===a} onClick={() => setAnio(a)}>{a}</Pill>
-        ))}
+      {/* Tabs de años + toggle de vista */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20, flexWrap:'wrap', gap:12 }}>
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+          {ANIOS.map(a => (
+            <Pill key={a} active={anio===a} onClick={() => setAnio(a)}>{a}</Pill>
+          ))}
+        </div>
+        <div style={{ display:'flex', gap:4, background:C.bg, borderRadius:8, padding:4 }}>
+          {[['colegios','🏫 Colegios'],['departamentos','🗺 Departamentos'],['regiones','🌎 Regiones']].map(([v,l]) => (
+            <button key={v} onClick={() => setVista(v)} style={{
+              padding:'7px 14px', borderRadius:6, border:'none', fontFamily:'Inter', fontSize:12,
+              fontWeight: vista===v ? 600 : 400,
+              background: vista===v ? C.navy : 'transparent',
+              color: vista===v ? C.white : C.gray,
+              cursor:'pointer', transition:'all 0.15s',
+            }}>{l}</button>
+          ))}
+        </div>
       </div>
 
-      {/* Sin datos */}
+      {/* Vista agrupada Departamentos / Regiones */}
+      {vista !== 'colegios' && (
+        <div style={{ background:C.white, borderRadius:10, border:`1px solid ${C.grayLt}`,
+          overflow:'hidden', boxShadow:'0 1px 4px rgba(10,31,61,0.05)' }}>
+          {loadingAgrp ? (
+            <div style={{ textAlign:'center', padding:60, color:C.gray, fontFamily:'Inter' }}>Cargando...</div>
+          ) : (
+            <div style={{ overflowX:'auto' }}>
+              <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter' }}>
+                <thead>
+                  <tr>
+                    <Th style={{width:40}}>#</Th>
+                    <Th>{vista==='regiones' ? 'Región' : 'Departamento'}</Th>
+                    <Th style={{textAlign:'center'}}>Colegios</Th>
+                    <Th style={{textAlign:'center'}}>Estudiantes</Th>
+                    <Th style={{textAlign:'center'}}>L.C.</Th>
+                    <Th style={{textAlign:'center'}}>Mat.</Th>
+                    <Th style={{textAlign:'center'}}>C.S.</Th>
+                    <Th style={{textAlign:'center'}}>C.N.</Th>
+                    <Th style={{textAlign:'center'}}>Inglés</Th>
+                    <Th style={{textAlign:'center'}}>Ponderado</Th>
+                    <Th style={{textAlign:'center'}}>Global</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {agrupado.map((g, i) => (
+                    <tr key={g.nombre} style={{
+                      borderBottom:`1px solid ${C.bg2}`,
+                      background: i===0 ? '#FFFDE7' : i===1 ? '#FFF8E1' : i===2 ? '#F9FBE7' : i%2===0?`${C.bg}80`:'transparent'
+                    }}>
+                      <Td style={{ fontWeight:700, color:C.navy, textAlign:'center' }}>
+                        {i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}
+                      </Td>
+                      <Td style={{ fontWeight:600, color:C.navy }}>{g.nombre}</Td>
+                      <Td style={{ textAlign:'center', color:C.gray }}>{g.colegios.toLocaleString('es-CO')}</Td>
+                      <Td style={{ textAlign:'center', color:C.gray }}>{g.estudiantes.toLocaleString('es-CO')}</Td>
+                      <Td style={{ textAlign:'center' }}><Score val={g.lc}/></Td>
+                      <Td style={{ textAlign:'center' }}><Score val={g.mat}/></Td>
+                      <Td style={{ textAlign:'center' }}><Score val={g.cs}/></Td>
+                      <Td style={{ textAlign:'center' }}><Score val={g.cn}/></Td>
+                      <Td style={{ textAlign:'center' }}><Score val={g.ing}/></Td>
+                      <Td style={{ textAlign:'center', fontWeight:700, color:C.navy }}>{g.pond.toFixed(3)}</Td>
+                      <Td style={{ textAlign:'center', fontWeight:700, color:C.navy }}>{g.glob.toFixed(1)}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Vista colegios: sin datos + tabla */}
+      {vista === 'colegios' && <>
       {!loading && data.length === 0 && (
         <div style={{ textAlign:'center', padding:'80px 0', color:C.gray, fontFamily:'Inter' }}>
           <div style={{ fontSize:48, marginBottom:16 }}>📅</div>
@@ -332,6 +446,8 @@ export default function AdminRanking() {
           )}
         </>
       )}
+      </>}
+
       {reporte && (
         <ReportePlantel
           codigo={reporte.codigo}
