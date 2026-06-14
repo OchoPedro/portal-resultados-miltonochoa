@@ -426,7 +426,7 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
                               <input value={editForm.usuario} onChange={ev=>setEditForm({...editForm,usuario:ev.target.value})} style={inStyle}/>
                             </td>
                             <td style={{ padding:'6px' }}>
-                              <input type="password" value={editForm.password_hash} onChange={ev=>setEditForm({...editForm,password_hash:ev.target.value})} style={inStyle}/>
+                              <input type="password" value={editForm.password_hash} onChange={ev=>setEditForm({...editForm,password_hash:ev.target.value})} placeholder="Dejar vacío para no cambiar" style={inStyle}/>
                             </td>
                             <td style={{ padding:'6px' }}>
                               <Badge color={e.activo?C.green:C.red}>{e.activo?'Activo':'Inactivo'}</Badge>

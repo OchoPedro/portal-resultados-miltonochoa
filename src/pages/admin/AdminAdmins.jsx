@@ -44,13 +44,17 @@ const ModalAdmin = ({admin, onClose, onSave}) => {
   const set = (k,v) => setForm(f=>({...f,[k]:v}))
 
   const handleSave = async () => {
-    if (!form.nombre || !form.usuario || !form.password_hash) {
+    if (!form.nombre || !form.usuario || (!admin && !form.password_hash)) {
       setError('Todos los campos son obligatorios.'); return
     }
     setSaving(true)
     try {
-      const { data: hashed } = await supabase.rpc('hashear_password', { p_password: form.password_hash })
-      const payload = { nombre: form.nombre, usuario: form.usuario, password_hash: hashed }
+      let pwdField = {}
+      if (form.password_hash) {
+        const { data: hashed } = await supabase.rpc('hashear_password', { p_password: form.password_hash })
+        pwdField = { password_hash: hashed }
+      }
+      const payload = { nombre: form.nombre, usuario: form.usuario, ...pwdField }
       const { error: err } = admin
         ? await supabase.from('administradores').update(payload).eq('id', admin.id)
         : await supabase.from('administradores').insert({ ...payload, activo: true })
@@ -74,8 +78,10 @@ const ModalAdmin = ({admin, onClose, onSave}) => {
           placeholder="Ej: María García" required/>
         <Input label="Usuario" value={form.usuario} onChange={v=>set('usuario',v)}
           placeholder="Ej: mgarcia" required/>
-        <Input label="Contraseña" value={form.password_hash} onChange={v=>set('password_hash',v)}
-          placeholder="Contraseña de acceso" required/>
+        <Input label={admin ? 'Nueva contraseña (dejar en blanco para no cambiar)' : 'Contraseña'}
+          value={form.password_hash} onChange={v=>set('password_hash',v)}
+          placeholder={admin ? 'Dejar en blanco para mantener la actual' : 'Contraseña de acceso'}
+          required={!admin}/>
         {error && <div style={{ background:'#FEF2F2', border:'1px solid #FECACA',
           borderRadius:6, padding:'10px 14px', marginBottom:16,
           fontSize:13, color:C.red, fontFamily:'Inter' }}>{error}</div>}
