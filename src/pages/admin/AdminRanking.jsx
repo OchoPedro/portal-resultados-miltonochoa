@@ -296,7 +296,7 @@ export default function AdminRanking() {
                       <Th style={{width:40}}>#</Th>
                       <Th>{vista==='regiones' ? 'Región' : vista==='municipios' ? 'Municipio' : 'Departamento'}</Th>
                       {vista === 'municipios' && <Th>Departamento</Th>}
-                      <Th style={{textAlign:'center'}}>Comportamiento</Th>
+                      <Th style={{textAlign:'center'}}>Tendencia</Th>
                       <Th style={{textAlign:'center'}}>Colegios</Th>
                       <Th style={{textAlign:'center'}}>Estudiantes</Th>
                       <Th style={{textAlign:'center'}}>L.C.</Th>
