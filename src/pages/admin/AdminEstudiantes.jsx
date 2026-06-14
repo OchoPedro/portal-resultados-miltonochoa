@@ -100,13 +100,14 @@ export default function AdminEstudiantes({ onUpdate }) {
       const errores = []
       for (const est of archivo.estudiantes) {
         const { usuario, password } = generateCredentials(est.nombre, est.documento)
+        const { data: hashed } = await supabase.rpc('hashear_password', { p_password: password })
         const { error } = await supabase.from('estudiantes').insert({
           colegio_id:    archivo.colegio.id,
           nombre:        est.nombre,
           grado:         est.grado,
           salon:         est.salon,
           usuario,
-          password_hash: password,
+          password_hash: hashed,
           activo:        true,
         })
         if (error) {

@@ -132,6 +132,7 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
     if (err) { setError(err); return }
     setSaving(true)
     try {
+      const { data: hashed } = await supabase.rpc('hashear_password', { p_password: form.password_hash })
       const payload = {
         nombre: form.nombre,
         departamento_nombre: form.departamento_nombre,
@@ -144,7 +145,7 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
         contacto_telefono: form.contactos?.[0]?.telefono,
         contacto_email: form.contactos?.[0]?.email,
         usuario: form.usuario,
-        password_hash: form.password_hash,
+        password_hash: hashed,
         activo: true,
       }
       const { error: err } = colegio

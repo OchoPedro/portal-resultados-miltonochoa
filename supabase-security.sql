@@ -118,6 +118,22 @@ $$;
 GRANT EXECUTE ON FUNCTION cambiar_password(uuid, text) TO anon;
 
 
+-- ── BLOQUE 4b: Función para hashear contraseñas desde el cliente ──
+-- Usada por AdminAdmins, AdminColegios y AdminEstudiantes al crear/editar usuarios.
+-- El cliente llama: supabase.rpc('hashear_password', { p_password: '...' })
+
+CREATE OR REPLACE FUNCTION hashear_password(p_password text)
+RETURNS text
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+  SELECT crypt(p_password, gen_salt('bf', 10));
+$$;
+
+GRANT EXECUTE ON FUNCTION hashear_password(text) TO anon;
+
+
 -- ── BLOQUE 5: Row Level Security ────────────────────────────
 -- Objetivo mínimo: impedir que la anon key lea password_hash de administradores.
 -- Las demás tablas mantienen acceso abierto (arquitectura sin Supabase Auth).

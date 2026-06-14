@@ -49,9 +49,11 @@ const ModalAdmin = ({admin, onClose, onSave}) => {
     }
     setSaving(true)
     try {
+      const { data: hashed } = await supabase.rpc('hashear_password', { p_password: form.password_hash })
+      const payload = { nombre: form.nombre, usuario: form.usuario, password_hash: hashed }
       const { error: err } = admin
-        ? await supabase.from('administradores').update(form).eq('id', admin.id)
-        : await supabase.from('administradores').insert({ ...form, activo: true })
+        ? await supabase.from('administradores').update(payload).eq('id', admin.id)
+        : await supabase.from('administradores').insert({ ...payload, activo: true })
       if (err) { setError(err.message); return }
       onSave(); onClose()
     } finally { setSaving(false) }
@@ -110,7 +112,8 @@ export default function AdminAdmins({ session }) {
   const handleChangePwd = async () => {
     if (!changePwd.newPwd) return
     setChangePwd(p => ({...p, saving:true}))
-    await supabase.from('administradores').update({ password_hash: changePwd.newPwd }).eq('id', session.id)
+    const { data: hashed } = await supabase.rpc('hashear_password', { p_password: changePwd.newPwd })
+    await supabase.from('administradores').update({ password_hash: hashed }).eq('id', session.id)
     setChangePwd({ show:false, newPwd:'', saving:false, msg:'✅ Contraseña actualizada.' })
     setTimeout(() => setChangePwd(p => ({...p, msg:''})), 3000)
   }
