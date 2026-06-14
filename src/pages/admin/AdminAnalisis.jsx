@@ -102,13 +102,15 @@ function ModoSelector({ onSelect }) {
       desc:'Analiza resultados de simulacros y pruebas propias del colegio. Identifica fortalezas, debilidades y genera recomendaciones pedagógicas.' },
     { key:'ranking', icon:'🏆', titulo:'Análisis de Ranking Saber 11',
       desc:'Analiza el historial de posicionamiento en ICFES Saber 11 — desde el nivel nacional hasta un colegio específico.' },
+    { key:'comparativo', icon:'⚖️', titulo:'Comparativo Simulacros vs Ranking',
+      desc:'Cruza los resultados de los simulacros internos con el historial real de Saber 11 del colegio. Identifica qué tan bien predicen los simulacros el rendimiento real.' },
   ]
   return (
     <div>
       <div style={{ fontSize:13, color:C.gray, fontFamily:'Inter', marginBottom:20 }}>
         Selecciona el tipo de análisis que deseas generar con IA:
       </div>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(260px, 1fr))', gap:16 }}>
         {modos.map(m => (
           <button key={m.key} onClick={() => onSelect(m.key)} style={{
             textAlign:'left', padding:24, background:C.white,
@@ -150,6 +152,10 @@ function AnalisisPruebas({ colegios, pruebas }) {
   const [borrador,           setBorrador]           = useState(null)
   const [publicando,         setPublicando]         = useState(false)
   const [msg,                setMsg]                = useState('')
+  // Búsqueda de colegio por texto
+  const [colSearch,    setColSearch]    = useState('')
+  const [colDropdown,  setColDropdown]  = useState(false)
+  const colRef = useRef(null)
 
   // ciudad se guarda como "Municipio, DEPARTAMENTO" — usarlo como fallback
   const getDepto = (c) => c.departamento_nombre || (c.ciudad ? c.ciudad.split(', ').slice(1).join(', ') : '')
@@ -165,6 +171,18 @@ function AnalisisPruebas({ colegios, pruebas }) {
     if (selectedDepto) return getDepto(c) === selectedDepto
     return true
   })
+
+  const sugerenciasCol = colegiosFiltrados.filter(c =>
+    !colSearch || c.nombre.toLowerCase().includes(colSearch.toLowerCase())
+  )
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (colRef.current && !colRef.current.contains(e.target)) setColDropdown(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   useEffect(() => {
     if (selectedColegio && selectedPrueba) loadAnalisis()
@@ -201,8 +219,8 @@ function AnalisisPruebas({ colegios, pruebas }) {
   }
 
   // Cambios en cascada
-  const cambiarDepto = (v) => { setSelectedDepto(v); setSelectedMuni(''); setSelectedColegio(''); setSelectedPrueba(''); setSelectedGrado(''); setSelectedSalon(''); setBorrador(null) }
-  const cambiarMuni  = (v) => { setSelectedMuni(v);  setSelectedColegio(''); setSelectedPrueba(''); setSelectedGrado(''); setSelectedSalon(''); setBorrador(null) }
+  const cambiarDepto = (v) => { setSelectedDepto(v); setSelectedMuni(''); setSelectedColegio(''); setColSearch(''); setColDropdown(false); setSelectedPrueba(''); setSelectedGrado(''); setSelectedSalon(''); setBorrador(null) }
+  const cambiarMuni  = (v) => { setSelectedMuni(v);  setSelectedColegio(''); setColSearch(''); setColDropdown(false); setSelectedPrueba(''); setSelectedGrado(''); setSelectedSalon(''); setBorrador(null) }
   const cambiarCol   = (v) => { setSelectedColegio(v); setSelectedPrueba(''); setSelectedGrado(''); setSelectedSalon(''); setBorrador(null) }
   const cambiarPrueba= (v) => { setSelectedPrueba(v); setBorrador(null) }
   const cambiarGrado = (v) => { setSelectedGrado(v); setSelectedSalon(''); setBorrador(null) }
@@ -358,13 +376,38 @@ Sé específico, práctico y orientado a la acción. Tono profesional pero cerca
               {munisDisp.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
           </div>
-          {/* Colegio */}
-          <div>
+          {/* Colegio — búsqueda por texto */}
+          <div ref={colRef}>
             <Label>Nombre *</Label>
-            <select value={selectedColegio} onChange={e => cambiarCol(e.target.value)} style={selStyle}>
-              <option value="">Seleccionar colegio...</option>
-              {colegiosFiltrados.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-            </select>
+            <div style={{ position:'relative' }}>
+              <input type="text" value={colSearch}
+                onChange={e => { setColSearch(e.target.value); if (selectedColegio) cambiarCol(''); setColDropdown(true) }}
+                onFocus={() => setColDropdown(true)}
+                placeholder="Buscar colegio..."
+                style={{ ...selStyle, cursor:'text', paddingRight: selectedColegio ? 32 : 13 }} />
+              {selectedColegio && (
+                <button onClick={() => { cambiarCol(''); setColSearch(''); setColDropdown(false) }}
+                  style={{ position:'absolute', right:8, top:'50%', transform:'translateY(-50%)',
+                    background:'none', border:'none', cursor:'pointer', color:C.gray, fontSize:14, padding:'2px 4px' }}>
+                  ✕
+                </button>
+              )}
+              {colDropdown && sugerenciasCol.length > 0 && (
+                <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:100,
+                  background:C.white, border:`1px solid ${C.grayLt}`, borderRadius:6,
+                  boxShadow:'0 4px 16px rgba(0,0,0,0.12)', maxHeight:220, overflowY:'auto', marginTop:2 }}>
+                  {sugerenciasCol.slice(0, 50).map(c => (
+                    <button key={c.id} onMouseDown={() => { cambiarCol(c.id); setColSearch(c.nombre); setColDropdown(false) }}
+                      style={{ display:'block', width:'100%', textAlign:'left', padding:'9px 13px',
+                        border:'none', background:'transparent', fontFamily:'Inter', fontSize:13, color:C.text, cursor:'pointer' }}
+                      onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                      {c.nombre}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           {/* Prueba */}
           <div>
@@ -474,6 +517,276 @@ Sé específico, práctico y orientado a la acción. Tono profesional pero cerca
                 fontSize:12, color:C.gray, fontFamily:'Inter', lineHeight:1.7 }}>
                 {a.contenido.substring(0,300)}...
               </div>
+            </div>
+          ))}
+        </Card>
+      )}
+    </div>
+  )
+}
+
+// ─── Comparativo Simulacros vs Ranking ────────────────────────────────────
+
+function AnalisisComparativo({ colegios }) {
+  const [colSearch,   setColSearch]   = useState('')
+  const [colDropdown, setColDropdown] = useState(false)
+  const [colegio,     setColegio]     = useState(null)
+  const [promptCustom, setPromptCustom] = useState('')
+  const [generando,   setGenerando]   = useState(false)
+  const [borrador,    setBorrador]    = useState(null)
+  const [guardados,   setGuardados]   = useState([])
+  const [expandido,   setExpandido]   = useState(null)
+  const [msg,         setMsg]         = useState('')
+  const colRef = useRef(null)
+
+  const sugerencias = colSearch.length > 0
+    ? colegios.filter(c => c.nombre.toLowerCase().includes(colSearch.toLowerCase())).slice(0, 50)
+    : []
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (colRef.current && !colRef.current.contains(e.target)) setColDropdown(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  useEffect(() => {
+    if (colegio) cargarGuardados()
+    else setGuardados([])
+  }, [colegio])
+
+  const cargarGuardados = async () => {
+    const { data } = await supabase.from('analisis_ia')
+      .select('*').eq('generado_por', `comparativo:colegio:${colegio.id}`)
+      .order('created_at', { ascending: false })
+    setGuardados(data || [])
+  }
+
+  const elegirColegio = (c) => {
+    setColegio(c); setColSearch(c.nombre); setColDropdown(false); setBorrador(null); setMsg('')
+  }
+
+  const limpiarColegio = () => {
+    setColegio(null); setColSearch(''); setColDropdown(false); setBorrador(null)
+  }
+
+  const generarAnalisis = async () => {
+    if (!colegio) return
+    if (!colegio.usuario) {
+      setMsg('⚠️ Este colegio no tiene código de usuario para cruzar con el ranking.')
+      return
+    }
+    setGenerando(true); setBorrador(null); setMsg('')
+    try {
+      const [{ data: rankingData }, { data: resultados }] = await Promise.all([
+        supabase.from('ranking_colegios')
+          .select('anio, puesto_anio, lectura_critica, matematicas, ciencias_sociales, ciencias_naturales, ingles, puntaje_global, eval_estudiantes')
+          .eq('codigo', colegio.usuario).order('anio'),
+        supabase.from('resultados_estudiante')
+          .select('prueba_id, puntaje_global, lectura_critica, mat_cuantitativo, mat_especifico, cn_quimica, cn_fisica, cn_biologia, cn_cts, sociales, ingles')
+          .eq('colegio_id', colegio.id),
+      ])
+
+      const avg = arr => {
+        const vals = arr.filter(v => v != null && !isNaN(Number(v)))
+        return vals.length ? (vals.reduce((a, b) => a + Number(b), 0) / vals.length).toFixed(1) : '—'
+      }
+
+      const rankingText = rankingData && rankingData.length > 0
+        ? rankingData.map(r =>
+            `  ${r.anio}: Puesto #${r.puesto_anio ?? '—'} | LC=${r.lectura_critica ?? '—'} Mat=${r.matematicas ?? '—'} CS=${r.ciencias_sociales ?? '—'} CN=${r.ciencias_naturales ?? '—'} Ing=${r.ingles ?? '—'} | Global=${r.puntaje_global ?? '—'} | ${r.eval_estudiantes ?? '?'} est.`
+          ).join('\n')
+        : '  Sin datos de Saber 11 disponibles.'
+
+      let simulacrosText = '  Sin resultados de simulacros registrados.'
+      if (resultados && resultados.length > 0) {
+        const porPrueba = {}
+        resultados.forEach(r => {
+          if (!porPrueba[r.prueba_id]) porPrueba[r.prueba_id] = []
+          porPrueba[r.prueba_id].push(r)
+        })
+        const { data: pruebasInfo } = await supabase
+          .from('pruebas').select('id, codigo').in('id', Object.keys(porPrueba))
+        const pruebaMap = {}
+        ;(pruebasInfo || []).forEach(p => { pruebaMap[p.id] = p.codigo })
+        simulacrosText = Object.entries(porPrueba).map(([pid, rows]) => {
+          const mat = avg(rows.map(r => ((r.mat_cuantitativo || 0) + (r.mat_especifico || 0)) / 2))
+          const cn  = avg(rows.map(r => ((r.cn_quimica || 0) + (r.cn_fisica || 0) + (r.cn_biologia || 0) + (r.cn_cts || 0)) / 4))
+          return `  ${pruebaMap[pid] || pid} (${rows.length} est.): LC=${avg(rows.map(r => r.lectura_critica))} Mat=${mat} CN=${cn} CS=${avg(rows.map(r => r.sociales))} Ing=${avg(rows.map(r => r.ingles))} | Global=${avg(rows.map(r => r.puntaje_global))}`
+        }).join('\n')
+      }
+
+      const instruccionCustom = promptCustom.trim()
+        ? `\nENFOQUE ESPECÍFICO: ${promptCustom.trim()}\nUsa ÚNICAMENTE los datos suministrados.`
+        : ''
+
+      const prompt = `Eres un experto en evaluación educativa colombiana con conocimiento del sistema ICFES Saber 11 y metodologías de simulacros.
+
+COLEGIO: ${colegio.nombre} (código: ${colegio.usuario})
+
+HISTORIAL SABER 11 — Resultados reales ICFES:
+${rankingText}
+
+RESULTADOS SIMULACROS INTERNOS — Promedios por prueba:
+${simulacrosText}
+
+IMPORTANTE: Usa ÚNICAMENTE los datos proporcionados. No incorpores información externa.
+${instruccionCustom}
+Genera un informe comparativo estructurado con:
+1. CORRELACIÓN GENERAL: ¿Los simulacros predicen bien el Saber 11?
+2. ÁREAS DE CONVERGENCIA: Donde simulacros y Saber 11 coinciden
+3. BRECHAS IDENTIFICADAS: Donde divergen significativamente
+4. ANÁLISIS POR ÁREA: LC, Matemáticas, CN, CS, Inglés comparados
+5. RECOMENDACIONES: Cómo ajustar los simulacros para mejorar la preparación
+6. PLAN DE MEJORA ESTRATÉGICO
+
+Sé específico con los números. Tono profesional y propositivo.`
+
+      const response = await fetch('/api/vision', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:2000,
+          messages:[{ role:'user', content:prompt }] }),
+      })
+      if (!response.ok) throw new Error(`Error ${response.status}`)
+      const data = await response.json()
+      const texto = data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || ''
+      if (!texto) throw new Error('Respuesta vacía del modelo')
+      setBorrador(texto)
+      await supabase.from('analisis_ia').insert({
+        colegio_id: null, prueba_id: null, contenido: texto,
+        publicado: false, generado_por: `comparativo:colegio:${colegio.id}`,
+      })
+      await cargarGuardados()
+    } catch(e) {
+      setMsg('Error al generar el análisis: ' + e.message)
+    } finally { setGenerando(false) }
+  }
+
+  const eliminarAnalisis = async (id) => {
+    if (!confirm('¿Eliminar este análisis?')) return
+    await supabase.from('analisis_ia').delete().eq('id', id)
+    cargarGuardados()
+  }
+
+  const copiarTexto = (texto) => {
+    navigator.clipboard.writeText(texto)
+    setMsg('✅ Copiado al portapapeles.')
+    setTimeout(() => setMsg(''), 3000)
+  }
+
+  return (
+    <div style={{ display:'grid', gap:20 }}>
+      <Card>
+        <SectionTitle>Comparativo: Simulacros vs Ranking Saber 11</SectionTitle>
+
+        <div style={{ marginBottom:16 }}>
+          <Label>Colegio *</Label>
+          <div ref={colRef} style={{ position:'relative' }}>
+            <div style={{ position:'relative' }}>
+              <input type="text" value={colSearch}
+                onChange={e => { setColSearch(e.target.value); if (colegio) limpiarColegio(); setColDropdown(e.target.value.length > 0) }}
+                onFocus={() => { if (colSearch.length > 0 && !colegio) setColDropdown(true) }}
+                placeholder="Buscar colegio..."
+                style={{ ...selStyle, cursor:'text', paddingRight: colegio ? 32 : 13 }} />
+              {colegio && (
+                <button onClick={limpiarColegio}
+                  style={{ position:'absolute', right:8, top:'50%', transform:'translateY(-50%)',
+                    background:'none', border:'none', cursor:'pointer', color:C.gray, fontSize:14, padding:'2px 4px' }}>
+                  ✕
+                </button>
+              )}
+            </div>
+            {colDropdown && sugerencias.length > 0 && (
+              <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:100,
+                background:C.white, border:`1px solid ${C.grayLt}`, borderRadius:6,
+                boxShadow:'0 4px 16px rgba(0,0,0,0.12)', maxHeight:220, overflowY:'auto', marginTop:2 }}>
+                {sugerencias.map(c => (
+                  <button key={c.id} onMouseDown={() => elegirColegio(c)}
+                    style={{ display:'block', width:'100%', textAlign:'left', padding:'9px 13px',
+                      border:'none', background:'transparent', fontFamily:'Inter', fontSize:13, color:C.text, cursor:'pointer' }}
+                    onMouseEnter={e => e.currentTarget.style.background = C.bg}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                    <div style={{ fontWeight:600 }}>{c.nombre}</div>
+                    {c.usuario && <div style={{ fontSize:11, color:C.gray, marginTop:1 }}>Código: {c.usuario}</div>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {colegio && (
+          <div style={{ marginBottom:16, padding:'8px 14px', background:'#EEF2FF',
+            border:'1px solid #C7D2FE', borderRadius:6, fontSize:12, color:'#3730A3', fontFamily:'Inter', fontWeight:500 }}>
+            🏫 {colegio.nombre}{colegio.usuario ? ` · Código: ${colegio.usuario}` : ''}
+          </div>
+        )}
+
+        <div style={{ marginBottom:16 }}>
+          <Label>¿Qué deseas examinar? (opcional)</Label>
+          <textarea value={promptCustom} onChange={e => setPromptCustom(e.target.value)}
+            placeholder="Ej: Analiza especialmente Matemáticas y cómo los simulacros predicen el Saber 11..."
+            style={textareaStyle} />
+          <div style={{ fontSize:11, color:C.gray, fontFamily:'Inter', marginTop:4 }}>
+            Claude cruzará los resultados de simulacros internos con el historial real de Saber 11.
+          </div>
+        </div>
+
+        <div style={{ display:'flex', gap:10, alignItems:'center' }}>
+          <Btn onClick={generarAnalisis} disabled={!colegio || generando} color={C.green}>
+            {generando ? '⏳ Generando comparativo...' : '⚖️ Generar comparativo con IA'}
+          </Btn>
+          {generando && <span style={{ fontSize:12, color:C.gray, fontFamily:'Inter' }}>Esto puede tomar 20-40 segundos...</span>}
+        </div>
+        <MsgBox msg={msg} />
+      </Card>
+
+      {borrador && (
+        <Card>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
+            marginBottom:16, paddingBottom:12, borderBottom:`1px solid ${C.bg2}` }}>
+            <div>
+              <div style={{ fontSize:11, fontWeight:600, color:C.navy, letterSpacing:'0.08em', textTransform:'uppercase' }}>
+                Comparativo generado — Solo visible para administrador
+              </div>
+              <div style={{ fontSize:11, color:C.gray, fontFamily:'Inter', marginTop:3 }}>
+                {colegio?.nombre} · Simulacros vs Saber 11
+              </div>
+            </div>
+            <div style={{ display:'flex', gap:8 }}>
+              <Btn onClick={() => copiarTexto(borrador)} small outline color={C.navy}>Copiar</Btn>
+              <Btn onClick={generarAnalisis} outline color={C.gray} small>↺ Regenerar</Btn>
+            </div>
+          </div>
+          <div style={{ background:C.bg, borderRadius:8, padding:'20px 24px' }}>{formatText(borrador)}</div>
+        </Card>
+      )}
+
+      {guardados.length > 0 && (
+        <Card>
+          <SectionTitle>Análisis Guardados — {colegio?.nombre}</SectionTitle>
+          {guardados.map((a, i) => (
+            <div key={a.id} style={{ borderBottom: i < guardados.length - 1 ? `1px solid ${C.bg2}` : 'none',
+              paddingBottom:16, marginBottom:16 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+                <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                  <Badge color={C.amber}>Solo admin</Badge>
+                  <span style={{ fontSize:11, color:C.gray, fontFamily:'Inter' }}>
+                    {new Date(a.created_at).toLocaleString('es-CO', { timeZone:'America/Bogota' })}
+                  </span>
+                </div>
+                <div style={{ display:'flex', gap:6 }}>
+                  <Btn onClick={() => setExpandido(expandido === a.id ? null : a.id)} small outline color={C.navy}>
+                    {expandido === a.id ? 'Colapsar' : 'Ver'}
+                  </Btn>
+                  <Btn onClick={() => copiarTexto(a.contenido)} small outline color={C.navy}>Copiar</Btn>
+                  <Btn onClick={() => eliminarAnalisis(a.id)} small outline color={C.red}>Eliminar</Btn>
+                </div>
+              </div>
+              {expandido === a.id && (
+                <div style={{ background:C.bg, borderRadius:8, padding:'16px 20px' }}>{formatText(a.contenido)}</div>
+              )}
             </div>
           ))}
         </Card>
@@ -1083,7 +1396,7 @@ export default function AdminAnalisis() {
             ← Volver
           </button>
           <div style={{ fontSize:13, color:C.gray, fontFamily:'Inter' }}>
-            {modo === 'pruebas' ? '📊 Análisis de Pruebas Internas' : '🏆 Análisis de Ranking Saber 11'}
+            {modo === 'pruebas' ? '📊 Análisis de Pruebas Internas' : modo === 'ranking' ? '🏆 Análisis de Ranking Saber 11' : '⚖️ Comparativo Simulacros vs Ranking'}
           </div>
         </div>
       )}
@@ -1095,8 +1408,9 @@ export default function AdminAnalisis() {
         </Card>
       )}
 
-      {modo === 'pruebas' && <AnalisisPruebas colegios={colegios} pruebas={pruebas} />}
-      {modo === 'ranking' && <AnalisisRanking />}
+      {modo === 'pruebas'      && <AnalisisPruebas colegios={colegios} pruebas={pruebas} />}
+      {modo === 'ranking'      && <AnalisisRanking />}
+      {modo === 'comparativo'  && <AnalisisComparativo colegios={colegios} />}
     </div>
   )
 }

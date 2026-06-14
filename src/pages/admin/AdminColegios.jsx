@@ -951,6 +951,7 @@ export default function AdminColegios({ onUpdate }) {
   const [fMuni, setFMuni]               = useState('')
   const [fUser, setFUser]               = useState('')
   const [copiado, setCopiado]           = useState(null)
+  const [tendencias, setTendencias]     = useState({})
 
   useEffect(() => { setPagina(1) }, [fNombre, fDepto, fMuni, fUser])
   useEffect(() => { loadColegios() }, [pagina, fNombre, fDepto, fMuni, fUser])
@@ -970,6 +971,33 @@ export default function AdminColegios({ onUpdate }) {
     setColegios(data || [])
     setTotal(count || 0)
     setLoading(false)
+
+    // Fetch tendencia from ranking_colegios (codigo = colegio.usuario)
+    const codigos = (data || []).map(c => c.usuario).filter(Boolean)
+    if (codigos.length > 0) {
+      const { data: ranks } = await supabase
+        .from('ranking_colegios')
+        .select('codigo, anio, puesto_anio')
+        .in('codigo', codigos)
+        .order('anio', { ascending: false })
+      const map = {}
+      ;(ranks || []).forEach(r => {
+        if (!map[r.codigo]) map[r.codigo] = []
+        map[r.codigo].push(r)
+      })
+      const tend = {}
+      codigos.forEach(code => {
+        const rows = map[code] || []
+        if (rows.length < 2) { tend[code] = '—'; return }
+        const [newer, older] = rows  // sorted desc already
+        if (newer.puesto_anio < older.puesto_anio) tend[code] = '↑'
+        else if (newer.puesto_anio > older.puesto_anio) tend[code] = '↓'
+        else tend[code] = '→'
+      })
+      setTendencias(tend)
+    } else {
+      setTendencias({})
+    }
   }
 
   const handleSave = () => { loadColegios(); onUpdate() }
@@ -1068,7 +1096,7 @@ export default function AdminColegios({ onUpdate }) {
             <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter' }}>
               <thead>
                 <tr style={{ borderBottom:`2px solid ${C.bg2}` }}>
-                  {['Nombre','Departamento','Municipio','Usuario','Clave','Estado','Acciones'].map(h=>(
+                  {['Nombre','Departamento','Municipio','Usuario','Clave','Estado','Tendencia','Acciones'].map(h=>(
                     <th key={h} style={{ textAlign:'left', padding:'10px 12px', fontSize:10,
                       color:C.gray, fontWeight:600, textTransform:'uppercase',
                       letterSpacing:'0.05em', whiteSpace:'nowrap' }}>{h}</th>
@@ -1100,6 +1128,11 @@ export default function AdminColegios({ onUpdate }) {
                     </td>
                     <td style={{ padding:'12px' }}>
                       <Badge color={c.activo?C.green:C.red}>{c.activo?'Activo':'Inactivo'}</Badge>
+                    </td>
+                    <td style={{ padding:'12px', textAlign:'center', fontSize:18, fontWeight:600,
+                      color: tendencias[c.usuario] === '↑' ? C.green
+                           : tendencias[c.usuario] === '↓' ? C.red : C.gray }}>
+                      {tendencias[c.usuario] || '—'}
                     </td>
                     <td style={{ padding:'12px' }}>
                       <AccionesMenu
