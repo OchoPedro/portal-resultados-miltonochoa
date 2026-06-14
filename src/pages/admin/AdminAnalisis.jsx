@@ -1064,7 +1064,7 @@ export default function AdminAnalisis() {
 
   const loadData = async () => {
     const [{ data: cols }, { data: prbs }] = await Promise.all([
-      supabase.from('colegios').select('id, nombre, usuario, departamento_nombre, municipio, ciudad').eq('activo', true).order('nombre'),
+      supabase.from('colegios').select('id, nombre, usuario, departamento_nombre, municipio, ciudad').order('nombre'),
       supabase.from('pruebas').select('id, codigo, nombre, tipo').eq('activa', true).order('nombre'),
     ])
     setColegios(cols || [])
