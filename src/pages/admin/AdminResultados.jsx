@@ -259,9 +259,9 @@ export default function AdminResultados({ onUpdate }) {
         .eq('colegio_id', colegioId).eq('activo', true)
         .then(({ data, error }) => {
           console.log('Estudiantes raw:', data, 'error:', error)
-          const grados = [...new Set((data||[]).map(e => e.grado).filter(Boolean))].sort()
+          const grados = [...new Set((data||[]).map(e => String(e.grado)).filter(Boolean))].sort()
           console.log('Grados encontrados:', grados)
-          setGradosDisp(grados)
+          setGradosDisp([...grados])
         })
     }
   }, [metodo, colegioId])
@@ -670,7 +670,7 @@ export default function AdminResultados({ onUpdate }) {
                   setEstDisp(data || [])
                 }
               }} disabled={!colegioId || gradosDisp.length === 0}>
-                <option value="">{!colegioId ? 'Selecciona un colegio primero' : gradosDisp.length === 0 ? 'Sin grados disponibles' : 'Selecciona el grado'}</option>
+                <option value="">Selecciona el grado</option>
                 {gradosDisp.map(g => <option key={g} value={g}>Grado {g}</option>)}
               </select>
             </div>
