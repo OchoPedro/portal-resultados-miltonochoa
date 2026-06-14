@@ -152,6 +152,10 @@ function ExcelUploader({ onParsed, parsed }) {
             <div style={{ fontSize:11, color:C.gray, fontFamily:'Inter', marginTop:2 }}>
               {parsed.totalRows ?? parsed.rows} filas × {parsed.cols} columnas — clic para cambiar
             </div>
+          </div>
+        ) : (
+          <div>
+            <div style={{ fontSize:28 }}>📊</div>
             <div style={{ fontSize:13, fontWeight:600, color:C.navy, fontFamily:'Inter' }}>
               Arrastra el Excel o haz clic para seleccionar
             </div>
