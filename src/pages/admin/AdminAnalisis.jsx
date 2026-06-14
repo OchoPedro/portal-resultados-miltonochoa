@@ -62,6 +62,22 @@ const selStyle = {
   outline:'none', cursor:'pointer', width:'100%',
 }
 
+const textareaStyle = {
+  width:'100%', padding:'10px 13px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+  fontFamily:'Inter', fontSize:13, color:C.text, background:C.bg,
+  outline:'none', resize:'vertical', minHeight:80, lineHeight:1.6,
+  boxSizing:'border-box',
+}
+
+const MsgBox = ({msg}) => msg ? (
+  <div style={{ marginTop:12, padding:'10px 14px',
+    background: msg.startsWith('✅') ? '#F0FFF4' : '#FEF2F2',
+    border: `1px solid ${msg.startsWith('✅') ? '#BBF7D0' : '#FECACA'}`,
+    borderRadius:6, fontSize:13, color: msg.startsWith('✅') ? C.green : C.red, fontFamily:'Inter' }}>
+    {msg}
+  </div>
+) : null
+
 // ─── Modo selector ────────────────────────────────────────────────────────────
 
 function ModoSelector({ onSelect }) {
@@ -115,6 +131,7 @@ function ModoSelector({ onSelect }) {
 function AnalisisPruebas({ colegios, pruebas }) {
   const [selectedColegio, setSelectedColegio] = useState('')
   const [selectedPrueba, setSelectedPrueba] = useState('')
+  const [promptCustom, setPromptCustom] = useState('')
   const [analisisExistentes, setAnalisisExistentes] = useState([])
   const [generando, setGenerando] = useState(false)
   const [borrador, setBorrador] = useState(null)
@@ -172,6 +189,10 @@ function AnalisisPruebas({ colegios, pruebas }) {
     const topOpor = (oportunidades||[]).slice(0,5)
       .map(q=>`Pregunta ${q.nro_pregunta} de ${q.materia} (colegio ${q.pct_colegio}% vs nacional ${q.pct_nacional}%)`).join('; ')
 
+    const instruccionCustom = promptCustom.trim()
+      ? `\nENFOQUE ESPECÍFICO SOLICITADO: ${promptCustom.trim()}\nUtiliza ÚNICAMENTE los datos suministrados arriba para responder a este enfoque. No inventes ni supongas información externa.`
+      : ''
+
     const prompt = `Eres un experto en evaluación educativa colombiana con profundo conocimiento del sistema ICFES y las pruebas Saber.
 
 Analiza los siguientes resultados del ${colegio?.nombre} en la prueba ${prueba?.codigo} y genera un informe de recomendaciones pedagógicas detallado.
@@ -188,7 +209,7 @@ RESULTADOS:
 COMPETENCIAS MÁS FUERTES: ${topComp || 'No disponible'}
 COMPETENCIAS MÁS DÉBILES: ${bajComp || 'No disponible'}
 OPORTUNIDADES DE MEJORA: ${topOpor || 'No disponible'}
-
+${instruccionCustom}
 Genera un informe estructurado con:
 1. DIAGNÓSTICO GENERAL
 2. FORTALEZAS IDENTIFICADAS
@@ -257,20 +278,27 @@ Sé específico, práctico y orientado a la acción. Tono profesional pero cerca
             </select>
           </div>
         </div>
+
+        <div style={{ marginBottom:16 }}>
+          <Label>¿Qué deseas examinar? (opcional)</Label>
+          <textarea
+            value={promptCustom}
+            onChange={e => setPromptCustom(e.target.value)}
+            placeholder="Ej: Enfócate en el desempeño de Matemáticas y sugiere actividades para reforzar el pensamiento lógico..."
+            style={textareaStyle}
+          />
+          <div style={{ fontSize:11, color:C.gray, fontFamily:'Inter', marginTop:4 }}>
+            Claude solo usará los datos de la prueba seleccionada, sin información externa.
+          </div>
+        </div>
+
         <div style={{ display:'flex', gap:10, alignItems:'center' }}>
           <Btn onClick={generarAnalisis} disabled={!selectedColegio||!selectedPrueba||generando} color={C.green}>
             {generando ? '⏳ Generando análisis...' : '✨ Generar análisis con IA'}
           </Btn>
           {generando && <span style={{ fontSize:12, color:C.gray, fontFamily:'Inter' }}>Esto puede tomar 15-30 segundos...</span>}
         </div>
-        {msg && (
-          <div style={{ marginTop:12, padding:'10px 14px',
-            background: msg.startsWith('✅') ? '#F0FFF4' : '#FEF2F2',
-            border: `1px solid ${msg.startsWith('✅') ? '#BBF7D0' : '#FECACA'}`,
-            borderRadius:6, fontSize:13, color: msg.startsWith('✅') ? C.green : C.red, fontFamily:'Inter' }}>
-            {msg}
-          </div>
-        )}
+        <MsgBox msg={msg} />
       </Card>
 
       {borrador && (
@@ -334,12 +362,30 @@ function AnalisisRanking() {
   const [busqueda, setBusqueda] = useState('')
   const [sugerencias, setSugerencias] = useState([])
   const [buscando, setBuscando] = useState(false)
-  const [seleccionado, setSeleccionado] = useState(null) // {codigo, nombre, departamento, ciudad}
+  const [seleccionado, setSeleccionado] = useState(null)
   const [mostrarSug, setMostrarSug] = useState(false)
+  const [promptCustom, setPromptCustom] = useState('')
   const [generando, setGenerando] = useState(false)
+  const [guardando, setGuardando] = useState(false)
+  const [analisisGuardados, setAnalisisGuardados] = useState([])
+  const [expandido, setExpandido] = useState(null)
   const [borrador, setBorrador] = useState(null)
   const [msg, setMsg] = useState('')
   const timerRef = useRef(null)
+
+  const GENERADO_POR_KEY = (codigo) => `ranking:${codigo}`
+
+  useEffect(() => {
+    if (seleccionado) cargarGuardados(seleccionado.codigo)
+  }, [seleccionado])
+
+  const cargarGuardados = async (codigo) => {
+    const { data } = await supabase.from('analisis_ia')
+      .select('*')
+      .eq('generado_por', GENERADO_POR_KEY(codigo))
+      .order('created_at', { ascending: false })
+    setAnalisisGuardados(data || [])
+  }
 
   const buscarColegios = async (q) => {
     if (q.length < 3) { setSugerencias([]); return }
@@ -350,7 +396,6 @@ function AnalisisRanking() {
       .ilike('nombre', `%${q}%`)
       .order('nombre')
       .limit(50)
-    // Deduplicar por codigo
     const visto = new Set()
     const uniq = (data||[]).filter(r => { if (visto.has(r.codigo)) return false; visto.add(r.codigo); return true })
     setSugerencias(uniq)
@@ -361,6 +406,7 @@ function AnalisisRanking() {
     setBusqueda(val)
     setSeleccionado(null)
     setBorrador(null)
+    setAnalisisGuardados([])
     clearTimeout(timerRef.current)
     timerRef.current = setTimeout(() => buscarColegios(val), 350)
     setMostrarSug(true)
@@ -392,13 +438,13 @@ function AnalisisRanking() {
 
     const ultimo = filas[filas.length - 1]
     const primero = filas[0]
-    const tendenciaPuesto = ultimo.puesto_anio < primero.puesto_anio ? 'mejoró' : ultimo.puesto_anio > primero.puesto_anio ? 'bajó' : 'se mantuvo estable'
+    const tendenciaPuesto = ultimo.puesto_anio < primero.puesto_anio ? 'mejoró'
+      : ultimo.puesto_anio > primero.puesto_anio ? 'bajó' : 'se mantuvo estable'
 
     const historial = filas.map(f =>
       `  ${f.anio}: Puesto #${f.puesto_anio} | LC=${f.lectura_critica ?? '—'} Mat=${f.matematicas ?? '—'} CS=${f.ciencias_sociales ?? '—'} CN=${f.ciencias_naturales ?? '—'} Ing=${f.ingles ?? '—'} | Global=${f.puntaje_global ?? '—'} | ${f.eval_estudiantes ?? '?'} estudiantes`
     ).join('\n')
 
-    // Tendencia por área
     const areas = ['lectura_critica','matematicas','ciencias_sociales','ciencias_naturales','ingles']
     const nombresArea = { lectura_critica:'Lectura Crítica', matematicas:'Matemáticas',
       ciencias_sociales:'Ciencias Sociales', ciencias_naturales:'Ciencias Naturales', ingles:'Inglés' }
@@ -411,7 +457,13 @@ function AnalisisRanking() {
 
     const mejorAnio = filas.reduce((m,f) => f.puesto_anio < m.puesto_anio ? f : m, filas[0])
 
+    const instruccionCustom = promptCustom.trim()
+      ? `\nENFOQUE ESPECÍFICO SOLICITADO POR EL ADMINISTRADOR: ${promptCustom.trim()}\nResponde a este enfoque utilizando ÚNICAMENTE los datos del historial suministrado. No incorpores información externa ni suposiciones fuera de los datos.`
+      : ''
+
     const prompt = `Eres un experto en educación colombiana y en el sistema de evaluación ICFES Saber 11. Analiza el desempeño histórico en ranking de este colegio y genera un informe estratégico detallado.
+
+IMPORTANTE: Usa ÚNICAMENTE los datos proporcionados a continuación. No incorpores información de otras fuentes ni supongas datos no presentes.
 
 COLEGIO: ${seleccionado.nombre}
 UBICACIÓN: ${ultimo.ciudad}, ${ultimo.departamento}
@@ -426,7 +478,7 @@ MEJOR AÑO: ${mejorAnio.anio} con puesto #${mejorAnio.puesto_anio}
 
 EVOLUCIÓN POR ÁREA (primero → último año):
 ${tendAreas || 'No disponible'}
-
+${instruccionCustom}
 Genera un informe estructurado con:
 1. DIAGNÓSTICO HISTÓRICO DE POSICIONAMIENTO
 2. ÁREAS DE MAYOR FORTALEZA Y DEBILIDAD EN SABER 11
@@ -434,7 +486,7 @@ Genera un informe estructurado con:
 4. FACTORES A POTENCIAR PARA MEJORAR EL RANKING
 5. RECOMENDACIONES ESTRATÉGICAS PARA LA INSTITUCIÓN
 
-Sé específico, usa los datos del historial. Tono profesional y propositivo.`
+Sé específico y apóyate en los números del historial. Tono profesional y propositivo.`
 
     try {
       const response = await fetch('/api/vision', {
@@ -448,14 +500,31 @@ Sé específico, usa los datos del historial. Tono profesional y propositivo.`
       const texto = data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || ''
       if (!texto) throw new Error('Respuesta vacía del modelo')
       setBorrador(texto)
+      // Auto-guardar (solo admin, nunca visible al colegio)
+      setGuardando(true)
+      const { error } = await supabase.from('analisis_ia').insert({
+        colegio_id: null,
+        prueba_id: null,
+        contenido: texto,
+        publicado: false,
+        generado_por: GENERADO_POR_KEY(seleccionado.codigo),
+      })
+      if (!error) await cargarGuardados(seleccionado.codigo)
+      setGuardando(false)
     } catch(e) {
       setMsg('Error al generar el análisis: ' + e.message)
     } finally { setGenerando(false) }
   }
 
-  const copiarTexto = () => {
-    if (!borrador) return
-    navigator.clipboard.writeText(borrador)
+  const eliminarAnalisis = async (id) => {
+    if (!confirm('¿Eliminar este análisis guardado?')) return
+    await supabase.from('analisis_ia').delete().eq('id', id)
+    if (seleccionado) await cargarGuardados(seleccionado.codigo)
+    if (borrador) setBorrador(null)
+  }
+
+  const copiarTexto = (texto) => {
+    navigator.clipboard.writeText(texto)
     setMsg('✅ Análisis copiado al portapapeles.')
     setTimeout(() => setMsg(''), 3000)
   }
@@ -513,41 +582,85 @@ Sé específico, usa los datos del historial. Tono profesional y propositivo.`
           </div>
         )}
 
+        <div style={{ marginBottom:16 }}>
+          <Label>¿Qué deseas examinar? (opcional)</Label>
+          <textarea
+            value={promptCustom}
+            onChange={e => setPromptCustom(e.target.value)}
+            placeholder="Ej: Analiza la evolución en Matemáticas y Lectura Crítica, e identifica en qué años hubo los cambios más significativos..."
+            style={textareaStyle}
+          />
+          <div style={{ fontSize:11, color:C.gray, fontFamily:'Inter', marginTop:4 }}>
+            Claude solo usará los datos de ranking suministrados, sin información externa.
+          </div>
+        </div>
+
         <div style={{ display:'flex', gap:10, alignItems:'center' }}>
           <Btn onClick={generarAnalisis} disabled={!seleccionado||generando} color={C.green}>
             {generando ? '⏳ Analizando histórico...' : '✨ Generar análisis con IA'}
           </Btn>
           {generando && <span style={{ fontSize:12, color:C.gray, fontFamily:'Inter' }}>Esto puede tomar 15-30 segundos...</span>}
+          {guardando && <span style={{ fontSize:12, color:C.gray, fontFamily:'Inter' }}>Guardando...</span>}
         </div>
-
-        {msg && (
-          <div style={{ marginTop:12, padding:'10px 14px',
-            background: msg.startsWith('✅') ? '#F0FFF4' : '#FEF2F2',
-            border: `1px solid ${msg.startsWith('✅') ? '#BBF7D0' : '#FECACA'}`,
-            borderRadius:6, fontSize:13, color: msg.startsWith('✅') ? C.green : C.red, fontFamily:'Inter' }}>
-            {msg}
-          </div>
-        )}
+        <MsgBox msg={msg} />
       </Card>
 
+      {/* Análisis recién generado */}
       {borrador && (
         <Card>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
             marginBottom:16, paddingBottom:12, borderBottom:`1px solid ${C.bg2}` }}>
             <div>
               <div style={{ fontSize:11, fontWeight:600, color:C.navy, letterSpacing:'0.08em', textTransform:'uppercase' }}>
-                Análisis de Ranking Saber 11
+                Análisis generado — guardado automáticamente
               </div>
               <div style={{ fontSize:11, color:C.gray, fontFamily:'Inter', marginTop:3 }}>
-                {seleccionado?.nombre} · {seleccionado?.departamento}
+                {seleccionado?.nombre} · {seleccionado?.departamento} · Solo visible para administradores
               </div>
             </div>
             <div style={{ display:'flex', gap:8 }}>
               <Btn onClick={generarAnalisis} outline color={C.gray} small>↺ Regenerar</Btn>
-              <Btn onClick={copiarTexto} outline color={C.navy} small>📋 Copiar texto</Btn>
+              <Btn onClick={() => copiarTexto(borrador)} outline color={C.navy} small>📋 Copiar</Btn>
             </div>
           </div>
           <div style={{ background:C.bg, borderRadius:8, padding:'20px 24px' }}>{formatText(borrador)}</div>
+        </Card>
+      )}
+
+      {/* Historial de análisis guardados */}
+      {analisisGuardados.length > 0 && (
+        <Card>
+          <SectionTitle>Análisis Guardados — {seleccionado?.nombre}</SectionTitle>
+          <div style={{ fontSize:11, color:C.gray, fontFamily:'Inter', marginBottom:16,
+            padding:'8px 12px', background:'#FFF8E1', border:'1px solid #FFE082',
+            borderRadius:6 }}>
+            🔒 Estos análisis son solo para uso interno del administrador. No son visibles para el colegio.
+          </div>
+          {analisisGuardados.map((a,i) => (
+            <div key={a.id} style={{ borderBottom: i<analisisGuardados.length-1?`1px solid ${C.bg2}`:'none',
+              paddingBottom:16, marginBottom:16 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+                <span style={{ fontSize:11, color:C.gray, fontFamily:'Inter' }}>
+                  {new Date(a.created_at).toLocaleString('es-CO', {timeZone:'America/Bogota'})}
+                </span>
+                <div style={{ display:'flex', gap:6 }}>
+                  <Btn onClick={() => setExpandido(expandido===a.id ? null : a.id)}
+                    small outline color={C.navy}>
+                    {expandido===a.id ? 'Contraer' : 'Ver completo'}
+                  </Btn>
+                  <Btn onClick={() => copiarTexto(a.contenido)} small outline color={C.navy}>📋</Btn>
+                  <Btn onClick={() => eliminarAnalisis(a.id)} small outline color={C.red}>Eliminar</Btn>
+                </div>
+              </div>
+              <div style={{ background:C.bg, borderRadius:8, padding:'14px 18px',
+                fontSize:12, color:C.gray, fontFamily:'Inter', lineHeight:1.7 }}>
+                {expandido===a.id
+                  ? formatText(a.contenido)
+                  : <>{a.contenido.substring(0,280)}<span style={{color:C.navy}}>... Ver completo →</span></>
+                }
+              </div>
+            </div>
+          ))}
         </Card>
       )}
     </div>
@@ -559,7 +672,7 @@ Sé específico, usa los datos del historial. Tono profesional y propositivo.`
 export default function AdminAnalisis() {
   const [colegios, setColegios] = useState([])
   const [pruebas, setPruebas] = useState([])
-  const [modo, setModo] = useState(null) // null | 'pruebas' | 'ranking'
+  const [modo, setModo] = useState(null)
 
   useEffect(() => { loadData() }, [])
 
@@ -574,7 +687,6 @@ export default function AdminAnalisis() {
 
   return (
     <div style={{ display:'grid', gap:20 }}>
-      {/* Cabecera con back si hay modo seleccionado */}
       {modo && (
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
           <button onClick={() => setModo(null)} style={{
@@ -590,7 +702,6 @@ export default function AdminAnalisis() {
         </div>
       )}
 
-      {/* Selector de modo */}
       {!modo && (
         <Card>
           <SectionTitle>Análisis con IA</SectionTitle>
@@ -598,7 +709,6 @@ export default function AdminAnalisis() {
         </Card>
       )}
 
-      {/* Contenido según modo */}
       {modo === 'pruebas' && <AnalisisPruebas colegios={colegios} pruebas={pruebas} />}
       {modo === 'ranking' && <AnalisisRanking />}
     </div>
