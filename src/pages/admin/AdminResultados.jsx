@@ -251,24 +251,7 @@ export default function AdminResultados({ onUpdate }) {
 
   useEffect(() => { cargarDatos() }, [])
 
-  // Cargar grados cuando se entra a modo manual con colegio ya seleccionado
-  useEffect(() => {
-    if (metodo === 'manual' && colegioId) {
-      setGradosDisp([]) // reset first
-      supabase.from('estudiantes')
-        .select('grado')
-        .eq('colegio_id', colegioId)
-        .eq('activo', true)
-        .then(({ data }) => {
-          const unicos = [...new Set((data||[]).map(r => r.grado).filter(g => g !== null && g !== undefined))]
-          unicos.sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }))
-          console.log('Grados cargados:', unicos)
-          setGradosDisp(unicos)
-        })
-    } else if (metodo !== 'manual') {
-      setGradosDisp([])
-    }
-  }, [metodo, colegioId])
+
 
   async function cargarDatos() {
     setCargando(true)
@@ -445,7 +428,16 @@ export default function AdminResultados({ onUpdate }) {
       <p style={{ fontSize:14, color:C.gray, margin:'0 0 24px' }}>Elige cómo vas a subir los resultados.</p>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(260px,1fr))', gap:18 }}>
         {METODOS.map(m => (
-          <button key={m.id} onClick={() => setMetodo(m.id)} style={{
+          <button key={m.id} onClick={async () => {
+            setMetodo(m.id)
+            if (m.id === 'manual' && colegioId) {
+              const { data } = await supabase.from('estudiantes')
+                .select('grado').eq('colegio_id', colegioId).eq('activo', true)
+              const unicos = [...new Set((data||[]).map(r => r.grado).filter(Boolean))]
+              unicos.sort((a,b) => String(a).localeCompare(String(b), undefined, {numeric:true}))
+              setGradosDisp(unicos)
+            }
+          }} style={{
             textAlign:'left', cursor:'pointer', background:C.white, border:`1px solid ${C.grayLt}`,
             borderRadius:14, padding:'24px 24px 26px', transition:'all .15s', boxShadow:'0 1px 3px rgba(10,31,61,.05)',
           }}
