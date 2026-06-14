@@ -201,7 +201,9 @@ export default function ReportePlantel({ codigo, nombre, onClose }) {
   const ultimo = data[data.length - 1]
   const primero = data[0]
   const tendencia = data.length >= 2
-    ? (data[data.length-1].puesto_anio < data[data.length-2].puesto_anio ? '↑' : '↓')
+    ? data[data.length-1].puesto_anio < data[data.length-2].puesto_anio ? '↑'
+      : data[data.length-1].puesto_anio === data[data.length-2].puesto_anio ? '→'
+      : '↓'
     : '—'
 
   // ── Datos para gráficas ───────────────────────────────────────────────────
@@ -326,7 +328,8 @@ export default function ReportePlantel({ codigo, nombre, onClose }) {
               { label: 'Ponderado', value: parseFloat(ultimo.ponderado || 0).toFixed(3) },
               { label: 'Evaluados', value: ultimo.eval_estudiantes },
               { label: 'Años en ranking', value: data.length },
-              { label: 'Tendencia', value: tendencia === '↑' ? '↑ Mejoró' : tendencia === '↓' ? '↓ Bajó' : '—',
+              { label: 'Tendencia',
+                value: tendencia === '↑' ? '↑ Mejoró' : tendencia === '↓' ? '↓ Bajó' : tendencia === '→' ? '→ Igual' : '—',
                 color: tendencia === '↑' ? C.green : tendencia === '↓' ? C.red : C.gray },
             ].map(k => (
               <div key={k.label}>
