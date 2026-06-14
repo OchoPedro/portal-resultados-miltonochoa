@@ -79,8 +79,9 @@ export default function EstudianteDashboard({ session, onLogout }) {
   const promColegio = compañeros.length
     ? Math.round(avg(compañeros.map(c => c.puntaje_global)))
     : 0
-  const percentil = r.puesto && compañeros.length
-    ? Math.round((1 - (r.puesto - 1) / compañeros.length) * 100)
+  const miPuesto = compañeros.findIndex(c => c.estudiante_id === session.id) + 1 || 0
+  const percentil = miPuesto && compañeros.length
+    ? Math.round((1 - (miPuesto - 1) / compañeros.length) * 100)
     : 0
 
   const areaData = [
@@ -91,6 +92,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
     { area: 'Biología', yo: r.cn_biologia, nac: 58.1 },
     { area: 'CTS', yo: r.cn_cts, nac: 57.2 },
     { area: 'Sociales', yo: r.sociales, nac: 51.8 },
+    { area: 'Ciudadanas', yo: r.ciudadanas, nac: 49.3 },
     { area: 'Lect. Crítica', yo: r.lectura_critica, nac: 52.4 },
     { area: 'Inglés', yo: r.ingles, nac: 55.3 },
   ].filter(a => a.yo != null)
@@ -98,7 +100,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
   const radarData = [
     { comp: 'Matemáticas', yo: Math.round(((r.mat_cuantitativo || 0) + (r.mat_especifico || 0)) / 2) },
     { comp: 'Ciencias Nat.', yo: Math.round(((r.cn_quimica || 0) + (r.cn_fisica || 0) + (r.cn_biologia || 0) + (r.cn_cts || 0)) / 4) },
-    { comp: 'Sociales', yo: r.sociales || 0 },
+    { comp: 'Soc. y Ciud.', yo: Math.round(((r.sociales||0)+(r.ciudadanas||0))/2) },
     { comp: 'Lect. Crítica', yo: r.lectura_critica || 0 },
     { comp: 'Inglés', yo: r.ingles || 0 },
   ]
@@ -154,7 +156,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
               </h1>
               <div style={{ fontSize: 13, color: C.gray, fontFamily: 'Inter' }}>
                 {session.colegios?.nombre} · {session.colegios?.ciudad} · Grado {session.grado}
-                {r.puesto && ` · Puesto #${r.puesto} de ${compañeros.length}`}
+                {miPuesto ? ` · Puesto #${miPuesto} de ${compañeros.length}` : ''}
               </div>
             </div>
           </div>
@@ -164,7 +166,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 24 }}>
           <KpiCard label="Puntaje Global" value={r.puntaje_global} sub="Escala 0–500" color={getColor((r.puntaje_global / 500) * 100)} />
           <KpiCard label="Desempeño" value={`${r.desempeno_pct?.toFixed(1)}%`} sub="Promedio ponderado" color={getColor(r.desempeno_pct)} />
-          <KpiCard label="Puesto" value={r.puesto ? `#${r.puesto}` : '—'} sub={`de ${compañeros.length} estudiantes`} color={C.navy} />
+          <KpiCard label="Puesto" value={miPuesto ? `#${miPuesto}` : '—'} sub={`de ${compañeros.length} estudiantes`} color={C.navy} />
           <KpiCard label="Percentil" value={`${percentil}°`} sub="Dentro del colegio" color={C.green} />
         </div>
 
@@ -297,7 +299,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
                 <div style={{ fontSize: 28, fontFamily: 'Playfair Display, serif',
                   color: getColor((r.puntaje_global / 500) * 100), fontWeight: 700 }}>{r.puntaje_global}</div>
                 <div style={{ fontSize: 11, color: C.gray, fontFamily: 'Inter' }}>
-                  Puesto #{r.puesto} · Percentil {percentil}°
+                  Puesto #{miPuesto} · Percentil {percentil}°
                 </div>
               </div>
             </Card>
