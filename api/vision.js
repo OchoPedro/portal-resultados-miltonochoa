@@ -1,4 +1,4 @@
-export const config = { runtime: 'edge' }
+export const config = { maxDuration: 60 }
 
 // Orígenes permitidos. Agrega más separados por coma en la variable de entorno ALLOWED_ORIGIN.
 const ALLOWED_ORIGINS = [
@@ -10,57 +10,43 @@ const ALLOWED_ORIGINS = [
 function isAllowedOrigin(origin) {
   if (!origin) return false
   if (ALLOWED_ORIGINS.includes(origin)) return true
-  // Permitir preview deployments de Vercel del mismo repo
   return /^https:\/\/portal-resultados-miltonochoa-[a-z0-9-]+\.vercel\.app$/.test(origin)
 }
 
-export default async function handler(req) {
-  const origin = req.headers.get('origin') || ''
+export default async function handler(req, res) {
+  const origin = req.headers['origin'] || ''
   const allowed = isAllowedOrigin(origin)
 
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': allowed ? origin : ALLOWED_ORIGINS[0],
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Vary': 'Origin',
-  }
+  const corsOrigin = allowed ? origin : ALLOWED_ORIGINS[0]
+  res.setHeader('Access-Control-Allow-Origin', corsOrigin)
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Vary', 'Origin')
 
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+    return res.status(204).end()
   }
 
   if (!allowed) {
-    return new Response(JSON.stringify({ error: 'Forbidden' }), {
-      status: 403,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders },
-    })
+    return res.status(403).json({ error: 'Forbidden' })
   }
 
   if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405, headers: corsHeaders })
+    return res.status(405).end('Method not allowed')
   }
 
-  // S-8: Rechazar payloads mayores a 20 MB
-  const contentLength = req.headers.get('content-length')
+  const contentLength = req.headers['content-length']
   if (contentLength && parseInt(contentLength) > 20 * 1024 * 1024) {
-    return new Response(JSON.stringify({ error: 'Payload too large' }), {
-      status: 413,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders },
-    })
+    return res.status(413).json({ error: 'Payload too large' })
   }
 
   try {
-    const body = await req.json()
+    const body = req.body
 
-    // Validación mínima: solo acepta peticiones con la estructura esperada
     if (!body.messages || !Array.isArray(body.messages)) {
-      return new Response(JSON.stringify({ error: 'Invalid request body' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders },
-      })
+      return res.status(400).json({ error: 'Invalid request body' })
     }
 
-    // S-4: Modelo y max_tokens fijos en el servidor — el cliente no puede controlarlos
     const safeBody = {
       model: 'claude-sonnet-4-6',
       max_tokens: Math.min(typeof body.max_tokens === 'number' ? body.max_tokens : 2000, 4000),
@@ -78,15 +64,8 @@ export default async function handler(req) {
     })
 
     const data = await response.json()
-
-    return new Response(JSON.stringify(data), {
-      status: response.status,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders },
-    })
+    return res.status(response.status).json(data)
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders },
-    })
+    return res.status(500).json({ error: err.message })
   }
 }
