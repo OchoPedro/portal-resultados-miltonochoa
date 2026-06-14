@@ -474,7 +474,7 @@ export default function AdminRanking() {
                       const med = medalla(p)
                       return (
                         <tr key={r.id}
-                          onClick={() => setReporte({ codigo: r.codigo, nombre: r.nombre })}
+                          onClick={() => setReporte({ codigo: r.codigo, nombre: r.nombre, anio })}
                           style={{
                             background: i % 2 === 0 ? rowBg(p) : rowBg(p) || `${C.bg}60`,
                             borderBottom:`1px solid ${C.bg2}`,
@@ -575,6 +575,7 @@ export default function AdminRanking() {
         <ReportePlantel
           codigo={reporte.codigo}
           nombre={reporte.nombre}
+          anioRef={reporte.anio}
           onClose={() => setReporte(null)}
         />
       )}

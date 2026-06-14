@@ -91,7 +91,7 @@ const CustomTooltip = ({ active, payload, label }) => {
   )
 }
 
-export default function ReportePlantel({ codigo, nombre, onClose }) {
+export default function ReportePlantel({ codigo, nombre, anioRef, onClose }) {
   const [tab, setTab]           = useState('comparativo')
   const [data, setData]         = useState([])
   const [deptData, setDept]     = useState([])
@@ -198,13 +198,17 @@ export default function ReportePlantel({ codigo, nombre, onClose }) {
 
   if (!codigo) return null
 
-  const ultimo = data[data.length - 1]
-  const primero = data[0]
-  const tendencia = data.length >= 2
-    ? data[data.length-1].puesto_anio < data[data.length-2].puesto_anio ? '↑'
-      : data[data.length-1].puesto_anio === data[data.length-2].puesto_anio ? '→'
+  // Usar el año de referencia pasado desde el Nacional; si no existe en los datos, usar el último disponible
+  const refRow   = anioRef ? (data.find(r => r.anio === anioRef) ?? data[data.length - 1]) : data[data.length - 1]
+  const prevRow  = refRow  ? data[data.indexOf(refRow) - 1] : null
+  const ultimo   = refRow  ?? data[data.length - 1]
+  const primero  = data[0]
+  const tendencia = prevRow
+    ? refRow.puesto_anio < prevRow.puesto_anio ? '↑'
+      : refRow.puesto_anio === prevRow.puesto_anio ? '→'
       : '↓'
     : '—'
+  const tendenciaLabel = prevRow ? `(${prevRow.anio}→${refRow.anio})` : ''
 
   // ── Datos para gráficas ───────────────────────────────────────────────────
 
@@ -328,7 +332,7 @@ export default function ReportePlantel({ codigo, nombre, onClose }) {
               { label: 'Ponderado', value: parseFloat(ultimo.ponderado || 0).toFixed(3) },
               { label: 'Evaluados', value: ultimo.eval_estudiantes },
               { label: 'Años en ranking', value: data.length },
-              { label: 'Tendencia',
+              { label: `Tendencia ${tendenciaLabel}`,
                 value: tendencia === '↑' ? '↑ Mejoró' : tendencia === '↓' ? '↓ Bajó' : tendencia === '→' ? '→ Igual' : '—',
                 color: tendencia === '↑' ? C.green : tendencia === '↓' ? C.red : C.gray },
             ].map(k => (
