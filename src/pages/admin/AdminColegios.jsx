@@ -275,15 +275,20 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
   const startEdit = (e) => {
     setEditando(e.id)
     setEditForm({ nombre:e.nombre, grado:e.grado, salon:e.salon,
-      usuario:e.usuario, password_hash:e.password_hash })
+      usuario:e.usuario, password_hash:'' })
   }
 
   const cancelEdit = () => { setEditando(null); setEditForm({}) }
 
   const saveEdit = async (id) => {
+    let pwdField = {}
+    if (editForm.password_hash) {
+      const { data: hashed } = await supabase.rpc('hashear_password', { p_password: editForm.password_hash })
+      pwdField = { password_hash: hashed }
+    }
     const { error } = await supabase.from('estudiantes').update({
       nombre: editForm.nombre, grado: editForm.grado, salon: editForm.salon,
-      usuario: editForm.usuario, password_hash: editForm.password_hash,
+      usuario: editForm.usuario, ...pwdField,
     }).eq('id', id)
     if (error) { alert('Error: ' + error.message); return }
     setEditando(null)
