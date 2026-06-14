@@ -86,7 +86,7 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
     nombre:'', departamento_nombre:'', municipio:'', direccion:'', barrio:'',
     calendario:'', naturaleza:'', jornada:'',
     contactos:[{nombre:'', cargo:'', telefono:'', email:''}],
-    usuario:'', password_hash:'',
+    usuario:'', password_hash:'', password_plain:'',
     ...(colegio || {}),
     password_hash: '',  // nunca prellenar con el hash bcrypt del DB
   })
@@ -106,7 +106,7 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
     if (!colegio && mun && form.departamento_nombre) {
       setGenerando(true)
       const user = await generarUsuario(form.departamento_nombre, mun)
-      setForm(f => ({...f, municipio:mun, usuario:user, password_hash:user.toLowerCase()+'*Mo2026'}))
+      setForm(f => ({...f, municipio:mun, usuario:user, password_hash:user, password_plain:user}))
       setGenerando(false)
     }
   }
@@ -158,7 +158,7 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
         contacto_telefono: form.contactos?.[0]?.telefono,
         contacto_email: form.contactos?.[0]?.email,
         usuario: form.usuario,
-        ...(hashedPassword ? { password_hash: hashedPassword } : {}),
+        ...(hashedPassword ? { password_hash: hashedPassword, password_plain: form.password_hash } : {}),
         ...(!colegio ? { activo: false } : {}),
       }
       const { error: err } = colegio
@@ -618,6 +618,7 @@ const ModalImportarColegios = ({ onClose, onSave }) => {
         }],
         usuario,
         password_hash: hashed,
+        password_plain: usuario,
         activo: false,
       })
       if (error) omitidos++; else creados++
@@ -933,26 +934,52 @@ const AccionesMenu = ({ onEditar, onEstudiantes, onHistoricos, onToggle, activo,
   )
 }
 
+const POR_PAG = 50
+
 // ── MAIN ─────────────────────────────────────────────────────
 export default function AdminColegios({ onUpdate }) {
   const [colegios, setColegios]         = useState([])
+  const [total, setTotal]               = useState(0)
+  const [pagina, setPagina]             = useState(1)
   const [loading, setLoading]           = useState(true)
   const [modalColegio, setModalColegio] = useState(null)
   const [modalEst, setModalEst]         = useState(null)
   const [modalImport, setModalImport]   = useState(false)
   const [modalHistorico, setModalHistorico] = useState(null)
-  const [search, setSearch]             = useState('')
+  const [fNombre, setFNombre]           = useState('')
+  const [fDepto, setFDepto]             = useState('')
+  const [fMuni, setFMuni]               = useState('')
+  const [fUser, setFUser]               = useState('')
+  const [copiado, setCopiado]           = useState(null)
 
-  useEffect(() => { loadColegios() }, [])
+  useEffect(() => { setPagina(1) }, [fNombre, fDepto, fMuni, fUser])
+  useEffect(() => { loadColegios() }, [pagina, fNombre, fDepto, fMuni, fUser])
 
   const loadColegios = async () => {
     setLoading(true)
-    const { data } = await supabase.from('colegios').select('*').order('nombre')
+    const offset = (pagina - 1) * POR_PAG
+    let q = supabase.from('colegios')
+      .select('*', { count: 'exact' })
+      .order('nombre')
+      .range(offset, offset + POR_PAG - 1)
+    if (fNombre.trim()) q = q.ilike('nombre',              `%${fNombre.trim()}%`)
+    if (fDepto.trim())  q = q.ilike('departamento_nombre', `%${fDepto.trim()}%`)
+    if (fMuni.trim())   q = q.ilike('municipio',           `%${fMuni.trim()}%`)
+    if (fUser.trim())   q = q.ilike('usuario',             `%${fUser.trim()}%`)
+    const { data, count } = await q
     setColegios(data || [])
+    setTotal(count || 0)
     setLoading(false)
   }
 
   const handleSave = () => { loadColegios(); onUpdate() }
+
+  const handleCopiar = (id, texto) => {
+    navigator.clipboard.writeText(texto).then(() => {
+      setCopiado(id)
+      setTimeout(() => setCopiado(null), 1500)
+    })
+  }
 
   const handleToggle = async (c) => {
     await supabase.from('colegios').update({ activo: !c.activo }).eq('id', c.id)
@@ -991,30 +1018,44 @@ export default function AdminColegios({ onUpdate }) {
     } catch(e) { alert('Error: ' + e.message) }
   }
 
-  const filtered = colegios.filter(c =>
-    c.nombre?.toLowerCase().includes(search.toLowerCase()) ||
-    c.municipio?.toLowerCase().includes(search.toLowerCase()) ||
-    c.departamento_nombre?.toLowerCase().includes(search.toLowerCase())
-  )
-
   return (
     <div>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
-        marginBottom:24, flexWrap:'wrap', gap:12 }}>
-        <input value={search} onChange={e=>setSearch(e.target.value)}
-          placeholder="Buscar por nombre, municipio o departamento..."
-          style={{ padding:'10px 16px', border:`1px solid ${C.grayLt}`, borderRadius:8,
-            fontFamily:'Inter', fontSize:13, width:320, outline:'none', background:C.bg }} />
+      {/* Filtros y acciones */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start',
+        marginBottom:16, flexWrap:'wrap', gap:12 }}>
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap', flex:1 }}>
+          {[
+            { val:fNombre, set:setFNombre, ph:'Nombre del colegio...' },
+            { val:fDepto,  set:setFDepto,  ph:'Departamento...' },
+            { val:fMuni,   set:setFMuni,   ph:'Municipio...' },
+            { val:fUser,   set:setFUser,   ph:'Usuario...' },
+          ].map(({val,set,ph}) => (
+            <input key={ph} value={val} onChange={e=>set(e.target.value)} placeholder={ph}
+              style={{ padding:'9px 14px', border:`1px solid ${C.grayLt}`, borderRadius:8,
+                fontFamily:'Inter', fontSize:12, width:180, outline:'none', background:C.bg }} />
+          ))}
+          {(fNombre||fDepto||fMuni||fUser) && (
+            <button onClick={()=>{setFNombre('');setFDepto('');setFMuni('');setFUser('')}}
+              style={{ padding:'9px 12px', border:`1px solid ${C.grayLt}`, borderRadius:8,
+                background:'transparent', color:C.gray, cursor:'pointer', fontFamily:'Inter', fontSize:12 }}>
+              ✕ Limpiar
+            </button>
+          )}
+        </div>
         <div style={{ display:'flex', gap:8 }}>
           <Btn onClick={()=>setModalImport(true)} outline color={C.navy}>↑ Importar Excel</Btn>
           <Btn onClick={()=>setModalColegio('new')} color={C.green}>+ Nuevo Colegio</Btn>
         </div>
       </div>
+      {/* Contador */}
+      <div style={{ fontSize:12, color:C.gray, fontFamily:'Inter', marginBottom:10 }}>
+        {total.toLocaleString('es-CO')} colegios · página {pagina} de {Math.ceil(total/POR_PAG)||1}
+      </div>
 
       <Card>
         {loading ? (
           <div style={{ textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter' }}>Cargando...</div>
-        ) : filtered.length===0 ? (
+        ) : colegios.length===0 ? (
           <div style={{ textAlign:'center', padding:60, fontFamily:'Inter' }}>
             <div style={{ fontSize:40, marginBottom:12 }}>🏫</div>
             <div style={{ fontSize:18, fontFamily:'Playfair Display, serif', color:C.navy, marginBottom:8 }}>
@@ -1035,14 +1076,28 @@ export default function AdminColegios({ onUpdate }) {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((c,i)=>(
+                {colegios.map((c,i)=>(
                   <tr key={i} style={{ borderBottom:`1px solid ${C.bg2}`,
                     background:i%2===0?`${C.bg}80`:'transparent' }}>
                     <td style={{ padding:'12px', fontSize:13, color:C.text, fontWeight:600 }}>{c.nombre}</td>
                     <td style={{ padding:'12px', fontSize:12, color:C.gray }}>{c.departamento_nombre||'—'}</td>
                     <td style={{ padding:'12px', fontSize:12, color:C.gray }}>{c.municipio||'—'}</td>
                     <td style={{ padding:'12px', fontSize:12, color:C.navy, fontWeight:600 }}>{c.usuario}</td>
-                    <td style={{ padding:'12px', fontSize:12, color:C.gray, letterSpacing:'0.12em' }}>••••••••</td>
+                    <td style={{ padding:'12px' }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                        <span style={{ fontFamily:'monospace', fontSize:12, color:C.text,
+                          background:C.bg, border:`1px solid ${C.grayLt}`,
+                          borderRadius:4, padding:'2px 8px', letterSpacing:'0.04em' }}>
+                          {c.password_plain || c.usuario || '—'}
+                        </span>
+                        <button onClick={()=>handleCopiar(c.id, c.password_plain||c.usuario||'')}
+                          title="Copiar clave" style={{ background:'none', border:'none',
+                            cursor:'pointer', fontSize:14, padding:2,
+                            color: copiado===c.id ? C.green : C.gray }}>
+                          {copiado===c.id ? '✓' : '⧉'}
+                        </button>
+                      </div>
+                    </td>
                     <td style={{ padding:'12px' }}>
                       <Badge color={c.activo?C.green:C.red}>{c.activo?'Activo':'Inactivo'}</Badge>
                     </td>
@@ -1064,6 +1119,32 @@ export default function AdminColegios({ onUpdate }) {
           </div>
         )}
       </Card>
+
+      {/* Paginación */}
+      {Math.ceil(total/POR_PAG) > 1 && (
+        <div style={{ display:'flex', justifyContent:'center', alignItems:'center',
+          gap:8, marginTop:16, fontFamily:'Inter' }}>
+          <button onClick={()=>setPagina(1)} disabled={pagina===1}
+            style={{ padding:'6px 12px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+              background:C.white, cursor:pagina===1?'not-allowed':'pointer',
+              color:pagina===1?C.gray:C.navy, fontSize:12 }}>«</button>
+          <button onClick={()=>setPagina(p=>Math.max(1,p-1))} disabled={pagina===1}
+            style={{ padding:'6px 12px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+              background:C.white, cursor:pagina===1?'not-allowed':'pointer',
+              color:pagina===1?C.gray:C.navy, fontSize:12 }}>‹ Ant.</button>
+          <span style={{ fontSize:12, color:C.gray, padding:'0 6px' }}>
+            <strong style={{color:C.navy}}>{pagina}</strong> / {Math.ceil(total/POR_PAG)}
+          </span>
+          <button onClick={()=>setPagina(p=>Math.min(Math.ceil(total/POR_PAG),p+1))} disabled={pagina===Math.ceil(total/POR_PAG)}
+            style={{ padding:'6px 12px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+              background:C.white, cursor:pagina===Math.ceil(total/POR_PAG)?'not-allowed':'pointer',
+              color:pagina===Math.ceil(total/POR_PAG)?C.gray:C.navy, fontSize:12 }}>Sig. ›</button>
+          <button onClick={()=>setPagina(Math.ceil(total/POR_PAG))} disabled={pagina===Math.ceil(total/POR_PAG)}
+            style={{ padding:'6px 12px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+              background:C.white, cursor:pagina===Math.ceil(total/POR_PAG)?'not-allowed':'pointer',
+              color:pagina===Math.ceil(total/POR_PAG)?C.gray:C.navy, fontSize:12 }}>»</button>
+        </div>
+      )}
 
       {modalColegio && (
         <ModalColegio
