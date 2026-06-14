@@ -6,6 +6,7 @@ import AdminPruebas from './AdminPruebas'
 import AdminResultados from './AdminResultados'
 import AdminAdmins from './AdminAdmins'
 import AdminAnalisis from './AdminAnalisis'
+import HojasRespuesta from '../components/HojasRespuesta'
 
 const C = {
   navy:'#0A1F3D', green:'#2D9B6F', greenLt:'#3AB882',
@@ -15,12 +16,13 @@ const C = {
 }
 
 const MENU = [
-  { id:'colegios',     label:'Colegios',        icon:'🏫', desc:'Gestión de instituciones' },
-  { id:'estudiantes',  label:'Estudiantes',      icon:'👥', desc:'Carga masiva de estudiantes' },
-  { id:'pruebas',      label:'Pruebas',          icon:'📋', desc:'Tipos y referencias' },
-  { id:'resultados',   label:'Resultados',       icon:'📊', desc:'Cargar resultados de pruebas' },
-  { id:'analisis',     label:'Análisis IA',      icon:'🤖', desc:'Recomendaciones con Claude' },
-  { id:'admins',       label:'Administradores',  icon:'👤', desc:'Usuarios admin' },
+  { id:'colegios',     label:'Colegios',           icon:'🏫', desc:'Gestión de instituciones' },
+  { id:'estudiantes',  label:'Estudiantes',         icon:'👥', desc:'Carga masiva de estudiantes' },
+  { id:'pruebas',      label:'Pruebas',             icon:'📋', desc:'Tipos y referencias' },
+  { id:'resultados',   label:'Resultados',          icon:'📊', desc:'Cargar resultados de pruebas' },
+  { id:'hojas',        label:'Hojas de Respuesta',  icon:'📝', desc:'Generar hojas por referencia' },
+  { id:'analisis',     label:'Análisis IA',         icon:'🤖', desc:'Recomendaciones con Claude' },
+  { id:'admins',       label:'Administradores',     icon:'👤', desc:'Usuarios admin' },
 ]
 
 export default function AdminDashboard({ session, onLogout }) {
@@ -123,6 +125,7 @@ export default function AdminDashboard({ session, onLogout }) {
         {section==='estudiantes' && <AdminEstudiantes onUpdate={loadStats} />}
         {section==='pruebas'     && <AdminPruebas     onUpdate={loadStats} />}
         {section==='resultados'  && <AdminResultados  onUpdate={loadStats} />}
+        {section==='hojas'       && <HojasRespuesta />}
         {section==='analisis'    && <AdminAnalisis />}
         {section==='admins'      && <AdminAdmins      session={session}    onUpdate={loadStats} />}
       </main>
