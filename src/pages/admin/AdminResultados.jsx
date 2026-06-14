@@ -107,21 +107,30 @@ function Badge({ pct }) {
 
 /* ── Extraer páginas individuales como base64 ─────────────── */
 async function extraerPaginas(arrayBuffer) {
-  const pdfDoc    = await PDFDocument.load(arrayBuffer)
-  const totalPag  = pdfDoc.getPageCount()
-  const paginas   = []
+  // Cargar PDF.js desde CDN para renderizar páginas como imágenes
+  const script = document.createElement('script')
+  script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'
+  await new Promise((res, rej) => { script.onload = res; script.onerror = rej; document.head.appendChild(script) })
 
-  for (let i = 0; i < totalPag; i++) {
-    const subDoc  = await PDFDocument.create()
-    const [copia] = await subDoc.copyPages(pdfDoc, [i])
-    subDoc.addPage(copia)
-    const bytes   = await subDoc.save()
-    // Convertir a base64
-    let binary = ''
-    bytes.forEach(b => binary += String.fromCharCode(b))
-    paginas.push(btoa(binary))
+  const pdfjsLib = window.pdfjsLib
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
+
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+  const totalPag = pdf.numPages
+  const paginas = []
+
+  for (let i = 1; i <= totalPag; i++) {
+    const page = await pdf.getPage(i)
+    const scale = 1.5
+    const viewport = page.getViewport({ scale })
+    const canvas = document.createElement('canvas')
+    canvas.width  = viewport.width
+    canvas.height = viewport.height
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+    paginas.push(dataUrl.split(',')[1])
   }
-  return paginas  // array de strings base64, una por página
+  return paginas
 }
 
 /* ── Llamar a Claude Vision con un lote de páginas ────────── */
@@ -131,7 +140,7 @@ async function visionLote(paginasB64) {
   // Agregar cada página como documento
   paginasB64.forEach((b64, idx) => {
     content.push({ type: 'text', text: `PÁGINA ${idx + 1}:` })
-    content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } })
+    content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } })
   })
 
   content.push({
