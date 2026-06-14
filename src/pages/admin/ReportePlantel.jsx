@@ -1,6 +1,15 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { C } from '../../components/ui'
+import { DEPTO_REGION } from './AdminRanking'
+
+const REGIONES_DEPTS = {
+  'Andina':    ['ANTIOQUIA','BOYACÁ','CALDAS','CUNDINAMARCA','HUILA','NORTE SANTANDER','QUINDÍO','RISARALDA','SANTANDER','TOLIMA'],
+  'Caribe':    ['ATLÁNTICO','BOLÍVAR','CESAR','CÓRDOBA','LA GUAJIRA','MAGDALENA','SUCRE','SAN ANDRÉS'],
+  'Pacífica':  ['CAUCA','CHOCÓ','NARIÑO','VALLE DEL CAUCA'],
+  'Orinoquía': ['ARAUCA','CASANARE','META','VICHADA'],
+  'Amazonía':  ['AMAZONAS','CAQUETÁ','GUAINÍA','GUAVIARE','PUTUMAYO','VAUPÉS'],
+}
 import {
   BarChart, Bar, LineChart, Line, RadarChart, Radar, PolarGrid,
   PolarAngleAxis, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -83,10 +92,11 @@ const CustomTooltip = ({ active, payload, label }) => {
 }
 
 export default function ReportePlantel({ codigo, nombre, onClose }) {
-  const [tab, setTab]         = useState('comparativo')
-  const [data, setData]       = useState([])   // historial del plantel ordenado por año
-  const [deptData, setDept]   = useState([])   // promedios del departamento
-  const [loading, setLoading] = useState(true)
+  const [tab, setTab]           = useState('comparativo')
+  const [data, setData]         = useState([])
+  const [deptData, setDept]     = useState([])
+  const [regionData, setRegion] = useState([])
+  const [loading, setLoading]   = useState(true)
 
   useEffect(() => {
     if (!codigo) return
@@ -143,6 +153,44 @@ export default function ReportePlantel({ codigo, nombre, onClose }) {
         total_colegios:    v.n,
       }))
       setDept(deptAvgs)
+
+      // 3. Promedios región
+      const region = DEPTO_REGION[depto]
+      const regionDepts = region ? REGIONES_DEPTS[region] : []
+      if (regionDepts.length) {
+        const { data: rRows } = await supabase
+          .from('ranking_colegios')
+          .select('anio,lectura_critica,matematicas,ciencias_sociales,ciencias_naturales,ingles,ponderado,puntaje_global')
+          .in('departamento', regionDepts)
+          .in('anio', anios)
+          .limit(50000)
+
+        const byYearR = {}
+        ;(rRows || []).forEach(r => {
+          if (!byYearR[r.anio]) byYearR[r.anio] = { n:0, lc:0, mat:0, cs:0, cn:0, ing:0, pond:0, glob:0 }
+          const y = byYearR[r.anio]
+          y.n++
+          y.lc   += parseFloat(r.lectura_critica || 0)
+          y.mat  += parseFloat(r.matematicas || 0)
+          y.cs   += parseFloat(r.ciencias_sociales || 0)
+          y.cn   += parseFloat(r.ciencias_naturales || 0)
+          y.ing  += parseFloat(r.ingles || 0)
+          y.pond += parseFloat(r.ponderado || 0)
+          y.glob += parseFloat(r.puntaje_global || 0)
+        })
+        setRegion(Object.entries(byYearR).map(([anio, v]) => ({
+          anio: parseInt(anio),
+          lectura_critica:    v.n ? v.lc/v.n   : null,
+          matematicas:        v.n ? v.mat/v.n   : null,
+          ciencias_sociales:  v.n ? v.cs/v.n    : null,
+          ciencias_naturales: v.n ? v.cn/v.n    : null,
+          ingles:             v.n ? v.ing/v.n   : null,
+          ponderado:          v.n ? v.pond/v.n  : null,
+          puntaje_global:     v.n ? v.glob/v.n  : null,
+          total_colegios:     v.n,
+          region,
+        })))
+      }
     }
 
     setLoading(false)
@@ -181,6 +229,20 @@ export default function ReportePlantel({ codigo, nombre, onClose }) {
       if (dRow) {
         entry[`Plantel ${r.anio}`] = parseFloat(r[a.key] || 0)
         entry[`Depto ${r.anio}`]   = parseFloat(dRow[a.key] || 0).toFixed(1)
+      }
+    })
+    return entry
+  })
+
+  // Comparativo Región: plantel vs promedio regional por área (último año disponible en ambos)
+  const regionNombre = ultimo ? DEPTO_REGION[ultimo.departamento] : null
+  const compRegionData = AREAS.map(a => {
+    const entry = { area: a.short }
+    data.forEach(r => {
+      const rRow = regionData.find(d => d.anio === r.anio)
+      if (rRow) {
+        entry[`Plantel ${r.anio}`] = parseFloat(r[a.key] || 0)
+        entry[`Región ${r.anio}`]  = parseFloat(rRow[a.key] || 0)
       }
     })
     return entry
@@ -277,6 +339,7 @@ export default function ReportePlantel({ codigo, nombre, onClose }) {
             { id: 'departamento', label: 'Comparativo Departamento' },
             { id: 'promedios',    label: 'Promedios Plantel' },
             { id: 'ranking',      label: 'Tendencia Ranking' },
+            { id: 'region',       label: `Comparativo ${regionNombre || 'Regional'}` },
             { id: 'radar',        label: 'Perfil por Áreas' },
           ].map(t => <Tab key={t.id} label={t.label} active={tab===t.id} onClick={() => setTab(t.id)} />)}
         </div>
@@ -593,6 +656,80 @@ export default function ReportePlantel({ codigo, nombre, onClose }) {
                       )
                     })}
                   </div>
+                </div>
+              )}
+
+              {/* ── Comparativo Regional ────────────────────────────────── */}
+              {tab === 'region' && (
+                <div>
+                  <div style={{ fontFamily:'Inter', fontSize:13, color:C.gray, marginBottom:20 }}>
+                    Puntaje del plantel vs promedio de la <strong style={{ color:C.navy }}>Región {regionNombre}</strong> por área académica
+                  </div>
+                  {regionData.length === 0 ? (
+                    <div style={{ textAlign:'center', padding:60, color:C.gray, fontFamily:'Inter' }}>
+                      No hay datos regionales disponibles.
+                    </div>
+                  ) : (
+                    <>
+                      <ResponsiveContainer width="100%" height={360}>
+                        <BarChart data={compRegionData} margin={{ top:10, right:20, left:0, bottom:10 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke={C.bg2} />
+                          <XAxis dataKey="area" tick={{ fontFamily:'Inter', fontSize:12 }} />
+                          <YAxis domain={[40, 100]} tick={{ fontFamily:'Inter', fontSize:11 }} />
+                          <Tooltip content={<CustomTooltip />} />
+                          <Legend wrapperStyle={{ fontFamily:'Inter', fontSize:12 }} />
+                          {años.map((a, i) => {
+                            const keys = compRegionData[0] ? Object.keys(compRegionData[0]).filter(k => k !== 'area') : []
+                            const plantelKey = keys.find(k => k.startsWith(`Plantel ${a}`))
+                            const regionKey  = keys.find(k => k.startsWith(`Región ${a}`))
+                            return plantelKey ? [
+                              <Bar key={`p${a}`} dataKey={plantelKey} fill={AÑO_COLORS[a] || '#94A3B8'} radius={[4,4,0,0]} />,
+                              <Bar key={`r${a}`} dataKey={regionKey}  fill={AÑO_COLORS[a] || '#94A3B8'} fillOpacity={0.35} radius={[4,4,0,0]} />,
+                            ] : null
+                          })}
+                        </BarChart>
+                      </ResponsiveContainer>
+
+                      {/* Tabla resumen regional */}
+                      <div style={{ marginTop:24, overflowX:'auto' }}>
+                        <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter' }}>
+                          <thead>
+                            <tr>
+                              <Th>Año</Th>
+                              <Th center>L.C. Plantel</Th><Th center>L.C. Región</Th>
+                              <Th center>Mat. Plantel</Th><Th center>Mat. Región</Th>
+                              <Th center>Global Plantel</Th><Th center>Global Región</Th>
+                              <Th center>Colegios región</Th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {data.map(r => {
+                              const rRow = regionData.find(d => d.anio === r.anio)
+                              if (!rRow) return null
+                              const diff = parseFloat(r.puntaje_global||0) - parseFloat(rRow.puntaje_global||0)
+                              return (
+                                <tr key={r.anio} style={{ background: r.anio % 2 === 0 ? C.bg : 'transparent' }}>
+                                  <Td bold color={C.navy}>{r.anio}</Td>
+                                  <Td center><ScoreChip val={r.lectura_critica}/></Td>
+                                  <Td center><ScoreChip val={rRow.lectura_critica}/></Td>
+                                  <Td center><ScoreChip val={r.matematicas}/></Td>
+                                  <Td center><ScoreChip val={rRow.matematicas}/></Td>
+                                  <Td center bold color={C.navy}>{parseFloat(r.puntaje_global||0).toFixed(1)}</Td>
+                                  <Td center>{parseFloat(rRow.puntaje_global||0).toFixed(1)}</Td>
+                                  <Td center>
+                                    <span style={{ color: diff >= 0 ? C.green : C.red, fontWeight:600 }}>
+                                      {diff >= 0 ? '+' : ''}{diff.toFixed(1)}
+                                    </span>
+                                    {' · '}{rRow.total_colegios?.toLocaleString('es-CO')} col.
+                                  </Td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 

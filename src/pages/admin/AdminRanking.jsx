@@ -7,12 +7,25 @@ const ANIOS = [2026, 2025, 2024, 2023, 2022, 2021, 2020]
 const POR_PAGINA = 100
 
 const DEPARTAMENTOS_COL = [
-  'AMAZONAS','ANTIOQUIA','ARAUCA','ATLÁNTICO','CUNDINAMARCA','BOLÍVAR','BOYACÁ',
+  'AMAZONAS','ANTIOQUIA','ARAUCA','ATLÁNTICO','BOLÍVAR','BOYACÁ',
   'CALDAS','CAQUETÁ','CASANARE','CAUCA','CESAR','CHOCÓ','CÓRDOBA','CUNDINAMARCA',
   'GUAINÍA','GUAVIARE','HUILA','LA GUAJIRA','MAGDALENA','META','NARIÑO',
   'NORTE SANTANDER','PUTUMAYO','QUINDÍO','RISARALDA','SAN ANDRÉS','SANTANDER',
   'SUCRE','TOLIMA','VALLE DEL CAUCA','VAUPÉS','VICHADA',
 ]
+
+// Regiones naturales de Colombia → departamentos
+const REGIONES_COL = {
+  'Andina':    ['ANTIOQUIA','BOYACÁ','CALDAS','CUNDINAMARCA','HUILA','NORTE SANTANDER','QUINDÍO','RISARALDA','SANTANDER','TOLIMA'],
+  'Caribe':    ['ATLÁNTICO','BOLÍVAR','CESAR','CÓRDOBA','LA GUAJIRA','MAGDALENA','SUCRE','SAN ANDRÉS'],
+  'Pacífica':  ['CAUCA','CHOCÓ','NARIÑO','VALLE DEL CAUCA'],
+  'Orinoquía': ['ARAUCA','CASANARE','META','VICHADA'],
+  'Amazonía':  ['AMAZONAS','CAQUETÁ','GUAINÍA','GUAVIARE','PUTUMAYO','VAUPÉS'],
+}
+
+// Mapa inverso: departamento → región
+export const DEPTO_REGION = {}
+Object.entries(REGIONES_COL).forEach(([r, ds]) => ds.forEach(d => { DEPTO_REGION[d] = r }))
 
 const medalla = (p) => {
   if (p === 1) return '🥇'
@@ -85,9 +98,10 @@ export default function AdminRanking() {
   const [filtroNat, setFiltroNat]       = useState('')
   const [filtroJorn, setFiltroJorn]     = useState('')
   const [filtroCalend, setFiltroCalend] = useState('')
+  const [filtroRegion, setFiltroRegion] = useState('')
   const [reporte, setReporte] = useState(null)
 
-  const doLoad = async (a, p, bus, dep, nat, jorn, cal) => {
+  const doLoad = async (a, p, bus, dep, nat, jorn, cal, reg) => {
     setLoading(true)
     const offset = (p - 1) * POR_PAGINA
     let q = supabase
@@ -98,6 +112,7 @@ export default function AdminRanking() {
       .range(offset, offset + POR_PAGINA - 1)
     if (bus.trim()) q = q.ilike('nombre', `%${bus.trim()}%`)
     if (dep)        q = q.eq('departamento', dep)
+    else if (reg)   q = q.in('departamento', REGIONES_COL[reg] || [])
     if (nat)        q = q.eq('naturaleza', nat)
     if (jorn)       q = q.ilike('jornada', `%${jorn}%`)
     if (cal)        q = q.eq('calendario', cal)
@@ -107,8 +122,8 @@ export default function AdminRanking() {
   }
 
   useEffect(() => {
-    doLoad(anio, pagina, buscar, filtroDepto, filtroNat, filtroJorn, filtroCalend)
-  }, [anio, pagina, buscar, filtroDepto, filtroNat, filtroJorn, filtroCalend])
+    doLoad(anio, pagina, buscar, filtroDepto, filtroNat, filtroJorn, filtroCalend, filtroRegion)
+  }, [anio, pagina, buscar, filtroDepto, filtroNat, filtroJorn, filtroCalend, filtroRegion])
 
   const totalPags = Math.ceil(total / POR_PAGINA)
 
@@ -165,7 +180,9 @@ export default function AdminRanking() {
               style={{ padding:'8px 14px', border:`1px solid ${C.grayLt}`, borderRadius:7,
                 fontFamily:'Inter', fontSize:13, outline:'none', flex:1, minWidth:200 }}
             />
-            <SelectF value={filtroDepto} onChange={setFiltroDepto}
+            <SelectF value={filtroRegion} onChange={v => { setFiltroRegion(v); setFiltroDepto('') }}
+              options={Object.keys(REGIONES_COL)} placeholder="Región" />
+            <SelectF value={filtroDepto} onChange={v => { setFiltroDepto(v); setFiltroRegion('') }}
               options={DEPARTAMENTOS_COL} placeholder="Departamento" />
             <SelectF value={filtroNat} onChange={setFiltroNat}
               options={['OFICIAL','NO OFICIAL','OFICIAL(C)']} placeholder="Naturaleza" />
@@ -173,10 +190,10 @@ export default function AdminRanking() {
               options={['A','B','O']} placeholder="Calendario" />
             <SelectF value={filtroJorn} onChange={setFiltroJorn}
               options={['MAÑANA','TARDE','NOCHE','COMPLETA','ÚNICA','SABATINO']} placeholder="Jornada" />
-            {(buscar||filtroDepto||filtroNat||filtroCalend||filtroJorn) && (
+            {(buscar||filtroRegion||filtroDepto||filtroNat||filtroCalend||filtroJorn) && (
               <button onClick={() => {
-                setBuscar(''); setFiltroDepto(''); setFiltroNat('');
-                setFiltroCalend(''); setFiltroJorn('')
+                setBuscar(''); setFiltroRegion(''); setFiltroDepto('');
+                setFiltroNat(''); setFiltroCalend(''); setFiltroJorn('')
               }} style={{ padding:'8px 14px', border:`1px solid ${C.red}`,
                 borderRadius:7, background:'transparent', color:C.red,
                 fontFamily:'Inter', fontSize:12, cursor:'pointer' }}>
