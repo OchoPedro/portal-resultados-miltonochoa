@@ -176,13 +176,13 @@ export default function AdminResultados({ onUpdate }) {
       const documentos = filasTXT.map(f => f.documento)
       const { data: estudiantesDB } = await supabase
         .from('estudiantes')
-        .select('id, nombre, documento, grado, salon, colegio_id')
-        .in('documento', documentos)
+        .select('id, nombre, usuario, grado, salon, colegio_id')
+        .in('usuario', documentos)
         .eq('colegio_id', colegioId)
 
       // 4. Calcular resultados
       const filas = filasTXT.map(f => {
-        const estudianteDB = estudiantesDB?.find(e => e.documento === f.documento)
+        const estudianteDB = estudiantesDB?.find(e => e.usuario === f.documento)
         const resultado    = calcularResultado(f.respuestas, clave, areas)
         return {
           documento:  f.documento,
