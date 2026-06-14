@@ -175,41 +175,116 @@ function ModalVerExcel({ referencia, onClose }) {
   const excel = referencia.estructura_excel || {}
   const fileName = excel.fileName || `${referencia.codigo}.xlsx`
 
-  // Soporte estructura nueva (headers + rows) y antigua (raw)
   const headers = excel.headers || excel.raw?.[0] || []
-  const rows    = excel.rows    || excel.raw?.slice(1) || []
+  const allRows = excel.rows    || excel.raw?.slice(1) || []
   const meta    = excel.meta    || []
 
-  // Colores de columna similares al Excel original
+  // Índices de columnas filtrables (las que tienen pocos valores únicos)
+  const FILTER_COLS = ['Área', 'Asignatura', 'Ciclo MEN', 'Competencia', 'Componente', 'Dificultad', 'Sesión']
+  const filterableCols = headers
+    .map((h, i) => ({ name: String(h), idx: i }))
+    .filter(c => FILTER_COLS.includes(c.name))
+
+  const [filters, setFilters] = useState({})
+
+  // Opciones únicas por columna filtrable
+  const getOptions = (colIdx) => {
+    const vals = [...new Set(allRows.map(r => String(r[colIdx] ?? '')))]
+      .filter(v => v !== '').sort()
+    return vals
+  }
+
+  // Filas filtradas
+  const filteredRows = allRows.filter(row =>
+    filterableCols.every(col => {
+      const active = filters[col.name]
+      if (!active) return true
+      return String(row[col.idx] ?? '') === active
+    })
+  )
+
+  // Colores de columna
   const COL_COLORS = [
     '#BDD7EE','#BDD7EE','#70AD47','#4472C4',
     '#4472C4','#4472C4','#4472C4','#4472C4',
     '#4472C4','#FFD966','#FFD966',
   ]
 
+  // Descarga con formato y colores
   const handleDownload = () => {
     const wb = XLSX.utils.book_new()
-    const ws = XLSX.utils.aoa_to_sheet(excel.raw || [headers, ...rows])
+    const dataToExport = [
+      ...(meta.length > 0 ? meta : []),
+      headers,
+      ...filteredRows,
+    ]
+    const ws = XLSX.utils.aoa_to_sheet(dataToExport)
+
+    // Ancho de columnas
+    ws['!cols'] = headers.map((h, i) => ({
+      wch: i === 5 ? 60 : i >= 6 ? 30 : 16 // Estándar más ancho
+    }))
+
+    // Estilos de header (fila de headers)
+    const headerRowIdx = meta.length > 0 ? meta.length : 0
+    headers.forEach((_, ci) => {
+      const cellRef = XLSX.utils.encode_cell({ r: headerRowIdx, c: ci })
+      if (!ws[cellRef]) ws[cellRef] = { v: headers[ci], t: 's' }
+      ws[cellRef].s = {
+        fill: { fgColor: { rgb: (COL_COLORS[ci] || '#4472C4').replace('#','') } },
+        font: { bold: true, color: { rgb: COL_COLORS[ci] === '#FFD966' ? '1A1A2E' : 'FFFFFF' } },
+        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+        border: {
+          top: { style:'thin', color:{ rgb:'FFFFFF' } },
+          bottom: { style:'thin', color:{ rgb:'FFFFFF' } },
+          left: { style:'thin', color:{ rgb:'FFFFFF' } },
+          right: { style:'thin', color:{ rgb:'FFFFFF' } },
+        }
+      }
+    })
+
+    // Estilos de filas de datos (alternado)
+    filteredRows.forEach((_, ri) => {
+      const rowIdx = headerRowIdx + 1 + ri
+      const bgColor = ri % 2 === 0 ? 'FFFFFF' : 'EFF4FB'
+      headers.forEach((_, ci) => {
+        const cellRef = XLSX.utils.encode_cell({ r: rowIdx, c: ci })
+        if (!ws[cellRef]) ws[cellRef] = { v: '', t: 's' }
+        ws[cellRef].s = {
+          fill: { fgColor: { rgb: bgColor } },
+          alignment: { vertical: 'center', wrapText: ci === 5 },
+          border: {
+            top: { style:'thin', color:{ rgb:'D1D5DB' } },
+            bottom: { style:'thin', color:{ rgb:'D1D5DB' } },
+            left: { style:'thin', color:{ rgb:'D1D5DB' } },
+            right: { style:'thin', color:{ rgb:'D1D5DB' } },
+          }
+        }
+      })
+    })
+
     XLSX.utils.book_append_sheet(wb, ws, 'Prueba')
-    XLSX.writeFile(wb, fileName)
+    XLSX.writeFile(wb, fileName, { cellStyles: true })
   }
+
+  const activeFilters = Object.entries(filters).filter(([,v]) => v)
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)',
       display:'flex', alignItems:'center', justifyContent:'center', zIndex:1100 }}>
-      <div style={{ background:C.white, borderRadius:12, width:'95%', maxWidth:1100,
-        maxHeight:'90vh', display:'flex', flexDirection:'column',
+      <div style={{ background:C.white, borderRadius:12, width:'95%', maxWidth:1200,
+        maxHeight:'92vh', display:'flex', flexDirection:'column',
         boxShadow:'0 24px 64px rgba(0,0,0,0.25)' }}>
 
-        {/* Header modal */}
+        {/* Header */}
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
-          padding:'18px 24px', borderBottom:`1px solid ${C.grayLt}`, flexShrink:0 }}>
+          padding:'16px 24px', borderBottom:`1px solid ${C.grayLt}`, flexShrink:0 }}>
           <div>
             <h2 style={{ fontSize:16, fontWeight:700, color:C.navy, margin:0, fontFamily:'Inter' }}>
               📊 {referencia.nombre}
             </h2>
             <p style={{ fontSize:12, color:C.gray, margin:'3px 0 0', fontFamily:'Inter' }}>
-              {rows.length} preguntas · {headers.length} columnas
+              {filteredRows.length} de {allRows.length} preguntas · {headers.length} columnas
               {meta.length > 0 && meta[0]?.filter(Boolean).length > 0 &&
                 ` · ${meta[0].filter(Boolean).join(' ')}`}
             </p>
@@ -227,11 +302,48 @@ function ModalVerExcel({ referencia, onClose }) {
           </div>
         </div>
 
+        {/* Filtros */}
+        {filterableCols.length > 0 && (
+          <div style={{ padding:'12px 24px', borderBottom:`1px solid ${C.bg2}`,
+            display:'flex', flexWrap:'wrap', gap:10, alignItems:'center', flexShrink:0,
+            background:C.bg }}>
+            <span style={{ fontSize:11, fontWeight:600, color:C.gray, fontFamily:'Inter',
+              textTransform:'uppercase', letterSpacing:'0.05em' }}>Filtrar:</span>
+            {filterableCols.map(col => (
+              <select key={col.name}
+                value={filters[col.name] || ''}
+                onChange={e => setFilters(f => ({ ...f, [col.name]: e.target.value || undefined }))}
+                style={{ padding:'5px 10px', borderRadius:6, border:`1px solid ${C.grayLt}`,
+                  fontSize:12, fontFamily:'Inter', color:C.text, background:C.white,
+                  cursor:'pointer', outline:'none',
+                  borderColor: filters[col.name] ? C.green : C.grayLt,
+                  fontWeight: filters[col.name] ? 600 : 400 }}>
+                <option value="">{col.name} (todos)</option>
+                {getOptions(col.idx).map(opt => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            ))}
+            {activeFilters.length > 0 && (
+              <button onClick={() => setFilters({})}
+                style={{ padding:'5px 12px', borderRadius:6, border:`1px solid ${C.red}`,
+                  fontSize:12, color:C.red, background:'transparent', cursor:'pointer',
+                  fontFamily:'Inter', fontWeight:600 }}>
+                ✕ Limpiar filtros ({activeFilters.length})
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Tabla */}
         <div style={{ overflowY:'auto', overflowX:'auto', flex:1 }}>
           {headers.length === 0 ? (
             <div style={{ textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter' }}>
               Sin datos en el archivo
+            </div>
+          ) : filteredRows.length === 0 ? (
+            <div style={{ textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter' }}>
+              No hay preguntas que coincidan con los filtros seleccionados
             </div>
           ) : (
             <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12, fontFamily:'Inter' }}>
@@ -244,7 +356,7 @@ function ModalVerExcel({ referencia, onClose }) {
                     <th key={i} style={{
                       padding:'10px 12px', textAlign:'center',
                       background: COL_COLORS[i] || '#4472C4',
-                      color: ['#FFD966'].includes(COL_COLORS[i]) ? '#1A1A2E' : 'white',
+                      color: COL_COLORS[i] === '#FFD966' ? '#1A1A2E' : 'white',
                       fontSize:11, fontWeight:700, whiteSpace:'nowrap', minWidth:110,
                       borderRight:'1px solid rgba(255,255,255,0.3)',
                       borderBottom:'2px solid rgba(0,0,0,0.15)'
@@ -255,21 +367,22 @@ function ModalVerExcel({ referencia, onClose }) {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row, ri) => (
-                  <tr key={ri} style={{ background: ri % 2 === 0 ? C.white : '#F0F4FA' }}>
+                {filteredRows.map((row, ri) => (
+                  <tr key={ri} style={{ background: ri % 2 === 0 ? C.white : '#EFF4FB' }}>
                     <td style={{ padding:'7px 12px', color:C.gray, fontSize:11,
-                      fontWeight:600, textAlign:'center', background: ri % 2 === 0 ? '#EBF0FA' : '#D6E4F0',
+                      fontWeight:600, textAlign:'center',
+                      background: ri % 2 === 0 ? '#EBF0FA' : '#D6E4F0',
                       borderRight:'1px solid #D1D5DB', borderBottom:'1px solid #E5E7EB' }}>
                       {ri + 1}
                     </td>
                     {headers.map((_, ci) => {
-                      const val = Array.isArray(row) ? row[ci] : row
+                      const val = Array.isArray(row) ? row[ci] : ''
                       return (
                         <td key={ci} style={{
                           padding:'7px 12px', color:C.text,
                           borderRight:'1px solid #E5E7EB',
                           borderBottom:'1px solid #E5E7EB',
-                          maxWidth:220, overflow:'hidden',
+                          maxWidth:260, overflow:'hidden',
                           textOverflow:'ellipsis', whiteSpace:'nowrap'
                         }} title={val !== undefined && val !== null ? String(val) : ''}>
                           {val !== undefined && val !== null && val !== '' ? String(val) : ''}
