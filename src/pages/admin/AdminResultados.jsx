@@ -27,6 +27,11 @@ const METODOS = [
     desc:'Ingresa las respuestas de un estudiante manualmente. Usa números para mayor rapidez: 0=A, 1=B, 2=C, 3=D.',
     badge:'Manual',
   },
+  {
+    id:'fotos', icon:'📷', titulo:'Fotos de hojas', sub:'Imágenes JPG o PNG — Claude Vision',
+    desc:'Sube las fotos de las hojas de respuesta. Puedes seleccionar varias imágenes a la vez. Claude Vision lee cada foto automáticamente.',
+    badge:'IA',
+  },
 ]
 
 function Card({ children, style }) {
@@ -213,6 +218,7 @@ export default function AdminResultados({ onUpdate }) {
   const [resultado, setResultado]   = useState(null)
   const [error, setError]           = useState('')
   const [cancelarRef]               = useState({ value: false })
+  const [archivos, setArchivos]     = useState([])  // múltiples imágenes
   const [manualDoc, setManualDoc]   = useState('')
   const [manualGrado, setManualGrado] = useState('')
   const [manualRespuestas, setManualRespuestas] = useState('')
@@ -240,6 +246,7 @@ export default function AdminResultados({ onUpdate }) {
     setError(''); setConfirmar(false)
     setProgreso({ actual:0, total:0, msg:'' }); cancelarRef.value = false
     setManualDoc(''); setManualGrado(''); setManualRespuestas(''); setManualPreview('')
+    setArchivos([])
   }
 
   /* ── Procesar TXT ──────────────────────────────────────── */
@@ -466,9 +473,131 @@ export default function AdminResultados({ onUpdate }) {
     finally { setProcesando(false) }
   }
 
+  /* ── Claude Vision para una imagen ───────────────────────── */
+  async function visionImagen(file) {
+    const arrayBuffer = await file.arrayBuffer()
+    const bytes = new Uint8Array(arrayBuffer)
+    let binary = ''
+    bytes.forEach(b => binary += String.fromCharCode(b))
+    const b64 = btoa(binary)
+    const mediaType = file.type === 'image/png' ? 'image/png' : 'image/jpeg'
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2000,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } },
+              { type: 'text', text: `Analiza esta foto de una hoja de respuesta de examen colombiano.
+Las burbujas marcadas son círculos negros sólidos completamente rellenos. Las opciones son A B C D.
+La hoja tiene en la cabecera: "Sesión 1" o "Sesión 2" y el campo "Usuario (No. Documento)" con el número del estudiante.
+Lee todas las preguntas en orden de arriba a abajo, izquierda a derecha.
+
+Responde SOLO este JSON sin texto adicional:` },
+            ],
+          },
+          { role: 'assistant', content: '{"usuario":' },
+        ],
+      }),
+    })
+
+    if (!res.ok) throw new Error(`Claude API ${res.status}`)
+    const data = await res.json()
+    const txt  = data.content?.find(b => b.type === 'text')?.text || ''
+    const full = '{"usuario":' + txt
+    try {
+      return JSON.parse(full.replace(/```json|```/g, '').trim())
+    } catch {
+      const fixed = full.replace(/,?\s*$/, '}')
+      return JSON.parse(fixed)
+    }
+  }
+
+  /* ── Procesar fotos con Claude Vision ─────────────────────── */
+  async function procesarFotos() {
+    setError('')
+    if (!colegioId || !pruebaId || archivos.length === 0) {
+      setError('Completa todos los campos y selecciona al menos una imagen.'); return
+    }
+    setProcesando(true); cancelarRef.value = false
+
+    try {
+      const prueba = pruebas.find(p => p.id === pruebaId)
+      const raw    = prueba?.estructura_excel?.raw
+      if (!raw || raw.length < 3) { setError('La prueba no tiene preguntas cargadas.'); return }
+
+      const clave       = raw.slice(2).map(f => (f[9]||'').toString().trim().toUpperCase())
+      const areas       = raw.slice(2).map(f => (f[2]||'').toString().trim())
+      const asignaturas = raw.slice(2).map(f => (f[3]||'').toString().trim())
+
+      const total = archivos.length
+      setProgreso({ actual:0, total, msg:`📷 ${total} imagen(es) seleccionada(s). Iniciando lectura…` })
+      await new Promise(r => setTimeout(r, 400))
+
+      const todasLasPaginas = []
+      for (let i = 0; i < archivos.length; i++) {
+        if (cancelarRef.value) break
+        const file = archivos[i]
+        setProgreso({ actual:i+1, total, msg:`🔍 Leyendo imagen ${i+1}/${total}: ${file.name}…` })
+
+        try {
+          const result = await visionImagen(file)
+          todasLasPaginas.push({
+            usuario:    result.usuario,
+            sesion:     result.sesion,
+            respuestas: result.respuestas || '',
+          })
+        } catch(e) {
+          todasLasPaginas.push({ usuario: null, sesion: null, respuestas: '', error: e.message })
+        }
+
+        if (i < archivos.length - 1) await new Promise(r => setTimeout(r, 200))
+      }
+
+      // Agrupar por estudiante
+      setProgreso({ actual:total, total, msg:'📊 Agrupando respuestas por estudiante…' })
+      const estudiantesLeidos = agruparPorEstudiante(todasLasPaginas)
+
+      // Buscar en Supabase
+      setProgreso({ actual:total, total, msg:'🔎 Buscando estudiantes en el sistema…' })
+      const documentos = estudiantesLeidos.map(e => e.documento).filter(Boolean)
+      const { data: estudiantesDB } = await supabase
+        .from('estudiantes').select('id,nombre,usuario,grado,salon,colegio_id')
+        .in('usuario', documentos).eq('colegio_id', colegioId)
+
+      const filas = estudiantesLeidos.map(e => {
+        const est  = estudiantesDB?.find(db => db.usuario === e.documento)
+        const calc = calcularResultado(e.respuestas, clave, areas, asignaturas)
+        return { documento:e.documento, respuestas:e.respuestas, encontrado:!!est,
+          estudiante:est||null, tieneS1:e.tieneS1, tieneS2:e.tieneS2, ...calc }
+      })
+
+      const ids = filas.filter(f=>f.encontrado).map(f=>f.estudiante.id)
+      let yaGuardados = []
+      if (ids.length) {
+        const { data:ex } = await supabase.from('resultados_estudiante')
+          .select('estudiante_id').in('estudiante_id', ids).eq('prueba_id', pruebaId)
+        yaGuardados = (ex||[]).map(e=>e.estudiante_id)
+      }
+
+      setProgreso({ actual:total, total, msg:`✅ Completado — ${filas.length} estudiante(s) detectados` })
+      setPreview({
+        clave, prueba, via:'fotos',
+        filas: filas.map(f=>({...f, yaGuardado:f.encontrado&&yaGuardados.includes(f.estudiante?.id)})),
+        paginasNoLeidas: todasLasPaginas.filter(p=>!p.usuario).length,
+      })
+    } catch(e) { setError('Error al procesar las fotos: ' + e.message) }
+    finally { setProcesando(false) }
+  }
+
   const metodoActivo = METODOS.find(m => m.id === metodo)
   const pruebaActiva = pruebas.find(p => p.id === pruebaId)
-  const listo        = colegioId && pruebaId && (metodo === 'manual' ? manualDoc && manualRespuestas : archivo)
+  const listo        = colegioId && pruebaId && (metodo === 'manual' ? manualDoc && manualRespuestas : metodo === 'fotos' ? archivos.length > 0 : archivo)
   const pctProgreso  = progreso.total > 0 ? Math.round((progreso.actual / progreso.total) * 100) : 0
 
   /* ── Pantalla 1 ────────────────────────────────────────── */
@@ -652,7 +781,7 @@ export default function AdminResultados({ onUpdate }) {
           )}
         </div>
 
-        {metodo !== 'manual' && (
+        {metodo !== 'manual' && metodo !== 'fotos' && (
         <div style={{ marginBottom:6 }}>
           <Label>{metodo==='optico'?'Archivo del lector óptico (.txt)':'Hojas escaneadas (.pdf)'}</Label>
           <input type="file" accept={metodoActivo.accept}
@@ -747,15 +876,46 @@ export default function AdminResultados({ onUpdate }) {
           </div>
         )}
 
+        {/* Formulario fotos */}
+        {metodo === 'fotos' && (
+          <div style={{ marginBottom:6 }}>
+            <Label>Selecciona las fotos de las hojas de respuesta</Label>
+            <input type="file" accept="image/jpeg,image/png,image/jpg" multiple
+              onChange={e => { setArchivos(Array.from(e.target.files)); setPreview(null); setError('') }}
+              style={{ width:'100%', padding:'10px 12px', borderRadius:9, fontSize:13.5,
+                border:`1px dashed ${C.grayLt}`, background:C.bg, color:C.text }} />
+            <p style={{ fontSize:12, color:C.gray, margin:'8px 0 0' }}>
+              Puedes seleccionar varias imágenes a la vez (JPG o PNG). Una imagen por hoja de respuesta.
+              Mantén presionado <strong>Cmd</strong> para seleccionar múltiples archivos.
+            </p>
+            {archivos.length > 0 && (
+              <div style={{ marginTop:10, padding:'10px 14px', background:C.bg2, borderRadius:9 }}>
+                <div style={{ fontSize:12, color:C.navy, fontWeight:700, marginBottom:6 }}>
+                  📷 {archivos.length} imagen(es) seleccionada(s):
+                </div>
+                <div style={{ maxHeight:120, overflowY:'auto' }}>
+                  {archivos.map((f,i) => (
+                    <div key={i} style={{ display:'flex', justifyContent:'space-between',
+                      fontSize:12, color:C.text, padding:'2px 0', borderBottom:`1px solid ${C.bg2}` }}>
+                      <span>📄 {f.name}</span>
+                      <span style={{ color:C.gray }}>{(f.size/1024).toFixed(0)} KB</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <div style={{ marginTop:24, borderTop:`1px solid ${C.bg2}`, paddingTop:20 }}>
-          <button disabled={!listo||procesando} onClick={metodo==='optico'?procesarTXT:metodo==='pdf'?procesarPDF:procesarManual}
+          <button disabled={!listo||procesando} onClick={metodo==='optico'?procesarTXT:metodo==='pdf'?procesarPDF:metodo==='fotos'?procesarFotos:procesarManual}
             style={{ width:'100%', padding:'13px', borderRadius:10, fontSize:15, fontWeight:700,
               border:'none', cursor:listo&&!procesando?'pointer':'not-allowed',
               background:listo&&!procesando?C.green:C.grayLt,
               color:listo&&!procesando?C.white:C.gray }}>
             {procesando
-              ? (metodo==='pdf'?`Procesando lote ${progreso.actual}/${progreso.total}…`:'Procesando…')
-              : (metodo==='pdf'?'Procesar hojas con Claude Vision':'Procesar archivo')}
+              ? (metodo==='pdf'?`Procesando lote ${progreso.actual}/${progreso.total}…`:metodo==='fotos'?`Procesando imagen ${progreso.actual}/${progreso.total}…`:'Procesando…')
+              : (metodo==='pdf'?'Procesar hojas con Claude Vision':metodo==='fotos'?'Procesar fotos con Claude Vision':'Procesar archivo')}
           </button>
         </div>
       </Card>
