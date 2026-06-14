@@ -662,7 +662,7 @@ export default function AdminResultados({ onUpdate }) {
           <div>
             <div style={{ marginBottom:18 }}>
               <Label>Grado</Label>
-              <select style={selectStyle} value={manualGrado} onChange={async e => {
+              <select key={`grado-${gradosDisp.join(',')}`} style={selectStyle} value={manualGrado} onChange={async e => {
                 setManualGrado(e.target.value); setManualEstId(''); setManualDoc(''); setEstDisp([])
                 if (e.target.value && colegioId) {
                   const { data } = await supabase.from('estudiantes')
