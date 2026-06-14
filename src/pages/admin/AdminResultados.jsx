@@ -255,9 +255,12 @@ export default function AdminResultados({ onUpdate }) {
   useEffect(() => {
     if (metodo === 'manual' && colegioId) {
       supabase.from('estudiantes')
-        .select('grado').eq('colegio_id', colegioId).eq('estado', 'Activo')
-        .then(({ data }) => {
+        .select('grado, estado')
+        .eq('colegio_id', colegioId)
+        .then(({ data, error }) => {
+          console.log('Estudiantes raw:', data, 'error:', error)
           const grados = [...new Set((data||[]).map(e => e.grado).filter(Boolean))].sort()
+          console.log('Grados encontrados:', grados)
           setGradosDisp(grados)
         })
     }
