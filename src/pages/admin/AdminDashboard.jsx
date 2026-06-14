@@ -60,21 +60,6 @@ export default function AdminDashboard({ session, onLogout }) {
             letterSpacing:'0.12em', textTransform:'uppercase' }}>Panel Administrador</div>
         </div>
 
-        {/* Stats rápidas */}
-        <div style={{ padding:'16px', borderBottom:'1px solid rgba(255,255,255,0.08)' }}>
-          {[
-            { label:'Colegios', val:stats.colegios },
-            { label:'Estudiantes', val:stats.estudiantes },
-            { label:'Pruebas', val:stats.pruebas },
-          ].map((s,i) => (
-            <div key={i} style={{ display:'flex', justifyContent:'space-between',
-              marginBottom:6, fontFamily:'Inter' }}>
-              <span style={{ fontSize:11, color:'rgba(255,255,255,0.45)' }}>{s.label}</span>
-              <span style={{ fontSize:12, color:C.white, fontWeight:600 }}>{s.val}</span>
-            </div>
-          ))}
-        </div>
-
         {/* Menú */}
         <nav style={{ flex:1, padding:'12px' }}>
           <div style={{ fontSize:9, color:'rgba(255,255,255,0.35)', fontFamily:'Inter',
