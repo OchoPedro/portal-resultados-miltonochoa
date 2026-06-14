@@ -582,11 +582,12 @@ export default function AdminResultados({ onUpdate }) {
           <select style={selectStyle} value={colegioId} onChange={async e => {
             const cid = e.target.value
             setColegioId(cid); resetForm()
-            if (cid && metodo === 'manual') {
+            if (cid) {
               const { data } = await supabase.from('estudiantes')
                 .select('grado').eq('colegio_id', cid).eq('activo', true)
               const unicos = [...new Set((data||[]).map(r => r.grado).filter(Boolean))]
               unicos.sort((a,b) => String(a).localeCompare(String(b), undefined, {numeric:true}))
+              console.log('Grados cargados para colegio:', unicos)
               setGradosDisp(unicos)
             }
           }} disabled={cargando}>
