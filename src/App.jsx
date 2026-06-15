@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { setSupabaseToken, clearSupabaseToken } from './lib/supabase'
 import Login from './pages/Login'
 import EstudianteDashboard from './pages/EstudianteDashboard'
 import ColegioDashboard from './pages/ColegioDashboard'
@@ -25,7 +26,7 @@ export default function App() {
       const claims = decodeJWT(token)
       // Si el token expiró, borrar y pedir login de nuevo
       if (claims && claims.exp && claims.exp * 1000 > Date.now()) {
-        // La sesión de visualización se guarda también para no perder el data del usuario
+        setSupabaseToken(token)
         try {
           const saved = sessionStorage.getItem('mo_session')
           if (saved) setSession(JSON.parse(saved))
@@ -47,6 +48,7 @@ export default function App() {
   }
 
   const handleLogout = () => {
+    clearSupabaseToken()
     sessionStorage.removeItem('mo_token')
     sessionStorage.removeItem('mo_session')
     window.location.href = 'https://miltonochoa-web.vercel.app'

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { setSupabaseToken } from '../lib/supabase'
 import { C } from '../components/ui'
 
 const REDIRECT_HOME = 'https://miltonochoa-web.vercel.app'
@@ -38,8 +39,8 @@ export default function Login({ onLogin }) {
 
       const { token, user } = await res.json()
 
-      // Guardar el JWT firmado por el servidor (no un JSON plano manipulable)
       sessionStorage.setItem('mo_token', token)
+      setSupabaseToken(token)
 
       onLogin(user)
     } catch (e) {
