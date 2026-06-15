@@ -19,7 +19,7 @@ async function verifyAdmin(req) {
   const token = auth.replace('Bearer ', '')
   if (!token) return false
   try {
-    const secret = Buffer.from(process.env.SUPABASE_JWT_SECRET, 'base64')
+    const secret = new TextEncoder().encode(process.env.SUPABASE_JWT_SECRET)
     const { payload } = await jwtVerify(token, secret)
     return payload.app_role === 'admin'
   } catch { return false }

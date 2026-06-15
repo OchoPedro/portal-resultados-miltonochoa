@@ -61,8 +61,7 @@ export default async function handler(req, res) {
   if (!usuario || !password)
     return res.status(400).json({ error: 'Faltan credenciales' })
 
-  // Supabase almacena el JWT secret como base64url — hay que decodificarlo para HMAC
-  const jwtSecret = Buffer.from(process.env.SUPABASE_JWT_SECRET, 'base64')
+  const jwtSecret = new TextEncoder().encode(process.env.SUPABASE_JWT_SECRET)
 
   try {
     // ── Paso 1: validar credenciales ────────────────────────────────────────
