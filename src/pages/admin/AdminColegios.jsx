@@ -292,10 +292,17 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
     setLoading(true)
     const { data } = await supabase.from('estudiantes')
       .select('*').eq('colegio_id', colegio.id)
-      .order('grado',  { ascending: true, nullsFirst: false })
       .order('salon',  { ascending: true, nullsFirst: false })
       .order('nombre', { ascending: true })
-    setEstudiantes(data || [])
+    const sorted = (data || []).sort((a, b) => {
+      const gA = parseInt(a.grado) || 0
+      const gB = parseInt(b.grado) || 0
+      if (gA !== gB) return gA - gB
+      const sA = String(a.salon || '').localeCompare(String(b.salon || ''), undefined, { numeric: true })
+      if (sA !== 0) return sA
+      return (a.nombre || '').localeCompare(b.nombre || '')
+    })
+    setEstudiantes(sorted)
     setLoading(false)
   }
 
