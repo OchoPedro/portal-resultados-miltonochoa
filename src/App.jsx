@@ -4,26 +4,50 @@ import EstudianteDashboard from './pages/EstudianteDashboard'
 import ColegioDashboard from './pages/ColegioDashboard'
 import AdminDashboard from './pages/admin/AdminDashboard'
 
+// Decodifica el payload del JWT sin verificar la firma (solo para lectura de claims).
+// La firma la valida Supabase en cada petición — aquí solo necesitamos saber el rol.
+function decodeJWT(token) {
+  try {
+    const [, payload] = token.split('.')
+    const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'))
+    return JSON.parse(json)
+  } catch { return null }
+}
+
 export default function App() {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  // Restaurar sesión al refrescar
+  // Restaurar sesión desde el JWT firmado por el servidor
   useEffect(() => {
-    try {
-      const saved = sessionStorage.getItem('mo_session')
-      if (saved) setSession(JSON.parse(saved))
-    } catch(e) {}
+    const token = sessionStorage.getItem('mo_token')
+    if (token) {
+      const claims = decodeJWT(token)
+      // Si el token expiró, borrar y pedir login de nuevo
+      if (claims && claims.exp && claims.exp * 1000 > Date.now()) {
+        // La sesión de visualización se guarda también para no perder el data del usuario
+        try {
+          const saved = sessionStorage.getItem('mo_session')
+          if (saved) setSession(JSON.parse(saved))
+        } catch(e) {}
+      } else {
+        // Token expirado → limpiar
+        sessionStorage.removeItem('mo_token')
+        sessionStorage.removeItem('mo_session')
+      }
+    }
     setLoading(false)
   }, [])
 
   const handleLogin = ({ role, data }) => {
     const s = { role, data }
     setSession(s)
+    // mo_token ya fue guardado por Login.jsx al recibir el JWT del servidor
     sessionStorage.setItem('mo_session', JSON.stringify(s))
   }
 
   const handleLogout = () => {
+    sessionStorage.removeItem('mo_token')
     sessionStorage.removeItem('mo_session')
     window.location.href = 'https://miltonochoa-web.vercel.app'
   }

@@ -1,20 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
 import { C } from '../components/ui'
-
-// S-3: Rate limiter en memoria (se resetea al recargar)
-const _attempts = {}
-function _blocked(u) {
-  const r = _attempts[u]; if (!r) return 0
-  return r.until > Date.now() ? Math.ceil((r.until - Date.now()) / 1000) : 0
-}
-function _fail(u) {
-  const r = _attempts[u] || { n: 0, until: 0 }
-  r.n = (r.n || 0) + 1
-  if (r.n >= 5) { r.until = Date.now() + 5 * 60 * 1000; r.n = 0 }
-  _attempts[u] = r
-}
-function _ok(u) { delete _attempts[u] }
 
 const REDIRECT_HOME = 'https://miltonochoa-web.vercel.app'
 
@@ -25,84 +10,38 @@ export default function Login({ onLogin }) {
   const [error, setError] = useState('')
 
   const doLogin = useCallback(async (u, p, autoLogin = false) => {
-    // S-3: Bloquear si hay demasiados intentos fallidos
-    const secs = _blocked(u.trim())
-    if (secs) {
-      setError(`Demasiados intentos fallidos. Espera ${secs} segundos.`)
-      return
-    }
-
     setLoading(true)
     setError('')
 
-    const wrongCreds = () => {
-      _fail(u.trim())
-      if (autoLogin) { window.location.href = REDIRECT_HOME; return true }
-      setError('Credenciales incorrectas. Redirigiendo...')  // S-7: mensaje unificado
-      setTimeout(() => { window.location.href = REDIRECT_HOME }, 2000)
+    const wrongCreds = (msg = 'Credenciales incorrectas.') => {
+      if (autoLogin) { window.location.href = REDIRECT_HOME; return }
+      setError(msg)
       setLoading(false)
-      return true
     }
 
     try {
-      // S-1: Intentar login seguro vía RPC (activo después de ejecutar supabase-security.sql)
-      const { data: rpc, error: rpcErr } = await supabase.rpc('verificar_login', {
-        p_usuario: u.trim(), p_password: p,
+      // Login a través del servidor — las credenciales nunca se validan en el cliente
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usuario: u.trim(), password: p }),
       })
-      if (!rpcErr) {
-        if (rpc) { _ok(u.trim()); onLogin(rpc); return }
-        wrongCreds(); return
-      }
-      // PGRST202 = función no encontrada → usar modo legado hasta ejecutar la migración SQL
-      if (rpcErr.code !== 'PGRST202') throw rpcErr
 
-      // ── Modo legado ────────────────────────────────────────────────
-      const { data: admin } = await supabase
-        .from('administradores')
-        .select('id, nombre, usuario, password_hash, activo, ultima_sesion, modulos')
-        .eq('usuario', u.trim()).eq('activo', true).single()
-      if (admin) {
-        if (admin.password_hash !== p) { wrongCreds(); return }
-        await supabase.from('administradores').update({
-          ultima_sesion: new Date().toLocaleString('sv-SE', { timeZone: 'America/Bogota' }).replace(' ', 'T'),
-        }).eq('id', admin.id)
-        const { password_hash: _, ...safeAdmin } = admin  // S-5: nunca guardar la contraseña en sesión
-        _ok(u.trim())
-        onLogin({ role: 'admin', data: safeAdmin })
+      if (res.status === 429) {
+        wrongCreds('Demasiados intentos fallidos. Espera 15 minutos.')
+        return
+      }
+      if (!res.ok) {
+        wrongCreds('Credenciales incorrectas.')
         return
       }
 
-      const { data: colegio } = await supabase
-        .from('colegios')
-        .select('id, nombre, usuario, password_hash, activo, ciudad, municipio, departamento_nombre, contactos, ultima_sesion')
-        .eq('usuario', u.trim()).eq('activo', true).single()
-      if (colegio) {
-        if (colegio.password_hash !== p) { wrongCreds(); return }
-        await supabase.from('colegios').update({
-          ultima_sesion: new Date().toLocaleString('sv-SE', { timeZone: 'America/Bogota' }).replace(' ', 'T'),
-        }).eq('id', colegio.id)
-        const { password_hash: _, ...safeColegio } = colegio  // S-5
-        _ok(u.trim())
-        onLogin({ role: 'colegio', data: safeColegio })
-        return
-      }
+      const { token, user } = await res.json()
 
-      const { data: estudiante } = await supabase
-        .from('estudiantes')
-        .select('id, nombre, usuario, password_hash, activo, grado, salon, colegio_id, ultima_sesion, colegios(nombre, ciudad)')
-        .eq('usuario', u.trim()).eq('activo', true).single()
-      if (estudiante) {
-        if (estudiante.password_hash !== p) { wrongCreds(); return }
-        await supabase.from('estudiantes').update({
-          ultima_sesion: new Date().toLocaleString('sv-SE', { timeZone: 'America/Bogota' }).replace(' ', 'T'),
-        }).eq('id', estudiante.id)
-        const { password_hash: _, ...safeEst } = estudiante  // S-5
-        _ok(u.trim())
-        onLogin({ role: 'estudiante', data: safeEst })
-        return
-      }
+      // Guardar el JWT firmado por el servidor (no un JSON plano manipulable)
+      sessionStorage.setItem('mo_token', token)
 
-      wrongCreds()  // S-7: mismo mensaje si el usuario no existe
+      onLogin(user)
     } catch (e) {
       setError('Error de conexión. Intenta de nuevo.')
     } finally {
