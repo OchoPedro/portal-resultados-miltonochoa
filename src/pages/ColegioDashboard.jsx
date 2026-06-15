@@ -591,6 +591,8 @@ export default function ColegioDashboard({session, onLogout}) {
   const [tableroSalon, setTableroSalon] = useState([])
   const [competencias, setCompetencias] = useState([])
   const [oportunidades, setOportunidades] = useState([])
+  const [detallePreguntas, setDetallePreguntas] = useState([])
+  const [allPruebasPromedio, setAllPruebasPromedio] = useState([])
 
   useEffect(() => { loadAll() }, [])
 
@@ -635,6 +637,35 @@ export default function ColegioDashboard({session, onLogout}) {
       setSelectedPrueba(primera)
       setPrueba(primera)
       await loadForPrueba(primera)
+
+      // Notas Acumuladas — promedios por prueba para línea de tiempo
+      const { data: todosRes } = await supabase
+        .from('resultados_estudiante')
+        .select('prueba_id, puntaje_global, mat_cuantitativo, mat_especifico, cn_quimica, cn_fisica, cn_biologia, cn_cts, sociales, ciudadanas, lectura_critica, ingles')
+        .eq('colegio_id', session.id)
+      if (todosRes && pruebasData?.length) {
+        const byPrueba = {}
+        todosRes.forEach(r => {
+          if (!byPrueba[r.prueba_id]) byPrueba[r.prueba_id] = []
+          byPrueba[r.prueba_id].push(r)
+        })
+        const promedios = [...pruebasData].reverse().map(p => {
+          const arr = byPrueba[p.id] || []
+          if (!arr.length) return null
+          return {
+            label: p.codigo || p.nombre,
+            prueba: p,
+            global: Math.round(avgArr(arr.map(r=>r.puntaje_global).filter(Boolean))),
+            mat:    Math.round(avgArr(arr.flatMap(r=>[r.mat_cuantitativo,r.mat_especifico]).filter(Boolean))),
+            cn:     Math.round(avgArr(arr.flatMap(r=>[r.cn_quimica,r.cn_fisica,r.cn_biologia,r.cn_cts]).filter(Boolean))),
+            soc:    Math.round(avgArr(arr.flatMap(r=>[(r.sociales||0),(r.ciudadanas||0)]).filter(Boolean))),
+            lc:     Math.round(avgArr(arr.map(r=>r.lectura_critica).filter(Boolean))),
+            ing:    Math.round(avgArr(arr.map(r=>r.ingles).filter(Boolean))),
+            n: arr.length,
+          }
+        }).filter(Boolean)
+        setAllPruebasPromedio(promedios)
+      }
 
     } catch(e) {
       console.error(e)
@@ -696,6 +727,13 @@ export default function ColegioDashboard({session, onLogout}) {
         .eq('colegio_id', cid).eq('prueba_id', pid)
         .eq('oportunidad_mejora', true).order('pct_colegio')
       setOportunidades(opor || [])
+
+      // Detalle Prueba — todas las preguntas
+      const { data: detalle } = await supabase
+        .from('analisis_preguntas').select('*')
+        .eq('colegio_id', cid).eq('prueba_id', pid)
+        .order('sesion').order('nro_pregunta')
+      setDetallePreguntas(detalle || [])
 
     } catch(e) {
       console.error(e)
@@ -792,13 +830,16 @@ export default function ColegioDashboard({session, onLogout}) {
   const tableroLabels = {mejores:'Mejores Promedios', nacional:'Nacional', ciudad:'Ciudad', plantel:'Plantel'}
 
   const tabs = [
-    {id:'tablero',      label:'Tablero de Gestión'},
-    {id:'areas',        label:'Análisis por Áreas'},
-    {id:'niveles',      label:'% por Nivel'},
-    {id:'desviacion',   label:'Desviación'},
-    {id:'competencias', label:'Competencias'},
-    {id:'mejora',       label:'Oportunidades'},
-    {id:'ranking',      label:'Ranking'},
+    {id:'tablero',         label:'Tablero de Gestión'},
+    {id:'areas',           label:'Análisis por Áreas'},
+    {id:'niveles',         label:'% por Nivel'},
+    {id:'desviacion',      label:'Desviación'},
+    {id:'competencias',    label:'Competencias'},
+    {id:'mejora',          label:'Oportunidades'},
+    {id:'detalle_prueba',  label:'Detalle Prueba'},
+    {id:'ranking',         label:'Ranking'},
+    {id:'listado_notas',   label:'Listado de Notas'},
+    {id:'notas_acumuladas',label:'Notas Acumuladas'},
   ]
 
   if (loading) return (
@@ -853,13 +894,16 @@ export default function ColegioDashboard({session, onLogout}) {
             {
               id: 'herramientas', label: 'Herramientas', icon: '🛠️',
               items: [
-                {id:'tablero',      label:'Tablero de Gestión'},
-                {id:'areas',        label:'Análisis por Áreas'},
-                {id:'niveles',      label:'% por Nivel'},
-                {id:'desviacion',   label:'Desviación'},
-                {id:'competencias', label:'Competencias'},
-                {id:'mejora',       label:'Oportunidades'},
-                {id:'ranking',      label:'Ranking'},
+                {id:'tablero',         label:'Tablero de Gestión'},
+                {id:'areas',           label:'Análisis por Áreas'},
+                {id:'niveles',         label:'% por Nivel'},
+                {id:'desviacion',      label:'Desviación'},
+                {id:'competencias',    label:'Competencias'},
+                {id:'mejora',          label:'Oportunidades'},
+                {id:'detalle_prueba',  label:'Detalle Prueba'},
+                {id:'ranking',         label:'Ranking'},
+                {id:'listado_notas',   label:'Listado de Notas'},
+                {id:'notas_acumuladas',label:'Notas Acumuladas'},
               ],
               filters: true,
             },
@@ -977,7 +1021,7 @@ export default function ColegioDashboard({session, onLogout}) {
               timeZone:'America/Bogota'
             })}
           </div>
-          {['tablero','areas','niveles','desviacion','competencias','mejora','ranking'].includes(tab) && (
+          {['tablero','areas','niveles','desviacion','competencias','mejora','detalle_prueba','ranking','listado_notas','notas_acumuladas'].includes(tab) && (
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:12}}>
               <div>
                 <h1 style={{fontSize:26, fontFamily:'Playfair Display, serif', color:C.navy, marginBottom:4}}>
@@ -992,7 +1036,7 @@ export default function ColegioDashboard({session, onLogout}) {
         </div>
 
         {/* KPIs — solo para herramientas */}
-        {['tablero','areas','niveles','desviacion','competencias','mejora','ranking'].includes(tab) && (
+        {['tablero','areas','niveles','desviacion','competencias','mejora','detalle_prueba','ranking','listado_notas','notas_acumuladas'].includes(tab) && (
         <div style={{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:28}}>
           <KpiCard label="Prom. Global" value={promGlobal||'—'} sub={`Prueba ${prueba?.codigo||'—'}`} color={C.navy}/>
           <KpiCard label="Estudiantes" value={students.length||'—'} sub="Evaluados" color={C.navy}/>
@@ -1002,7 +1046,7 @@ export default function ColegioDashboard({session, onLogout}) {
         </div>
         )}
 
-        {['tablero','areas','niveles','desviacion','competencias','mejora','ranking'].includes(tab) && (
+        {['tablero','areas','niveles','desviacion','competencias','mejora','detalle_prueba','ranking','listado_notas','notas_acumuladas'].includes(tab) && (
           <TabBar tabs={tabs} active={tab} onChange={setTab}/>
         )}
 
@@ -1407,6 +1451,203 @@ export default function ColegioDashboard({session, onLogout}) {
             </div>
           </Card>
         )}
+        {/* ══ DETALLE PRUEBA ════════════════════════════════════ */}
+        {tab==='detalle_prueba' && (
+          students.length === 0 ? <EmptyState/> :
+          <Card>
+            <CardTitle sub={`${detallePreguntas.length} preguntas — ${prueba?.codigo||'—'}`}>
+              Detalle de la Prueba por Pregunta
+            </CardTitle>
+            {detallePreguntas.length === 0 ? (
+              <EmptyState msg="No hay análisis de preguntas cargado para esta prueba."/>
+            ) : (
+              <div style={{overflowX:'auto'}}>
+                <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter'}}>
+                  <thead>
+                    <tr style={{background:C.navy}}>
+                      {['Ses.','Nro','Materia','Componente','% Colegio','% Nac.','Brecha','Nivel','Mejora'].map(h => (
+                        <th key={h} style={{padding:'8px 10px', fontSize:11, color:C.white,
+                          fontWeight:600, textAlign:'center', whiteSpace:'nowrap'}}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detallePreguntas.map((q,i) => {
+                      const brecha = (q.pct_colegio||0) - (q.pct_nacional||0)
+                      return (
+                        <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`,
+                          background: q.oportunidad_mejora ? `${C.red}08` : i%2===0?`${C.bg}60`:'transparent'}}>
+                          <td style={{padding:'8px 10px', textAlign:'center', fontSize:12, color:C.gray}}>{q.sesion}</td>
+                          <td style={{padding:'8px 10px', textAlign:'center', fontSize:14, fontWeight:700,
+                            color:C.navy, fontFamily:'Playfair Display, serif'}}>{q.nro_pregunta}</td>
+                          <td style={{padding:'8px 10px', fontSize:12, color:C.text, fontWeight:500}}>{q.materia}</td>
+                          <td style={{padding:'8px 10px', fontSize:11, color:C.gray}}>{q.componente}</td>
+                          <td style={{padding:'8px 10px', textAlign:'center'}}>
+                            <Badge color={semaforoColor(q.pct_colegio)}>{q.pct_colegio}%</Badge>
+                          </td>
+                          <td style={{padding:'8px 10px', textAlign:'center', fontSize:12, color:C.gray}}>{q.pct_nacional}%</td>
+                          <td style={{padding:'8px 10px', textAlign:'center'}}>
+                            <Badge color={brecha<0?C.red:C.green}>{brecha>=0?'+':''}{brecha}%</Badge>
+                          </td>
+                          <td style={{padding:'8px 10px', textAlign:'center'}}>
+                            <Badge color={q.dificultad==='Superior'?C.red:q.dificultad==='Alto'?'#F59E0B':q.dificultad==='Básico'?C.blue:C.green}>
+                              {q.dificultad||'—'}
+                            </Badge>
+                          </td>
+                          <td style={{padding:'8px 10px', textAlign:'center', fontSize:13}}>
+                            {q.oportunidad_mejora ? '⚠️' : ''}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+                <div style={{marginTop:12, display:'flex', gap:16, flexWrap:'wrap'}}>
+                  <div style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>
+                    ⚠️ = Oportunidad de mejora &nbsp;|&nbsp;
+                    Brecha positiva = mejor que el nacional &nbsp;|&nbsp;
+                    Brecha negativa = por debajo del nacional
+                  </div>
+                </div>
+              </div>
+            )}
+          </Card>
+        )}
+
+        {/* ══ LISTADO DE NOTAS ═══════════════════════════════════ */}
+        {tab==='listado_notas' && (
+          students.length === 0 ? <EmptyState/> :
+          <Card>
+            <CardTitle sub={`${students.length} estudiantes evaluados — ordenados por grado y salón`}>
+              Listado de Notas por Estudiante
+            </CardTitle>
+            <div style={{overflowX:'auto'}}>
+              <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter'}}>
+                <thead>
+                  <tr style={{background:C.navy}}>
+                    {['#','Estudiante','Gdo','Slón','Global','Def%','Mat.C','Mat.E','Quím.','Fís.','Bio.','CTS','Soc.','Ciud.','L.Crít.','Inglés'].map(h => (
+                      <th key={h} style={{padding:'8px 10px', fontSize:10, color:C.white,
+                        fontWeight:600, textAlign:'center', whiteSpace:'nowrap'}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...students]
+                    .sort((a,b) => {
+                      const gA = a.estudiantes?.grado||'', gB = b.estudiantes?.grado||''
+                      if (gA !== gB) return gA.localeCompare(gB)
+                      const sA = a.estudiantes?.salon||'', sB = b.estudiantes?.salon||''
+                      if (sA !== sB) return sA.localeCompare(sB)
+                      return (a.estudiantes?.nombre||'').localeCompare(b.estudiantes?.nombre||'')
+                    })
+                    .map((s,i) => (
+                    <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`,
+                      background:i%2===0?`${C.bg}60`:'transparent'}}>
+                      <td style={{padding:'7px 10px', textAlign:'center', fontSize:11, color:C.grayLt}}>{i+1}</td>
+                      <td style={{padding:'7px 10px', fontSize:11, color:C.text, fontWeight:500}}>
+                        {s.estudiantes?.nombre?.split(' ').slice(0,3).join(' ')}
+                      </td>
+                      <td style={{padding:'7px 10px', textAlign:'center', fontSize:11, color:C.gray}}>{s.estudiantes?.grado}</td>
+                      <td style={{padding:'7px 10px', textAlign:'center', fontSize:11, color:C.gray}}>{s.estudiantes?.salon}</td>
+                      <td style={{padding:'7px 10px', textAlign:'center'}}>
+                        <span style={{fontSize:14, fontWeight:700, color:C.navy,
+                          fontFamily:'Playfair Display, serif'}}>{s.puntaje_global}</span>
+                      </td>
+                      <td style={{padding:'7px 10px', textAlign:'center'}}>
+                        <Badge color={semaforoColor(s.desempeno_pct)}>{s.desempeno_pct?.toFixed(1)}%</Badge>
+                      </td>
+                      {[s.mat_cuantitativo,s.mat_especifico,s.cn_quimica,s.cn_fisica,
+                        s.cn_biologia,s.cn_cts,s.sociales,s.ciudadanas,s.lectura_critica,s.ingles].map((v,j) => (
+                        <td key={j} style={{padding:'7px 10px', textAlign:'center', fontSize:11,
+                          color:semaforoColor(v||0), fontWeight:(v||0)>=65?600:400,
+                          background:semaforoBg(v||0) + '60'}}>
+                          {v?.toFixed(0)||'—'}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <LeyendaNiveles/>
+          </Card>
+        )}
+
+        {/* ══ NOTAS ACUMULADAS ═══════════════════════════════════ */}
+        {tab==='notas_acumuladas' && (
+          <div style={{display:'grid', gap:16}}>
+            {allPruebasPromedio.length === 0 ? (
+              <Card><EmptyState msg="No hay datos acumulados de pruebas anteriores."/></Card>
+            ) : (
+              <>
+                <Card>
+                  <CardTitle sub="Evolución del promedio global a través de las pruebas">
+                    Notas Acumuladas por Prueba
+                  </CardTitle>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={allPruebasPromedio} margin={{top:10, right:20, bottom:0, left:-20}}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={C.bg2}/>
+                      <XAxis dataKey="label" tick={{fontSize:10, fontFamily:'Inter', fill:C.gray}}/>
+                      <YAxis tick={{fontSize:10, fontFamily:'Inter', fill:C.gray}} domain={[0,110]}/>
+                      <Tooltip contentStyle={{fontFamily:'Inter', fontSize:12, borderRadius:8}}/>
+                      <Legend wrapperStyle={{fontFamily:'Inter', fontSize:11}}/>
+                      <Bar dataKey="mat" name="Matemáticas" fill="#3B82F6" radius={[3,3,0,0]}/>
+                      <Bar dataKey="cn"  name="Cs. Naturales" fill="#10B981" radius={[3,3,0,0]}/>
+                      <Bar dataKey="soc" name="Soc/Ciudad." fill="#8B5CF6" radius={[3,3,0,0]}/>
+                      <Bar dataKey="lc"  name="Lect. Crítica" fill="#F59E0B" radius={[3,3,0,0]}/>
+                      <Bar dataKey="ing" name="Inglés" fill="#EF4444" radius={[3,3,0,0]}/>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </Card>
+                <Card>
+                  <CardTitle sub="Tabla de promedios acumulados por área y prueba">
+                    Tabla de Notas Acumuladas
+                  </CardTitle>
+                  <div style={{overflowX:'auto'}}>
+                    <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter'}}>
+                      <thead>
+                        <tr style={{background:C.navy}}>
+                          {['Prueba','Global','Matemáticas','Cs. Naturales','Soc/Ciudad.','Lect. Crítica','Inglés','Estud.'].map(h => (
+                            <th key={h} style={{padding:'10px 14px', fontSize:11, color:C.white,
+                              fontWeight:600, textAlign:'center', whiteSpace:'nowrap'}}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {allPruebasPromedio.map((row,i) => (
+                          <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`,
+                            background: row.prueba?.id === prueba?.id ? `${C.navy}08` : i%2===0?`${C.bg}60`:'transparent',
+                            fontWeight: row.prueba?.id === prueba?.id ? 600 : 400}}>
+                            <td style={{padding:'10px 14px', fontSize:13, color:C.navy, fontWeight:600}}>
+                              {row.label}
+                              {row.prueba?.id === prueba?.id && (
+                                <span style={{fontSize:9, color:C.green, marginLeft:6, fontWeight:400}}>actual</span>
+                              )}
+                            </td>
+                            <td style={{padding:'10px 14px', textAlign:'center'}}>
+                              <span style={{fontSize:15, fontWeight:700, color:C.navy,
+                                fontFamily:'Playfair Display, serif'}}>{row.global}</span>
+                            </td>
+                            {[row.mat, row.cn, row.soc, row.lc, row.ing].map((v,j) => (
+                              <td key={j} style={{padding:'10px 14px', textAlign:'center'}}>
+                                <div style={{display:'inline-block', background:semaforoBg(v||0),
+                                  color:semaforoColor(v||0), padding:'3px 10px',
+                                  borderRadius:5, fontWeight:700, fontSize:13}}>{v||'—'}</div>
+                              </td>
+                            ))}
+                            <td style={{padding:'10px 14px', textAlign:'center', fontSize:12, color:C.gray}}>{row.n}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <LeyendaNiveles/>
+                </Card>
+              </>
+            )}
+          </div>
+        )}
+
         {/* ══ CARTA DE BIENVENIDA ══════════════════════════════ */}
         {tab==='carta' && (
           <div style={{display:'grid', gap:20}}>
