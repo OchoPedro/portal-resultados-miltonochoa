@@ -10,6 +10,8 @@ export default function Login({ onLogin }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  const isAdminPortal = window.location.pathname.startsWith('/aamo-admin')
+
   const doLogin = useCallback(async (u, p, autoLogin = false) => {
     setLoading(true)
     setError('')
@@ -21,15 +23,19 @@ export default function Login({ onLogin }) {
     }
 
     try {
-      // Login a través del servidor — las credenciales nunca se validan en el cliente
+      const portal = window.location.pathname.startsWith('/aamo-admin') ? 'admin' : 'public'
       const res = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ usuario: u.trim(), password: p }),
+        body: JSON.stringify({ usuario: u.trim(), password: p, portal }),
       })
 
       if (res.status === 429) {
         wrongCreds('Demasiados intentos fallidos. Espera 15 minutos.')
+        return
+      }
+      if (res.status === 403) {
+        wrongCreds('Acceso no autorizado en este portal.')
         return
       }
       if (!res.ok) {
@@ -91,15 +97,20 @@ export default function Login({ onLogin }) {
           <div style={{ fontSize: 28, fontFamily: 'Playfair Display, serif',
             color: C.white, fontWeight: 400, marginBottom: 6 }}>Milton Ochoa</div>
           <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontFamily: 'Inter',
-            letterSpacing: '0.15em', textTransform: 'uppercase' }}>Portal de Resultados</div>
+            letterSpacing: '0.15em', textTransform: 'uppercase' }}>
+            {isAdminPortal ? 'Panel Administrativo' : 'Portal de Resultados'}
+          </div>
         </div>
 
         <div style={{ background: C.white, borderRadius: 12, padding: 40,
-          boxShadow: '0 20px 60px rgba(0,0,0,0.3)', borderTop: '3px solid #2D9B6F' }}>
+          boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+          borderTop: `3px solid ${isAdminPortal ? '#1D4ED8' : '#2D9B6F'}` }}>
           <div style={{ fontSize: 20, fontFamily: 'Playfair Display, serif',
-            color: C.navy, marginBottom: 6 }}>Bienvenido</div>
+            color: C.navy, marginBottom: 6 }}>
+            {isAdminPortal ? 'Acceso Administrador' : 'Bienvenido'}
+          </div>
           <div style={{ fontSize: 12, color: C.gray, fontFamily: 'Inter', marginBottom: 28 }}>
-            Ingresa tus credenciales para continuar
+            {isAdminPortal ? 'Solo personal autorizado de AAMO' : 'Ingresa tus credenciales para continuar'}
           </div>
 
           <form onSubmit={handleLogin}>

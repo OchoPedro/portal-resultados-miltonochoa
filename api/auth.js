@@ -57,7 +57,7 @@ export default async function handler(req, res) {
   if (_srvBlocked(ip))
     return res.status(429).json({ error: 'Demasiados intentos. Espera 15 minutos.' })
 
-  const { usuario, password } = req.body || {}
+  const { usuario, password, portal } = req.body || {}
   if (!usuario || !password)
     return res.status(400).json({ error: 'Faltan credenciales' })
 
@@ -116,6 +116,12 @@ export default async function handler(req, res) {
       _srvFail(ip)
       return res.status(401).json({ error: 'Credenciales incorrectas' })
     }
+
+    // Validar que el portal coincida con el rol
+    if (portal === 'admin' && userResult.role !== 'admin')
+      return res.status(403).json({ error: 'Acceso no autorizado' })
+    if (portal !== 'admin' && userResult.role === 'admin')
+      return res.status(403).json({ error: 'Acceso no autorizado' })
 
     // ── Paso 2: actualizar última sesión ────────────────────────────────────
 
