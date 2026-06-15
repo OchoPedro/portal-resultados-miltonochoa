@@ -276,7 +276,15 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
   const [msg, setMsg] = useState('')
   const [editando, setEditando] = useState(null)
   const [editForm, setEditForm] = useState({})
+  const [copiadoEst, setCopiadoEst] = useState(null)
   const fileRef = useRef()
+
+  const handleCopiarEst = (id, texto) => {
+    navigator.clipboard.writeText(texto).then(() => {
+      setCopiadoEst(id)
+      setTimeout(() => setCopiadoEst(null), 1500)
+    })
+  }
 
   useEffect(() => { loadEstudiantes() }, [])
 
@@ -462,7 +470,21 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
                             <td style={{ padding:'10px', fontSize:12, color:C.gray }}>{e.grado}</td>
                             <td style={{ padding:'10px', fontSize:12, color:C.gray }}>{e.salon}</td>
                             <td style={{ padding:'10px', fontSize:12, color:C.navy, fontWeight:500 }}>{e.usuario}</td>
-                            <td style={{ padding:'10px', fontSize:12, color:C.gray, letterSpacing:'0.12em' }}>••••••••</td>
+                            <td style={{ padding:'10px' }}>
+                              <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                                <span style={{ fontFamily:'monospace', fontSize:12, color:C.text,
+                                  background:C.bg, border:`1px solid ${C.grayLt}`,
+                                  borderRadius:4, padding:'2px 8px', letterSpacing:'0.04em' }}>
+                                  {generateCredentials(e.nombre, e.codigo || e.usuario).password}
+                                </span>
+                                <button onClick={()=>handleCopiarEst(e.id, generateCredentials(e.nombre, e.codigo || e.usuario).password)}
+                                  title="Copiar clave" style={{ background:'none', border:'none',
+                                    cursor:'pointer', fontSize:14, padding:2,
+                                    color: copiadoEst===e.id ? C.green : C.gray }}>
+                                  {copiadoEst===e.id ? '✓' : '⧉'}
+                                </button>
+                              </div>
+                            </td>
                             <td style={{ padding:'10px' }}>
                               <Badge color={e.activo?C.green:C.red}>{e.activo?'Activo':'Inactivo'}</Badge>
                             </td>
