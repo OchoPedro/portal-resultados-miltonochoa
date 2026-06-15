@@ -219,8 +219,11 @@ async function procesarResultados(estudiantesLeidos, clave, areas, asignaturas, 
 // ══════════════════════════════════════════════════════════
 export default function AdminResultados({ onUpdate }) {
   const [metodo, setMetodo]           = useState(null)
-  const [colegios, setColegios]       = useState([])
+  const [colegiosData, setColegiosData] = useState([])
   const [pruebas, setPruebas]         = useState([])
+  const [usuarioInput, setUsuarioInput] = useState('')
+  const [departamento, setDepartamento] = useState('')
+  const [municipio, setMunicipio]     = useState('')
   const [colegioId, setColegioId]     = useState('')
   const [pruebaId, setPruebaId]       = useState('')
   const [archivo, setArchivo]         = useState(null)
@@ -249,17 +252,61 @@ export default function AdminResultados({ onUpdate }) {
   async function cargarDatos() {
     setCargando(true)
     const [colRes, prbRes] = await Promise.all([
-      supabase.from('colegios').select('id,nombre,usuario').order('nombre'),
+      supabase.from('colegios').select('id,nombre,usuario,departamento_nombre,municipio').eq('activo', true).order('nombre'),
       supabase.from('pruebas').select('*').order('nombre'),
     ])
-    setColegios(colRes.data || []); setPruebas(prbRes.data || [])
+    setColegiosData(colRes.data || []); setPruebas(prbRes.data || [])
     setCargando(false)
+  }
+
+  // Listas derivadas para cascada
+  const departamentos = [...new Set(colegiosData.map(c => c.departamento_nombre).filter(Boolean))].sort()
+  const municipiosFiltrados = [...new Set(colegiosData.filter(c => c.departamento_nombre === departamento).map(c => c.municipio).filter(Boolean))].sort()
+  const colegiosFiltrados = colegiosData.filter(c => c.departamento_nombre === departamento && c.municipio === municipio)
+
+  function handleUsuarioInput(val) {
+    setUsuarioInput(val)
+    const found = colegiosData.find(c => (c.usuario || '').toUpperCase() === val.toUpperCase())
+    if (found) {
+      setDepartamento(found.departamento_nombre || '')
+      setMunicipio(found.municipio || '')
+      setColegioId(found.id)
+      resetFormFields()
+    }
+  }
+
+  function handleDepartamento(dep) {
+    setDepartamento(dep); setMunicipio(''); setColegioId(''); resetFormFields()
+  }
+  function handleMunicipio(mun) {
+    setMunicipio(mun); setColegioId(''); resetFormFields()
+    // Si solo hay un colegio en ese municipio, seleccionarlo automáticamente
+    const cols = colegiosData.filter(c => c.departamento_nombre === departamento && c.municipio === mun)
+    if (cols.length === 1) setColegioId(cols[0].id)
+  }
+  async function handleColegio(cid) {
+    setColegioId(cid); resetFormFields()
+    if (cid) {
+      const { data } = await supabase.from('estudiantes').select('grado').eq('colegio_id', cid).eq('activo', true)
+      const unicos = [...new Set((data||[]).map(r => r.grado).filter(Boolean))]
+      unicos.sort((a,b) => String(a).localeCompare(String(b), undefined, {numeric:true}))
+      setGradosDisp(unicos)
+    } else { setGradosDisp([]) }
+  }
+
+  function resetFormFields() {
+    setArchivo(null); setArchivos([]); setPreview(null); setResultado(null)
+    setError(''); setConfirmar(false)
+    setManualGrado(''); setManualEstId(''); setManualDoc(''); setEstDisp([])
+    setManualResp(''); setManualPrev(''); setGradosDisp([])
   }
 
   function reset() {
     setMetodo(null); setArchivo(null); setArchivos([]); setPreview(null); setResultado(null)
     setError(''); setColegioId(''); setPruebaId(''); setProgreso({ actual:0, total:0, msg:'' })
-    setManualDoc(''); setManualResp(''); setManualPrev(''); setManualGrado(''); setManualEstId(''); setEstDisp([]); cancelarRef.current = false
+    setManualDoc(''); setManualResp(''); setManualPrev(''); setManualGrado(''); setManualEstId(''); setEstDisp([])
+    setUsuarioInput(''); setDepartamento(''); setMunicipio(''); setGradosDisp([])
+    cancelarRef.current = false
   }
   function resetForm() {
     setArchivo(null); setArchivos([]); setPreview(null); setResultado(null)
@@ -424,9 +471,8 @@ export default function AdminResultados({ onUpdate }) {
           <button key={m.id} onClick={async () => {
             setMetodo(m.id)
             if (m.id === 'manual' && colegioId) {
-              const cid = colegioId
               const { data } = await supabase.from('estudiantes')
-                .select('grado').eq('colegio_id', cid).eq('activo', true)
+                .select('grado').eq('colegio_id', colegioId).eq('activo', true)
               const unicos = [...new Set((data||[]).map(r => r.grado).filter(Boolean))]
               unicos.sort((a,b) => String(a).localeCompare(String(b), undefined, {numeric:true}))
               setGradosDisp([...unicos])
@@ -568,28 +614,57 @@ export default function AdminResultados({ onUpdate }) {
       <p style={{ fontSize:14, color:C.gray, margin:'0 0 24px' }}>{metodoActivo.desc}</p>
 
       <Card style={{ maxWidth:640 }}>
+        {/* Usuario colegio (auto-fill) */}
+        <div style={{ marginBottom:18 }}>
+          <Label>Usuario del colegio</Label>
+          <input
+            type="text"
+            placeholder="Escribe el usuario (ej: ATBA0001)"
+            value={usuarioInput}
+            onChange={e => handleUsuarioInput(e.target.value)}
+            style={{ ...selectStyle, textTransform:'uppercase' }}
+          />
+          {usuarioInput && !colegioId && (
+            <div style={{ fontSize:12, color:C.amber, marginTop:5 }}>⚠ Usuario no encontrado entre colegios activos</div>
+          )}
+          {colegioId && (
+            <div style={{ fontSize:12, color:C.green, marginTop:5, fontWeight:600 }}>
+              ✓ {colegiosData.find(c=>c.id===colegioId)?.nombre}
+            </div>
+          )}
+        </div>
+
+        {/* Separador */}
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:18 }}>
+          <div style={{ flex:1, height:1, background:C.grayLt }}/>
+          <span style={{ fontSize:11, color:C.gray, fontWeight:600 }}>O SELECCIONA EN CASCADA</span>
+          <div style={{ flex:1, height:1, background:C.grayLt }}/>
+        </div>
+
+        {/* Departamento */}
+        <div style={{ marginBottom:18 }}>
+          <Label>Departamento</Label>
+          <select style={selectStyle} value={departamento} onChange={e => handleDepartamento(e.target.value)} disabled={cargando}>
+            <option value="">{cargando ? 'Cargando…' : 'Selecciona el departamento'}</option>
+            {departamentos.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+        </div>
+
+        {/* Municipio */}
+        <div style={{ marginBottom:18 }}>
+          <Label>Municipio</Label>
+          <select style={selectStyle} value={municipio} onChange={e => handleMunicipio(e.target.value)} disabled={!departamento}>
+            <option value="">{!departamento ? 'Selecciona el departamento primero' : 'Selecciona el municipio'}</option>
+            {municipiosFiltrados.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+
         {/* Colegio */}
         <div style={{ marginBottom:18 }}>
           <Label>Colegio</Label>
-          <select style={selectStyle} value={colegioId} onChange={async e => {
-            const cid = e.target.value
-            setColegioId(cid)
-            setArchivo(null); setArchivos([]); setPreview(null); setResultado(null)
-            setError(''); setConfirmar('')
-            setManualGrado(''); setManualEstId(''); setManualDoc(''); setEstDisp([])
-            setManualResp(''); setManualPrev('')
-            if (cid) {
-              const { data } = await supabase.from('estudiantes')
-                .select('grado').eq('colegio_id', cid).eq('activo', true)
-              const unicos = [...new Set((data||[]).map(r => r.grado).filter(Boolean))]
-              unicos.sort((a,b) => String(a).localeCompare(String(b), undefined, {numeric:true}))
-              setGradosDisp(unicos)
-            } else {
-              setGradosDisp([])
-            }
-          }} disabled={cargando}>
-            <option value="">{cargando?'Cargando…':'Selecciona un colegio'}</option>
-            {colegios.map(c => <option key={c.id} value={c.id}>{c.nombre}{c.usuario?` (${c.usuario})`:''}</option>)}
+          <select style={selectStyle} value={colegioId} onChange={e => handleColegio(e.target.value)} disabled={!municipio}>
+            <option value="">{!municipio ? 'Selecciona el municipio primero' : 'Selecciona el colegio'}</option>
+            {colegiosFiltrados.map(c => <option key={c.id} value={c.id}>{c.nombre}{c.usuario ? ` (${c.usuario})` : ''}</option>)}
           </select>
         </div>
 
