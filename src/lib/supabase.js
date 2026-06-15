@@ -7,7 +7,7 @@ export let supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 export function setSupabaseToken(token) {
   supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } }
+    accessToken: async () => token,
   })
 }
 
