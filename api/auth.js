@@ -1,5 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
 import { SignJWT } from 'jose'
+import bcrypt from 'bcryptjs'
+
+const checkPassword = async (stored, entered) => {
+  if (!stored || !entered) return false
+  if (stored.startsWith('$2')) return bcrypt.compare(entered, stored)
+  return stored === entered
+}
 
 export const config = { maxDuration: 30 }
 
@@ -78,7 +85,7 @@ export default async function handler(req, res) {
         .from('administradores')
         .select('id, nombre, usuario, password_hash, activo, modulos')
         .eq('usuario', usuario.trim()).eq('activo', true).single()
-      if (admin && admin.password_hash === password) {
+      if (admin && await checkPassword(admin.password_hash, password)) {
         const { password_hash, ...safe } = admin
         userResult = { role: 'admin', data: safe }
       }
@@ -89,7 +96,7 @@ export default async function handler(req, res) {
         .from('colegios')
         .select('id, nombre, usuario, password_hash, ciudad, municipio, departamento_nombre, contactos, ultima_sesion')
         .eq('usuario', usuario.trim()).single()
-      if (colegio && colegio.password_hash === password) {
+      if (colegio && await checkPassword(colegio.password_hash, password)) {
         const { password_hash, ...safe } = colegio
         userResult = { role: 'colegio', data: safe }
       }
@@ -100,7 +107,7 @@ export default async function handler(req, res) {
         .from('estudiantes')
         .select('id, nombre, usuario, password_hash, activo, grado, salon, colegio_id, ultima_sesion, colegios(nombre, ciudad)')
         .eq('usuario', usuario.trim()).eq('activo', true).single()
-      if (est && est.password_hash === password) {
+      if (est && await checkPassword(est.password_hash, password)) {
         const { password_hash, ...safe } = est
         userResult = { role: 'estudiante', data: safe }
       }
