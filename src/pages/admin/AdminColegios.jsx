@@ -291,7 +291,10 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
   const loadEstudiantes = async () => {
     setLoading(true)
     const { data } = await supabase.from('estudiantes')
-      .select('*').eq('colegio_id', colegio.id).order('nombre')
+      .select('*').eq('colegio_id', colegio.id)
+      .order('grado',  { ascending: true, nullsFirst: false })
+      .order('salon',  { ascending: true, nullsFirst: false })
+      .order('nombre', { ascending: true })
     setEstudiantes(data || [])
     setLoading(false)
   }
