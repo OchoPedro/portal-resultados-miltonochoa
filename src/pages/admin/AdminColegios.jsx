@@ -469,7 +469,18 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
                               textDecoration:e.activo?'none':'line-through' }}>{e.nombre}</td>
                             <td style={{ padding:'10px', fontSize:12, color:C.gray }}>{e.grado}</td>
                             <td style={{ padding:'10px', fontSize:12, color:C.gray }}>{e.salon}</td>
-                            <td style={{ padding:'10px', fontSize:12, color:C.navy, fontWeight:500 }}>{e.usuario}</td>
+                            <td style={{ padding:'10px' }}>
+                              <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                                <span style={{ fontFamily:'monospace', fontSize:12, color:C.navy,
+                                  fontWeight:600 }}>{e.usuario}</span>
+                                <button onClick={()=>handleCopiarEst(e.usuario + '_u', e.usuario)}
+                                  title="Copiar usuario" style={{ background:'none', border:'none',
+                                    cursor:'pointer', fontSize:14, padding:2,
+                                    color: copiadoEst===e.usuario+'_u' ? C.green : C.gray }}>
+                                  {copiadoEst===e.usuario+'_u' ? '✓' : '⧉'}
+                                </button>
+                              </div>
+                            </td>
                             <td style={{ padding:'10px' }}>
                               <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                                 <span style={{ fontFamily:'monospace', fontSize:12, color:C.text,
@@ -1144,7 +1155,18 @@ export default function AdminColegios({ onUpdate }) {
                     <td style={{ padding:'12px', fontSize:13, color:C.text, fontWeight:600 }}>{c.nombre}</td>
                     <td style={{ padding:'12px', fontSize:12, color:C.gray }}>{c.departamento_nombre||'—'}</td>
                     <td style={{ padding:'12px', fontSize:12, color:C.gray }}>{c.municipio||'—'}</td>
-                    <td style={{ padding:'12px', fontSize:12, color:C.navy, fontWeight:600 }}>{c.usuario}</td>
+                    <td style={{ padding:'12px' }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                        <span style={{ fontFamily:'monospace', fontSize:12, color:C.navy,
+                          fontWeight:600 }}>{c.usuario}</span>
+                        <button onClick={()=>handleCopiar(c.id + '_u', c.usuario)}
+                          title="Copiar usuario" style={{ background:'none', border:'none',
+                            cursor:'pointer', fontSize:14, padding:2,
+                            color: copiado===c.id+'_u' ? C.green : C.gray }}>
+                          {copiado===c.id+'_u' ? '✓' : '⧉'}
+                        </button>
+                      </div>
+                    </td>
                     <td style={{ padding:'12px' }}>
                       <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                         <span style={{ fontFamily:'monospace', fontSize:12, color:C.text,
