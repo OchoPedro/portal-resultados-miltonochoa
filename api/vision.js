@@ -1,6 +1,7 @@
+import { jwtVerify } from 'jose'
+
 export const config = { maxDuration: 60 }
 
-// Orígenes permitidos. Agrega más separados por coma en la variable de entorno ALLOWED_ORIGIN.
 const ALLOWED_ORIGINS = [
   'https://portal-resultados-miltonochoa.vercel.app',
   'https://resultados.aamocolombia.com',
@@ -13,6 +14,17 @@ function isAllowedOrigin(origin) {
   return /^https:\/\/portal-resultados-miltonochoa-[a-z0-9-]+\.vercel\.app$/.test(origin)
 }
 
+async function verifyAdmin(req) {
+  const auth = req.headers['authorization'] || ''
+  const token = auth.replace('Bearer ', '')
+  if (!token) return false
+  try {
+    const secret = Buffer.from(process.env.SUPABASE_JWT_SECRET, 'base64')
+    const { payload } = await jwtVerify(token, secret)
+    return payload.app_role === 'admin'
+  } catch { return false }
+}
+
 export default async function handler(req, res) {
   const origin = req.headers['origin'] || ''
   const allowed = isAllowedOrigin(origin)
@@ -20,7 +32,7 @@ export default async function handler(req, res) {
   const corsOrigin = allowed ? origin : ALLOWED_ORIGINS[0]
   res.setHeader('Access-Control-Allow-Origin', corsOrigin)
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
   res.setHeader('Vary', 'Origin')
 
   if (req.method === 'OPTIONS') {
@@ -33,6 +45,10 @@ export default async function handler(req, res) {
 
   if (req.method !== 'POST') {
     return res.status(405).end('Method not allowed')
+  }
+
+  if (!await verifyAdmin(req)) {
+    return res.status(401).json({ error: 'No autorizado' })
   }
 
   const contentLength = req.headers['content-length']
@@ -66,6 +82,7 @@ export default async function handler(req, res) {
     const data = await response.json()
     return res.status(response.status).json(data)
   } catch (err) {
-    return res.status(500).json({ error: err.message })
+    console.error('[vision] error:', err.message)
+    return res.status(500).json({ error: 'Error interno' })
   }
 }

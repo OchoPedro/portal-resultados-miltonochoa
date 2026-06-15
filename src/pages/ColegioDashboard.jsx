@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import {
-  C, getColor, getLevel,
+  C,
   Card, CardTitle, Badge, KpiCard, Sidebar
 } from '../components/ui'
 import {
@@ -302,7 +302,7 @@ function PlantelResultados({ colegioId, pruebas }) {
                     </td>
                     <td style={{padding:'10px 12px', fontSize:14, fontWeight:700,
                       color:C.navy, fontFamily:'Playfair Display, serif'}}>
-                      {res?.puntaje_global || '—'}
+                      {res?.puntaje_global ?? '—'}
                     </td>
                   </tr>
                 )
@@ -488,7 +488,7 @@ function RecomendacionesClaude({ session, prueba }) {
         .eq('publicado', true)
         .order('created_at', { ascending: false })
         .limit(1)
-        .single()
+        .maybeSingle()
       setAnalisis(data || null)
       setLoading(false)
     }
@@ -781,7 +781,6 @@ export default function ColegioDashboard({session, onLogout}) {
   ]
 
   // Niveles por área
-  const nivel = n => n>=65?'superior':n>=45?'alto':n>=25?'basico':'bajo'
   const nivelesData = [
     {materia:'Matemáticas',  ...calcNiveles(students.map(s=>(s.mat_cuantitativo+s.mat_especifico)/2))},
     {materia:'Cs. Naturales',...calcNiveles(students.map(s=>(s.cn_quimica+s.cn_fisica+s.cn_biologia+s.cn_cts)/4))},
@@ -803,7 +802,6 @@ export default function ColegioDashboard({session, onLogout}) {
 
   // Desviación por materia
   const desvData = areaData.map(a => {
-    const key = a.area.toLowerCase().replace('.','').replace(' ','_')
     const vals = students.map(s => {
       if (a.area==='Mat. Cuant.') return s.mat_cuantitativo
       if (a.area==='Mat. Espec.') return s.mat_especifico
@@ -811,17 +809,19 @@ export default function ColegioDashboard({session, onLogout}) {
       if (a.area==='Física')      return s.cn_fisica
       if (a.area==='Biología')    return s.cn_biologia
       if (a.area==='CTS')         return s.cn_cts
-      if (a.area==='Sociales')    return ((s.sociales||0)+(s.ciudadanas||0))/2
+      if (a.area==='Sociales')    return s.sociales
+      if (a.area==='Ciudadanas')  return s.ciudadanas
       if (a.area==='Lect. Crít.') return s.lectura_critica
       if (a.area==='Inglés')      return s.ingles
       return null
     }).filter(Boolean)
+    const prom = avgArr(vals)
     return {
       materia: a.area,
-      prom: Math.round(avgArr(vals)),
+      prom: Math.round(prom),
       min: vals.length ? Math.round(Math.min(...vals)) : 0,
       max: vals.length ? Math.round(Math.max(...vals)) : 0,
-      desv: vals.length ? Math.round(Math.sqrt(vals.reduce((acc,v)=>acc+Math.pow(v-avgArr(vals),2),0)/vals.length)) : 0,
+      desv: vals.length ? Math.round(Math.sqrt(vals.reduce((acc,v)=>acc+Math.pow(v-prom,2),0)/vals.length)) : 0,
     }
   })
 
@@ -1038,11 +1038,11 @@ export default function ColegioDashboard({session, onLogout}) {
         {/* KPIs — solo para herramientas */}
         {['tablero','areas','niveles','desviacion','competencias','mejora','detalle_prueba','ranking','listado_notas','notas_acumuladas'].includes(tab) && (
         <div style={{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:28}}>
-          <KpiCard label="Prom. Global" value={promGlobal||'—'} sub={`Prueba ${prueba?.codigo||'—'}`} color={C.navy}/>
-          <KpiCard label="Estudiantes" value={students.length||'—'} sub="Evaluados" color={C.navy}/>
-          <KpiCard label="Mejor puntaje" value={maxStudent?.puntaje_global||'—'}
-            sub={maxStudent?.estudiantes?.nombre?.split(' ').slice(0,2).join(' ')||'Sin datos'} color={C.green}/>
-          <KpiCard label="Oport. mejora" value={oportunidades.length||'—'} sub="Preguntas críticas" color={C.red}/>
+          <KpiCard label="Prom. Global" value={promGlobal ?? '—'} sub={`Prueba ${prueba?.codigo ?? '—'}`} color={C.navy}/>
+          <KpiCard label="Estudiantes" value={students.length || '—'} sub="Evaluados" color={C.navy}/>
+          <KpiCard label="Mejor puntaje" value={maxStudent?.puntaje_global ?? '—'}
+            sub={maxStudent?.estudiantes?.nombre?.split(' ').slice(0,2).join(' ') || 'Sin datos'} color={C.green}/>
+          <KpiCard label="Oport. mejora" value={oportunidades.length || '—'} sub="Preguntas críticas" color={C.red}/>
         </div>
         )}
 

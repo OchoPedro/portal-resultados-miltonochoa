@@ -314,8 +314,9 @@ Genera un informe estructurado con:
 Sé específico, práctico y orientado a la acción. Tono profesional pero cercano.`
 
     try {
+      const token = sessionStorage.getItem('mo_token')
       const response = await fetch('/api/vision', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
         body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:1500,
           messages:[{ role:'user', content:prompt }] }),
       })
@@ -643,8 +644,9 @@ Genera un informe comparativo estructurado con:
 
 Sé específico con los números. Tono profesional y propositivo.`
 
+      const token = sessionStorage.getItem('mo_token')
       const response = await fetch('/api/vision', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
         body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:2000,
           messages:[{ role:'user', content:prompt }] }),
       })
@@ -1141,8 +1143,9 @@ Basa el análisis exclusivamente en los datos proporcionados. Tono profesional y
   }
 
   const callClaude = async (prompt, maxTokens) => {
+    const token = sessionStorage.getItem('mo_token')
     const response = await fetch('/api/vision', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
       body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:maxTokens,
         messages:[{ role:'user', content:prompt }] }),
     })

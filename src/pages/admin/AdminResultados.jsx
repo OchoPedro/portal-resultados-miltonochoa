@@ -102,9 +102,10 @@ async function visionImagen(file) {
   const b64 = await toBase64(file)
   const mediaType = file.type === 'image/png' ? 'image/png' : 'image/jpeg'
 
+  const token = sessionStorage.getItem('mo_token')
   const res = await fetch('/api/vision', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
       max_tokens: 2000,
@@ -148,9 +149,10 @@ Responde ÚNICAMENTE con un objeto JSON válido, sin explicaciones:
 async function visionPDF(archivo) {
   const b64 = await toBase64(archivo)
 
+  const token = sessionStorage.getItem('mo_token')
   const res = await fetch('/api/vision', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
       max_tokens: 4000,
