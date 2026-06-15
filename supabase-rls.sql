@@ -181,11 +181,9 @@ CREATE POLICY "cs_colegio" ON public.comparativos_salon
 
 CREATE POLICY "cg_admin" ON public.comparativos_gestion
   FOR ALL USING (public.jwt_app_role() = 'admin');
+-- comparativos_gestion no tiene colegio_id — es data agregada de comparación
 CREATE POLICY "cg_colegio" ON public.comparativos_gestion
-  FOR ALL USING (
-    public.jwt_app_role() = 'colegio'
-    AND colegio_id = public.jwt_colegio_id()
-  );
+  FOR SELECT USING (public.jwt_app_role() = 'colegio');
 
 CREATE POLICY "ca_admin" ON public.colegio_anios
   FOR ALL USING (public.jwt_app_role() = 'admin');
