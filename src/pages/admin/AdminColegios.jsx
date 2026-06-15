@@ -1023,49 +1023,95 @@ const AccionesMenu = ({ onEditar, onEstudiantes, onHistoricos, onToggle, activo,
 
 // ── MODAL BORRAR RESULTADOS ───────────────────────────────────
 const ModalBorrarResultados = ({ colegio, onClose, onDone }) => {
-  const [pruebas, setPruebas]   = useState([])
-  const [grados, setGrados]     = useState([])
-  const [salones, setSalones]   = useState([])
-  const [prueba, setPrueba]     = useState('')
-  const [grado, setGrado]       = useState('')
-  const [salon, setSalon]       = useState('')
-  const [loading, setLoading]   = useState(false)
-  const [confirm, setConfirm]   = useState(false)
-  const [msg, setMsg]           = useState('')
+  const [pruebas,     setPruebas]     = useState([])
+  const [grados,      setGrados]      = useState([])
+  const [salones,     setSalones]     = useState([])
+  const [estudiantes, setEstudiantes] = useState([])
 
-  const sel = { width:'100%', padding:'9px 13px', border:`1px solid ${C.grayLt}`,
-    borderRadius:6, fontFamily:'Inter', fontSize:13, color:C.text,
-    background:C.bg, outline:'none', boxSizing:'border-box' }
+  const [prueba,      setPrueba]      = useState('')   // id de prueba
+  const [grado,       setGrado]       = useState(null) // null = sin seleccionar, '' = Todos
+  const [salon,       setSalon]       = useState(null) // null = sin seleccionar, '' = Todos
+  const [estudiante,  setEstudiante]  = useState(null) // null = sin seleccionar, '' = Todos, id = específico
 
+  const [loading,  setLoading]  = useState(false)
+  const [confirm,  setConfirm]  = useState(false)
+  const [msg,      setMsg]      = useState('')
+
+  const sel = (disabled) => ({
+    width:'100%', padding:'9px 13px', border:`1px solid ${disabled ? C.grayLt : C.grayLt}`,
+    borderRadius:6, fontFamily:'Inter', fontSize:13,
+    color: disabled ? C.gray : C.text,
+    background: disabled ? '#F3F4F6' : C.bg,
+    outline:'none', boxSizing:'border-box', cursor: disabled ? 'not-allowed' : 'pointer',
+  })
+
+  // Carga inicial: solo pruebas
   useEffect(() => {
     supabase.from('pruebas').select('id, nombre, codigo').order('nombre')
       .then(({ data }) => setPruebas(data || []))
-    supabase.from('estudiantes').select('grado').eq('colegio_id', colegio.id)
-      .then(({ data }) => {
-        const u = [...new Set((data||[]).map(r=>r.grado).filter(Boolean))].sort((a,b)=>Number(a)-Number(b))
-        setGrados(u)
-      })
   }, [])
 
+  // Al elegir Prueba → cargar grados con resultados para esa prueba en este colegio
   useEffect(() => {
-    setSalon(''); setSalones([])
-    if (!grado) return
-    supabase.from('estudiantes').select('salon')
-      .eq('colegio_id', colegio.id).eq('grado', grado)
+    setGrado(null); setSalon(null); setEstudiante(null)
+    setGrados([]); setSalones([]); setEstudiantes([])
+    if (!prueba) return
+    supabase.from('resultados_estudiante')
+      .select('estudiante_id, estudiantes(grado)')
+      .eq('prueba_id', prueba).eq('colegio_id', colegio.id)
       .then(({ data }) => {
-        const u = [...new Set((data||[]).map(r=>r.salon).filter(Boolean))].sort()
-        setSalones(u)
+        const u = [...new Set((data||[]).map(r=>r.estudiantes?.grado).filter(Boolean))]
+          .sort((a,b)=>Number(a)-Number(b))
+        setGrados(u)
       })
+  }, [prueba])
+
+  // Al elegir Grado → cargar salones
+  useEffect(() => {
+    setSalon(null); setEstudiante(null)
+    setSalones([]); setEstudiantes([])
+    if (grado === null) return
+    let q = supabase.from('resultados_estudiante')
+      .select('estudiante_id, estudiantes(salon)')
+      .eq('prueba_id', prueba).eq('colegio_id', colegio.id)
+    if (grado) q = q.eq('estudiantes.grado', grado)
+    q.then(({ data }) => {
+      const u = [...new Set((data||[]).map(r=>r.estudiantes?.salon).filter(Boolean))].sort()
+      setSalones(u)
+    })
   }, [grado])
 
+  // Al elegir Salón → cargar estudiantes con nombre e id
+  useEffect(() => {
+    setEstudiante(null); setEstudiantes([])
+    if (salon === null) return
+    let q = supabase.from('resultados_estudiante')
+      .select('estudiante_id, estudiantes(id, nombre, grado, salon)')
+      .eq('prueba_id', prueba).eq('colegio_id', colegio.id)
+    if (grado) q = q.eq('estudiantes.grado', grado)
+    if (salon) q = q.eq('estudiantes.salon', salon)
+    q.then(({ data }) => {
+      const vistos = new Set()
+      const lista = (data||[])
+        .map(r => r.estudiantes)
+        .filter(e => e && !vistos.has(e.id) && vistos.add(e.id))
+        .sort((a,b)=>a.nombre.localeCompare(b.nombre, 'es'))
+      setEstudiantes(lista)
+    })
+  }, [salon])
+
+  const listo = prueba && grado !== null && salon !== null && estudiante !== null
+
   const handleDelete = async () => {
-    if (!prueba) { setMsg('Debes seleccionar una prueba.'); return }
+    if (!listo) return
     setLoading(true); setMsg('')
     try {
-      // Estudiantes filtrados por grado/salón
-      let q = supabase.from('estudiantes').select('id').eq('colegio_id', colegio.id)
-      if (grado) q = q.eq('grado', grado)
-      if (salon) q = q.eq('salon', salon)
+      // Construir lista de IDs a borrar
+      let q = supabase.from('estudiantes').select('id')
+        .eq('colegio_id', colegio.id)
+      if (grado)      q = q.eq('grado', grado)
+      if (salon)      q = q.eq('salon', salon)
+      if (estudiante) q = q.eq('id', estudiante)
       const { data: ests } = await q
       const estIds = (ests||[]).map(e=>e.id)
 
@@ -1074,20 +1120,21 @@ const ModalBorrarResultados = ({ colegio, onClose, onDone }) => {
         setLoading(false); return
       }
 
-      // Borrar resultados individuales
       await supabase.from('resultados_estudiante')
         .delete().in('estudiante_id', estIds).eq('prueba_id', prueba)
       await supabase.from('notas_competencia')
         .delete().in('estudiante_id', estIds).eq('prueba_id', prueba)
 
-      // Borrar comparativos de salón (por salón específico si aplica)
-      let qSalon = supabase.from('comparativos_salon')
-        .delete().eq('colegio_id', colegio.id).eq('prueba_id', prueba)
-      if (salon) qSalon = qSalon.eq('salon', salon)
-      await qSalon
+      // Comparativos de salón: solo si no hay filtro de estudiante específico
+      if (!estudiante) {
+        let qSalon = supabase.from('comparativos_salon')
+          .delete().eq('colegio_id', colegio.id).eq('prueba_id', prueba)
+        if (salon) qSalon = qSalon.eq('salon', salon)
+        await qSalon
+      }
 
-      // Borrar análisis globales solo si no hay filtro de grado/salón
-      if (!grado && !salon) {
+      // Análisis globales: solo si se borran todos sin filtros
+      if (!grado && !salon && !estudiante) {
         await supabase.from('analisis_preguntas')
           .delete().eq('colegio_id', colegio.id).eq('prueba_id', prueba)
         await supabase.from('comparativos_gestion')
@@ -1105,17 +1152,31 @@ const ModalBorrarResultados = ({ colegio, onClose, onDone }) => {
   }
 
   const pruebaLabel = pruebas.find(p=>p.id===prueba)?.nombre || ''
+  const estLabel    = estudiante ? (estudiantes.find(e=>e.id===estudiante)?.nombre || '') : 'Todos los estudiantes'
   const resumen = [
     pruebaLabel,
-    grado ? `Grado ${grado}` : 'Todos los grados',
-    salon ? `Salón ${salon}` : 'Todos los salones',
+    grado  ? `Grado ${grado}`  : 'Todos los grados',
+    salon  ? `Salón ${salon}`  : 'Todos los salones',
+    estLabel,
   ].join(' · ')
+
+  const Fila = ({ label, children, active }) => (
+    <div style={{ marginBottom:14 }}>
+      <label style={{ display:'block', fontSize:10, letterSpacing:'0.12em',
+        textTransform:'uppercase', color: active ? C.navy : C.gray,
+        marginBottom:5, fontFamily:'Inter', fontWeight: active ? 600 : 400 }}>
+        {label}
+      </label>
+      {children}
+    </div>
+  )
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)',
       display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999, padding:24 }}>
       <div style={{ background:C.white, borderRadius:12, padding:32,
-        width:'100%', maxWidth:480, boxShadow:'0 20px 60px rgba(0,0,0,0.3)' }}>
+        width:'100%', maxWidth:480, maxHeight:'90vh', overflowY:'auto',
+        boxShadow:'0 20px 60px rgba(0,0,0,0.3)' }}>
 
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
           <h2 style={{ fontFamily:'Playfair Display, serif', fontSize:20, color:C.navy }}>
@@ -1125,42 +1186,46 @@ const ModalBorrarResultados = ({ colegio, onClose, onDone }) => {
         </div>
         <div style={{ fontSize:13, color:C.gray, fontFamily:'Inter', marginBottom:24 }}>{colegio.nombre}</div>
 
-        {/* Prueba */}
-        <div style={{ marginBottom:14 }}>
-          <label style={{ display:'block', fontSize:10, letterSpacing:'0.12em',
-            textTransform:'uppercase', color:C.gray, marginBottom:5, fontFamily:'Inter' }}>
-            Prueba <span style={{ color:C.red }}>*</span>
-          </label>
-          <select value={prueba} onChange={e=>{ setPrueba(e.target.value); setConfirm(false) }} style={sel}>
+        {/* 1. Prueba */}
+        <Fila label="1. Prueba *" active={true}>
+          <select value={prueba} onChange={e=>{ setPrueba(e.target.value); setConfirm(false) }} style={sel(false)}>
             <option value="">— Selecciona la prueba —</option>
-            {pruebas.map(p => <option key={p.id} value={p.id}>{p.nombre} {p.codigo ? `(${p.codigo})` : ''}</option>)}
+            {pruebas.map(p => <option key={p.id} value={p.id}>{p.nombre}{p.codigo ? ` (${p.codigo})` : ''}</option>)}
           </select>
-        </div>
+        </Fila>
 
-        {/* Grado */}
-        <div style={{ marginBottom:14 }}>
-          <label style={{ display:'block', fontSize:10, letterSpacing:'0.12em',
-            textTransform:'uppercase', color:C.gray, marginBottom:5, fontFamily:'Inter' }}>
-            Grado <span style={{ fontSize:10, color:C.gray }}>(opcional — vacío = todos)</span>
-          </label>
-          <select value={grado} onChange={e=>{ setGrado(e.target.value); setConfirm(false) }} style={sel}>
+        {/* 2. Grado */}
+        <Fila label="2. Grado" active={!!prueba}>
+          <select value={grado ?? ''} disabled={!prueba}
+            onChange={e=>{ setGrado(e.target.value); setConfirm(false) }}
+            style={sel(!prueba)}>
+            <option value="" disabled hidden>{prueba ? '— Selecciona el grado —' : 'Selecciona primero la prueba'}</option>
             <option value="">Todos los grados</option>
             {grados.map(g => <option key={g} value={g}>Grado {g}</option>)}
           </select>
-        </div>
+        </Fila>
 
-        {/* Salón */}
-        <div style={{ marginBottom:24 }}>
-          <label style={{ display:'block', fontSize:10, letterSpacing:'0.12em',
-            textTransform:'uppercase', color:C.gray, marginBottom:5, fontFamily:'Inter' }}>
-            Salón <span style={{ fontSize:10, color:C.gray }}>(opcional — vacío = todos)</span>
-          </label>
-          <select value={salon} onChange={e=>{ setSalon(e.target.value); setConfirm(false) }} style={sel}
-            disabled={!grado}>
-            <option value="">{grado ? 'Todos los salones' : 'Selecciona grado primero'}</option>
+        {/* 3. Salón */}
+        <Fila label="3. Salón" active={grado !== null}>
+          <select value={salon ?? ''} disabled={grado === null}
+            onChange={e=>{ setSalon(e.target.value); setConfirm(false) }}
+            style={sel(grado === null)}>
+            <option value="" disabled hidden>{grado !== null ? '— Selecciona el salón —' : 'Selecciona primero el grado'}</option>
+            <option value="">Todos los salones</option>
             {salones.map(s => <option key={s} value={s}>Salón {s}</option>)}
           </select>
-        </div>
+        </Fila>
+
+        {/* 4. Estudiante */}
+        <Fila label="4. Estudiante" active={salon !== null}>
+          <select value={estudiante ?? ''} disabled={salon === null}
+            onChange={e=>{ setEstudiante(e.target.value); setConfirm(false) }}
+            style={sel(salon === null)}>
+            <option value="" disabled hidden>{salon !== null ? '— Selecciona el estudiante —' : 'Selecciona primero el salón'}</option>
+            <option value="">Todos los estudiantes</option>
+            {estudiantes.map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}
+          </select>
+        </Fila>
 
         {msg && (
           <div style={{ background: msg.startsWith('✅') ? '#F0FFF4' : msg.startsWith('⚠️') ? '#FFFBEB' : '#FEF2F2',
@@ -1171,21 +1236,26 @@ const ModalBorrarResultados = ({ colegio, onClose, onDone }) => {
         )}
 
         {!confirm ? (
-          <button onClick={() => { if (!prueba) { setMsg('Debes seleccionar una prueba.'); return } setConfirm(true); setMsg('') }}
+          <button
+            onClick={() => { if (!listo) { setMsg('Completa todos los filtros para continuar.'); return } setConfirm(true); setMsg('') }}
             disabled={loading}
-            style={{ width:'100%', padding:'11px', background:C.red, color:C.white,
-              border:'none', borderRadius:6, fontFamily:'Inter', fontSize:13,
-              fontWeight:600, cursor:'pointer' }}>
+            style={{ width:'100%', padding:'11px', background: listo ? C.red : C.grayLt,
+              color: listo ? C.white : C.gray, border:'none', borderRadius:6,
+              fontFamily:'Inter', fontSize:13, fontWeight:600,
+              cursor: listo ? 'pointer' : 'not-allowed' }}>
             Continuar
           </button>
         ) : (
           <div>
             <div style={{ background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:8,
               padding:'12px 16px', marginBottom:14, fontFamily:'Inter' }}>
-              <div style={{ fontSize:12, color:C.red, fontWeight:600, marginBottom:4 }}>
+              <div style={{ fontSize:12, color:C.red, fontWeight:600, marginBottom:6 }}>
                 ⚠️ Esta acción no se puede deshacer
               </div>
-              <div style={{ fontSize:12, color:C.gray }}>Se borrarán los resultados de: <strong>{resumen}</strong></div>
+              <div style={{ fontSize:12, color:C.gray, lineHeight:1.6 }}>
+                Se borrarán los resultados de:<br/>
+                <strong style={{ color:C.navy }}>{resumen}</strong>
+              </div>
             </div>
             <div style={{ display:'flex', gap:10 }}>
               <button onClick={() => setConfirm(false)}
