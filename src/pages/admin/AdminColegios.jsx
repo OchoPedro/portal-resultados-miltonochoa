@@ -994,7 +994,9 @@ export default function AdminColegios({ onUpdate }) {
     const offset = (pagina - 1) * POR_PAG
     let q = supabase.from('colegios')
       .select('*', { count: 'exact' })
-      .order('nombre')
+      .order('departamento_nombre', { ascending: true, nullsFirst: false })
+      .order('municipio',           { ascending: true, nullsFirst: false })
+      .order('nombre',              { ascending: true })
       .range(offset, offset + POR_PAG - 1)
     if (fNombre.trim()) q = q.ilike('nombre',              `%${fNombre.trim()}%`)
     if (fDepto.trim())  q = q.ilike('departamento_nombre', `%${fDepto.trim()}%`)
