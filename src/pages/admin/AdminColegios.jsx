@@ -277,6 +277,8 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
   const [editando, setEditando] = useState(null)
   const [editForm, setEditForm] = useState({})
   const [copiadoEst, setCopiadoEst] = useState(null)
+  const [filtroNombre, setFiltroNombre] = useState('')
+  const [filtroUsuario, setFiltroUsuario] = useState('')
   const fileRef = useRef()
 
   const handleCopiarEst = (id, texto) => {
@@ -406,7 +408,10 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
               Estudiantes — {colegio.nombre}
             </h2>
             <div style={{ fontSize:12, color:C.gray, fontFamily:'Inter', marginTop:2 }}>
-              {estudiantes.length} estudiante{estudiantes.length!==1?'s':''} registrado{estudiantes.length!==1?'s':''}
+              {(filtroNombre || filtroUsuario)
+                ? `${estudiantes.filter(e => (!filtroNombre.trim() || (e.nombre||'').toLowerCase().includes(filtroNombre.trim().toLowerCase())) && (!filtroUsuario.trim() || (e.usuario||'').toLowerCase().includes(filtroUsuario.trim().toLowerCase()))).length} de ${estudiantes.length} estudiantes`
+                : `${estudiantes.length} estudiante${estudiantes.length!==1?'s':''} registrado${estudiantes.length!==1?'s':''}`
+              }
             </div>
           </div>
           <button onClick={onClose} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer', color:C.gray }}>✕</button>
@@ -415,9 +420,30 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
         {/* MODO LISTA */}
         {mode==='lista' && (
           <>
-            <div style={{ display:'flex', gap:10, marginBottom:20 }}>
+            <div style={{ display:'flex', gap:10, marginBottom:14, flexWrap:'wrap' }}>
               <Btn onClick={()=>setMode('subir')} color={C.green}>+ Subir Excel</Btn>
               <Btn onClick={downloadPlantilla} outline color={C.navy}>↓ Plantilla</Btn>
+            </div>
+            <div style={{ display:'flex', gap:10, marginBottom:16 }}>
+              <input
+                value={filtroNombre} onChange={e => setFiltroNombre(e.target.value)}
+                placeholder="Buscar por nombre..."
+                style={{ flex:2, padding:'8px 12px', borderRadius:7, border:`1px solid ${C.grayLt}`,
+                  fontFamily:'Inter', fontSize:13, color:C.text, outline:'none' }}
+              />
+              <input
+                value={filtroUsuario} onChange={e => setFiltroUsuario(e.target.value)}
+                placeholder="Buscar por usuario..."
+                style={{ flex:1, padding:'8px 12px', borderRadius:7, border:`1px solid ${C.grayLt}`,
+                  fontFamily:'Inter', fontSize:13, color:C.text, outline:'none' }}
+              />
+              {(filtroNombre || filtroUsuario) && (
+                <button onClick={() => { setFiltroNombre(''); setFiltroUsuario('') }}
+                  style={{ padding:'8px 12px', borderRadius:7, border:`1px solid ${C.grayLt}`,
+                    background:'none', cursor:'pointer', fontSize:12, color:C.gray, whiteSpace:'nowrap' }}>
+                  ✕ Limpiar
+                </button>
+              )}
             </div>
             {msg && (
               <div style={{ background:'#F0FFF4', border:'1px solid #BBF7D0', borderRadius:6,
@@ -431,6 +457,19 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
               </div>
             ) : (
               <div style={{ overflowX:'auto' }}>
+                {(() => {
+                  const fn = filtroNombre.trim().toLowerCase()
+                  const fu = filtroUsuario.trim().toLowerCase()
+                  const lista = estudiantes.filter(e =>
+                    (!fn || (e.nombre||'').toLowerCase().includes(fn)) &&
+                    (!fu || (e.usuario||'').toLowerCase().includes(fu))
+                  )
+                  return lista.length === 0 ? (
+                    <div style={{ textAlign:'center', padding:30, color:C.gray, fontFamily:'Inter', fontSize:13 }}>
+                      No se encontraron estudiantes con ese filtro.
+                    </div>
+                  ) : null
+                })()}
                 <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter' }}>
                   <thead>
                     <tr style={{ borderBottom:`2px solid ${C.bg2}` }}>
@@ -442,7 +481,12 @@ const ModalEstudiantes = ({ colegio, onClose, onSave }) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {estudiantes.map((e,i)=>(
+                    {estudiantes.filter(e => {
+                      const fn = filtroNombre.trim().toLowerCase()
+                      const fu = filtroUsuario.trim().toLowerCase()
+                      return (!fn || (e.nombre||'').toLowerCase().includes(fn)) &&
+                             (!fu || (e.usuario||'').toLowerCase().includes(fu))
+                    }).map((e,i)=>(
                       <tr key={i} style={{ borderBottom:`1px solid ${C.bg2}`,
                         background: !e.activo?'#FEF2F2':i%2===0?`${C.bg}80`:'transparent' }}>
                         {editando===e.id ? (
