@@ -125,16 +125,16 @@ export default async function handler(req, res) {
     // Las políticas RLS leen estos claims para autorizar cada query
 
     const token = await new SignJWT({
+      aud:        'authenticated',
       sub:        userResult.data.id,
-      role:       'authenticated',              // rol para Supabase
-      app_role:   userResult.role,              // 'admin' | 'colegio' | 'estudiante'
+      role:       'authenticated',
+      app_role:   userResult.role,
       colegio_id: userResult.role === 'colegio'    ? userResult.data.id : null,
       admin_id:   userResult.role === 'admin'      ? userResult.data.id : null,
       est_id:     userResult.role === 'estudiante' ? userResult.data.id : null,
-      iss: 'supabase',
-      ref: 'bmspwsbhsjkamjywvvde',
     })
       .setProtectedHeader({ alg: 'HS256' })
+      .setIssuer('https://bmspwsbhsjkamjywvvde.supabase.co/auth/v1')
       .setIssuedAt()
       .setExpirationTime('8h')
       .sign(jwtSecret)
