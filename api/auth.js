@@ -95,7 +95,7 @@ export default async function handler(req, res) {
       const { data: colegio } = await adminSupabase
         .from('colegios')
         .select('id, nombre, usuario, password_hash, ciudad, municipio, departamento_nombre, contactos, ultima_sesion')
-        .eq('usuario', usuario.trim()).single()
+        .eq('usuario', usuario.trim()).eq('activo', true).single()
       if (colegio && await checkPassword(colegio.password_hash, password)) {
         const { password_hash, ...safe } = colegio
         userResult = { role: 'colegio', data: safe }
