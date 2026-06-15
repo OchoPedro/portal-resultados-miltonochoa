@@ -1021,6 +1021,193 @@ const AccionesMenu = ({ onEditar, onEstudiantes, onHistoricos, onToggle, activo,
   )
 }
 
+// ── MODAL BORRAR RESULTADOS ───────────────────────────────────
+const ModalBorrarResultados = ({ colegio, onClose, onDone }) => {
+  const [pruebas, setPruebas]   = useState([])
+  const [grados, setGrados]     = useState([])
+  const [salones, setSalones]   = useState([])
+  const [prueba, setPrueba]     = useState('')
+  const [grado, setGrado]       = useState('')
+  const [salon, setSalon]       = useState('')
+  const [loading, setLoading]   = useState(false)
+  const [confirm, setConfirm]   = useState(false)
+  const [msg, setMsg]           = useState('')
+
+  const sel = { width:'100%', padding:'9px 13px', border:`1px solid ${C.grayLt}`,
+    borderRadius:6, fontFamily:'Inter', fontSize:13, color:C.text,
+    background:C.bg, outline:'none', boxSizing:'border-box' }
+
+  useEffect(() => {
+    supabase.from('pruebas').select('id, nombre, codigo').order('nombre')
+      .then(({ data }) => setPruebas(data || []))
+    supabase.from('estudiantes').select('grado').eq('colegio_id', colegio.id)
+      .then(({ data }) => {
+        const u = [...new Set((data||[]).map(r=>r.grado).filter(Boolean))].sort((a,b)=>Number(a)-Number(b))
+        setGrados(u)
+      })
+  }, [])
+
+  useEffect(() => {
+    setSalon(''); setSalones([])
+    if (!grado) return
+    supabase.from('estudiantes').select('salon')
+      .eq('colegio_id', colegio.id).eq('grado', grado)
+      .then(({ data }) => {
+        const u = [...new Set((data||[]).map(r=>r.salon).filter(Boolean))].sort()
+        setSalones(u)
+      })
+  }, [grado])
+
+  const handleDelete = async () => {
+    if (!prueba) { setMsg('Debes seleccionar una prueba.'); return }
+    setLoading(true); setMsg('')
+    try {
+      // Estudiantes filtrados por grado/salón
+      let q = supabase.from('estudiantes').select('id').eq('colegio_id', colegio.id)
+      if (grado) q = q.eq('grado', grado)
+      if (salon) q = q.eq('salon', salon)
+      const { data: ests } = await q
+      const estIds = (ests||[]).map(e=>e.id)
+
+      if (!estIds.length) {
+        setMsg('⚠️ No hay estudiantes con los filtros seleccionados.')
+        setLoading(false); return
+      }
+
+      // Borrar resultados individuales
+      await supabase.from('resultados_estudiante')
+        .delete().in('estudiante_id', estIds).eq('prueba_id', prueba)
+      await supabase.from('notas_competencia')
+        .delete().in('estudiante_id', estIds).eq('prueba_id', prueba)
+
+      // Borrar comparativos de salón (por salón específico si aplica)
+      let qSalon = supabase.from('comparativos_salon')
+        .delete().eq('colegio_id', colegio.id).eq('prueba_id', prueba)
+      if (salon) qSalon = qSalon.eq('salon', salon)
+      await qSalon
+
+      // Borrar análisis globales solo si no hay filtro de grado/salón
+      if (!grado && !salon) {
+        await supabase.from('analisis_preguntas')
+          .delete().eq('colegio_id', colegio.id).eq('prueba_id', prueba)
+        await supabase.from('comparativos_gestion')
+          .delete().eq('colegio_id', colegio.id).eq('prueba_id', prueba)
+      }
+
+      setMsg('✅ Resultados eliminados correctamente.')
+      onDone()
+      setTimeout(onClose, 1200)
+    } catch(e) {
+      setMsg('❌ Error: ' + e.message)
+    } finally {
+      setLoading(false); setConfirm(false)
+    }
+  }
+
+  const pruebaLabel = pruebas.find(p=>p.id===prueba)?.nombre || ''
+  const resumen = [
+    pruebaLabel,
+    grado ? `Grado ${grado}` : 'Todos los grados',
+    salon ? `Salón ${salon}` : 'Todos los salones',
+  ].join(' · ')
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)',
+      display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999, padding:24 }}>
+      <div style={{ background:C.white, borderRadius:12, padding:32,
+        width:'100%', maxWidth:480, boxShadow:'0 20px 60px rgba(0,0,0,0.3)' }}>
+
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+          <h2 style={{ fontFamily:'Playfair Display, serif', fontSize:20, color:C.navy }}>
+            🗑️ Borrar resultados
+          </h2>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer', color:C.gray }}>✕</button>
+        </div>
+        <div style={{ fontSize:13, color:C.gray, fontFamily:'Inter', marginBottom:24 }}>{colegio.nombre}</div>
+
+        {/* Prueba */}
+        <div style={{ marginBottom:14 }}>
+          <label style={{ display:'block', fontSize:10, letterSpacing:'0.12em',
+            textTransform:'uppercase', color:C.gray, marginBottom:5, fontFamily:'Inter' }}>
+            Prueba <span style={{ color:C.red }}>*</span>
+          </label>
+          <select value={prueba} onChange={e=>{ setPrueba(e.target.value); setConfirm(false) }} style={sel}>
+            <option value="">— Selecciona la prueba —</option>
+            {pruebas.map(p => <option key={p.id} value={p.id}>{p.nombre} {p.codigo ? `(${p.codigo})` : ''}</option>)}
+          </select>
+        </div>
+
+        {/* Grado */}
+        <div style={{ marginBottom:14 }}>
+          <label style={{ display:'block', fontSize:10, letterSpacing:'0.12em',
+            textTransform:'uppercase', color:C.gray, marginBottom:5, fontFamily:'Inter' }}>
+            Grado <span style={{ fontSize:10, color:C.gray }}>(opcional — vacío = todos)</span>
+          </label>
+          <select value={grado} onChange={e=>{ setGrado(e.target.value); setConfirm(false) }} style={sel}>
+            <option value="">Todos los grados</option>
+            {grados.map(g => <option key={g} value={g}>Grado {g}</option>)}
+          </select>
+        </div>
+
+        {/* Salón */}
+        <div style={{ marginBottom:24 }}>
+          <label style={{ display:'block', fontSize:10, letterSpacing:'0.12em',
+            textTransform:'uppercase', color:C.gray, marginBottom:5, fontFamily:'Inter' }}>
+            Salón <span style={{ fontSize:10, color:C.gray }}>(opcional — vacío = todos)</span>
+          </label>
+          <select value={salon} onChange={e=>{ setSalon(e.target.value); setConfirm(false) }} style={sel}
+            disabled={!grado}>
+            <option value="">{grado ? 'Todos los salones' : 'Selecciona grado primero'}</option>
+            {salones.map(s => <option key={s} value={s}>Salón {s}</option>)}
+          </select>
+        </div>
+
+        {msg && (
+          <div style={{ background: msg.startsWith('✅') ? '#F0FFF4' : msg.startsWith('⚠️') ? '#FFFBEB' : '#FEF2F2',
+            border:`1px solid ${msg.startsWith('✅') ? '#BBF7D0' : msg.startsWith('⚠️') ? '#FDE68A' : '#FECACA'}`,
+            borderRadius:6, padding:'10px 14px', marginBottom:16, fontSize:13,
+            color: msg.startsWith('✅') ? C.green : msg.startsWith('⚠️') ? '#92400E' : C.red,
+            fontFamily:'Inter' }}>{msg}</div>
+        )}
+
+        {!confirm ? (
+          <button onClick={() => { if (!prueba) { setMsg('Debes seleccionar una prueba.'); return } setConfirm(true); setMsg('') }}
+            disabled={loading}
+            style={{ width:'100%', padding:'11px', background:C.red, color:C.white,
+              border:'none', borderRadius:6, fontFamily:'Inter', fontSize:13,
+              fontWeight:600, cursor:'pointer' }}>
+            Continuar
+          </button>
+        ) : (
+          <div>
+            <div style={{ background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:8,
+              padding:'12px 16px', marginBottom:14, fontFamily:'Inter' }}>
+              <div style={{ fontSize:12, color:C.red, fontWeight:600, marginBottom:4 }}>
+                ⚠️ Esta acción no se puede deshacer
+              </div>
+              <div style={{ fontSize:12, color:C.gray }}>Se borrarán los resultados de: <strong>{resumen}</strong></div>
+            </div>
+            <div style={{ display:'flex', gap:10 }}>
+              <button onClick={() => setConfirm(false)}
+                style={{ flex:1, padding:'11px', background:C.bg, color:C.text,
+                  border:`1px solid ${C.grayLt}`, borderRadius:6, fontFamily:'Inter',
+                  fontSize:13, cursor:'pointer' }}>
+                Cancelar
+              </button>
+              <button onClick={handleDelete} disabled={loading}
+                style={{ flex:1, padding:'11px', background:C.red, color:C.white,
+                  border:'none', borderRadius:6, fontFamily:'Inter', fontSize:13,
+                  fontWeight:600, cursor: loading ? 'not-allowed' : 'pointer' }}>
+                {loading ? 'Borrando…' : 'Sí, borrar'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 const POR_PAG = 50
 
 // ── MAIN ─────────────────────────────────────────────────────
@@ -1039,6 +1226,7 @@ export default function AdminColegios({ onUpdate }) {
   const [fUser, setFUser]               = useState('')
   const [copiado, setCopiado]           = useState(null)
   const [tendencias, setTendencias]     = useState({})
+  const [modalBorrar, setModalBorrar]   = useState(null)
 
   useEffect(() => { setPagina(1) }, [fNombre, fDepto, fMuni, fUser])
   useEffect(() => { loadColegios() }, [pagina, fNombre, fDepto, fMuni, fUser])
@@ -1115,20 +1303,7 @@ export default function AdminColegios({ onUpdate }) {
     loadColegios()
   }
 
-  const handleDeleteResultados = async (c) => {
-    if (!confirm(`¿Eliminar TODOS los resultados de "${c.nombre}"?\nEsto no se puede deshacer.`)) return
-    try {
-      const { data: ests } = await supabase.from('estudiantes').select('id').eq('colegio_id', c.id)
-      const estIds = (ests||[]).map(e=>e.id)
-      if (estIds.length) await supabase.from('notas_competencia').delete().in('estudiante_id', estIds)
-      await supabase.from('comparativos_salon').delete().eq('colegio_id', c.id)
-      await supabase.from('analisis_preguntas').delete().eq('colegio_id', c.id)
-      await supabase.from('resultados_estudiante').delete().eq('colegio_id', c.id)
-      await supabase.from('comparativos_gestion').delete().eq('colegio_id', c.id)
-      alert('✅ Resultados eliminados correctamente.')
-      loadColegios(); onUpdate()
-    } catch(e) { alert('Error: ' + e.message) }
-  }
+  const handleDeleteResultados = (c) => setModalBorrar(c)
 
   const handleDeleteColegio = async (c) => {
     if (!confirm(`⚠️ ¿Eliminar COMPLETAMENTE "${c.nombre}"?\nSe eliminarán estudiantes y resultados.\nNo se puede deshacer.`)) return
@@ -1315,6 +1490,13 @@ export default function AdminColegios({ onUpdate }) {
         <ModalHistoricos
           colegio={modalHistorico}
           onClose={()=>setModalHistorico(null)}
+        />
+      )}
+      {modalBorrar && (
+        <ModalBorrarResultados
+          colegio={modalBorrar}
+          onClose={()=>setModalBorrar(null)}
+          onDone={()=>{ loadColegios(); onUpdate() }}
         />
       )}
     </div>
