@@ -73,7 +73,7 @@ export default async function handler(req, res) {
     const { data: rpc, error: rpcErr } = await adminSupabase.rpc('verificar_login', {
       p_usuario: usuario.trim(), p_password: password,
     })
-    if (!rpcErr && rpc) {
+    if (!rpcErr && rpc && typeof rpc === 'object' && rpc.role) {
       userResult = rpc
     } else if (rpcErr && rpcErr.code !== 'PGRST202') {
       throw rpcErr
