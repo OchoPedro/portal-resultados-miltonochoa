@@ -692,16 +692,15 @@ export default function ColegioDashboard({session, onLogout}) {
       setSelectedGrado('Todos')
       setSelectedSalon('Todos')
 
-      // Comparativos gestión
-      const { data: comp } = await supabase
-        .from('comparativos_gestion').select('*').eq('prueba_id', pid)
-      setTableroComp(comp || [])
-
-      // Comparativos salón
-      const { data: salon } = await supabase
-        .from('comparativos_salon')
-        .select('*').eq('colegio_id', cid).eq('prueba_id', pid).order('salon')
-      setTableroSalon(salon || [])
+      // Tablero de gestión (calculado dinámicamente)
+      const { data: tablero } = await supabase.rpc('get_tablero_gestion', {
+        p_prueba_id: pid,
+        p_colegio_id: cid,
+      })
+      if (tablero) {
+        setTableroComp(tablero.comparativos || [])
+        setTableroSalon(tablero.por_salon || [])
+      }
 
       // Competencias
       const { data: comps } = await supabase
@@ -827,8 +826,8 @@ export default function ColegioDashboard({session, onLogout}) {
   })
 
   // Tablero orden
-  const tableroOrden = ['mejores','nacional','ciudad','plantel']
-  const tableroLabels = {mejores:'Mejores Promedios', nacional:'Nacional', ciudad:'Ciudad', plantel:'Plantel'}
+  const tableroOrden = ['mejores','nacional','departamento','municipio','plantel']
+  const tableroLabels = {mejores:'Mejores Promedios', nacional:'Nacional', departamento:'Departamento', municipio:'Municipio', plantel:'Plantel'}
 
   const tabs = [
     {id:'tablero',         label:'Tablero de Gestión'},
