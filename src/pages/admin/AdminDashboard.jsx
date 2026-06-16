@@ -37,20 +37,16 @@ export default function AdminDashboard({ session, onLogout }) {
   )
   const [stats, setStats] = useState({ colegios: 0, estudiantes: 0, pruebas: 0 })
 
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      const [{ count: c }, { count: e }, { count: p }] = await Promise.all([
-        supabase.from('colegios').select('*', { count: 'exact', head: true }),
-        supabase.from('estudiantes').select('*', { count: 'exact', head: true }),
-        supabase.from('pruebas').select('*', { count: 'exact', head: true }),
-      ])
-      if (cancelled) return
-      setStats({ colegios: c || 0, estudiantes: e || 0, pruebas: p || 0 })
-    }
-    load()
-    return () => { cancelled = true }
-  }, [])
+  const loadStats = async () => {
+    const [{ count: c }, { count: e }, { count: p }] = await Promise.all([
+      supabase.from('colegios').select('*', { count: 'exact', head: true }),
+      supabase.from('estudiantes').select('*', { count: 'exact', head: true }),
+      supabase.from('pruebas').select('*', { count: 'exact', head: true }),
+    ])
+    setStats({ colegios: c || 0, estudiantes: e || 0, pruebas: p || 0 })
+  }
+
+  useEffect(() => { loadStats() }, [])
 
   const now = new Date().toLocaleDateString('es-CO', {
     weekday:'long', year:'numeric', month:'long', day:'numeric', timeZone:'America/Bogota'

@@ -597,11 +597,7 @@ export default function ColegioDashboard({session, onLogout}) {
   const [detallePreguntas, setDetallePreguntas] = useState([])
   const [allPruebasPromedio, setAllPruebasPromedio] = useState([])
 
-  useEffect(() => {
-    let cancelled = false
-    loadAll().finally(() => { if (cancelled) return })
-    return () => { cancelled = true }
-  }, [])
+  useEffect(() => { loadAll() }, [])
 
   // Filtered students based on selectors
   const students = allStudents.filter(s => {
