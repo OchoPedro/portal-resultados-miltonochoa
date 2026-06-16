@@ -221,11 +221,19 @@ function ClasificacionICFES({ session }) {
   const [estSel,     setEstSel]     = useState([])
   const [codigoDane, setCodigoDane] = useState('')
 
+  // Paginación
+  const POR_PAG = 20
+  const [pagina,   setPagina]   = useState(1)
+  const [total,    setTotal]    = useState(0)
+  const [byClass,  setByClass]  = useState({})
+  // Filtros "activos" (congelados al hacer Consultar, usados en cambio de página)
+  const [activeF,  setActiveF]  = useState(null)
+
   // Data / options
   const [data,      setData]      = useState([])
   const [deptoOpts, setDeptoOpts] = useState([])
-  const [muniAll,   setMuniAll]   = useState([])  // {municipio, departamento}[]
-  const [muniOpts,  setMuniOpts]  = useState([])  // municipios filtrados por deptoSel
+  const [muniAll,   setMuniAll]   = useState([])
+  const [muniOpts,  setMuniOpts]  = useState([])
   const [estOpts,   setEstOpts]   = useState([])
   const [loading,   setLoading]   = useState(false)
   const [importing, setImporting] = useState(false)
@@ -238,6 +246,7 @@ function ClasificacionICFES({ session }) {
     setDeptoSel([]); setMuniSel([]); setEstSel([])
     setDeptoOpts([]); setMuniAll([]); setMuniOpts([]); setEstOpts([])
     setData([]); setConsulted(false); setLastUpdate(null)
+    setTotal(0); setByClass({}); setPagina(1); setActiveF(null)
 
     supabase
       .from('clasificacion_icfes')
@@ -287,31 +296,60 @@ function ClasificacionICFES({ session }) {
       })
   }, [muniSel, anio, periodo, grado])
 
-  const consultar = useCallback(async () => {
+  // Aplica filtros activos a una query base
+  const applyFilters = (q, f) => {
+    if (f.sector)           q = q.eq('sector', f.sector)
+    if (f.clasSel?.length)  q = q.in('clasificacion', f.clasSel)
+    if (f.deptoSel?.length) q = q.in('departamento', f.deptoSel)
+    if (f.muniSel?.length)  q = q.in('municipio', f.muniSel)
+    if (f.estSel?.length)   q = q.in('nombre_sede', f.estSel)
+    if (f.codigoDane?.trim()) q = q.ilike('codigo_dane', `%${f.codigoDane.trim()}%`)
+    return q
+  }
+
+  const loadPage = useCallback(async (pag, f) => {
     setLoading(true)
-    setConsulted(true)
-
-    let q = supabase
-      .from('clasificacion_icfes')
-      .select('*')
-      .eq('anio', anio)
-      .eq('periodo', periodo)
-      .eq('grado', grado)
-      .order('clasificacion', { ascending: true })
-      .order('nombre_sede', { ascending: true })
-      .limit(5000)
-
-    if (sector)          q = q.eq('sector', sector)
-    if (clasSel.length)  q = q.in('clasificacion', clasSel)
-    if (deptoSel.length) q = q.in('departamento', deptoSel)
-    if (muniSel.length)  q = q.in('municipio', muniSel)
-    if (estSel.length)   q = q.in('nombre_sede', estSel)
-    if (codigoDane.trim()) q = q.ilike('codigo_dane', `%${codigoDane.trim()}%`)
-
+    const offset = (pag - 1) * POR_PAG
+    let q = applyFilters(
+      supabase.from('clasificacion_icfes').select('*')
+        .eq('anio', f.anio).eq('periodo', f.periodo).eq('grado', f.grado)
+        .order('clasificacion', { ascending: true })
+        .order('nombre_sede', { ascending: true })
+        .range(offset, offset + POR_PAG - 1),
+      f
+    )
     const { data: rows } = await q
     setData(rows || [])
     setLoading(false)
-  }, [anio, periodo, grado, sector, clasSel, deptoSel, muniSel, estSel, codigoDane])
+  }, [])
+
+  const consultar = useCallback(async () => {
+    setLoading(true)
+    setConsulted(true)
+    setPagina(1)
+
+    const f = { anio, periodo, grado, sector, clasSel, deptoSel, muniSel, estSel, codigoDane }
+    setActiveF(f)
+
+    const base = () => applyFilters(
+      supabase.from('clasificacion_icfes').select('*', { count:'exact', head:true })
+        .eq('anio', f.anio).eq('periodo', f.periodo).eq('grado', f.grado),
+      f
+    )
+
+    // Conteo total + por clasificación en paralelo
+    const [totalRes, ...clasRes] = await Promise.all([
+      base(),
+      ...CLAS_OPTS.map(c => base().eq('clasificacion', c))
+    ])
+
+    setTotal(totalRes.count || 0)
+    const bc = {}
+    CLAS_OPTS.forEach((c, i) => { bc[c] = clasRes[i].count || 0 })
+    setByClass(bc)
+
+    await loadPage(1, f)
+  }, [anio, periodo, grado, sector, clasSel, deptoSel, muniSel, estSel, codigoDane, loadPage])
 
   const importar = async () => {
     setImporting(true)
@@ -372,12 +410,14 @@ function ClasificacionICFES({ session }) {
     XLSX.writeFile(wb, `clasificacion_icfes_${anio}_p${periodo}_g${grado}.xlsx`)
   }
 
-  // KPIs
-  const totalSedes = data.length
-  const byClass    = CLAS_OPTS.reduce((acc, c) => {
-    acc[c] = data.filter(r => r.clasificacion === c).length
-    return acc
-  }, {})
+  const totalPags = Math.ceil(total / POR_PAG)
+
+  const cambiarPagina = (p) => {
+    if (!activeF || p < 1 || p > totalPags) return
+    setPagina(p)
+    loadPage(p, activeF)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   return (
     <div>
@@ -590,7 +630,7 @@ function ClasificacionICFES({ session }) {
               border:`1px solid ${C.grayLt}`, textAlign:'center',
               gridColumn: mobile ? '1/4' : 'auto' }}>
               <div style={{ fontSize:22, fontFamily:'Playfair Display, serif', color:C.navy, fontWeight:700 }}>
-                {totalSedes.toLocaleString('es-CO')}
+                {total.toLocaleString('es-CO')}
               </div>
               <div style={{ fontSize:10, color:C.gray, textTransform:'uppercase',
                 letterSpacing:'0.08em', fontFamily:'Inter', marginTop:2 }}>Total sedes</div>
@@ -601,7 +641,7 @@ function ClasificacionICFES({ session }) {
                 <div key={c} style={{ background:s.bg, borderRadius:9, padding:'12px 14px',
                   border:`1px solid ${s.border}`, textAlign:'center' }}>
                   <div style={{ fontSize:20, fontFamily:'Playfair Display, serif', color:s.color, fontWeight:700 }}>
-                    {byClass[c] || 0}
+                    {(byClass[c] || 0).toLocaleString('es-CO')}
                   </div>
                   <div style={{ fontSize:11, color:s.color, fontWeight:700, fontFamily:'Inter', marginTop:2 }}>
                     {c}
@@ -678,8 +718,49 @@ function ClasificacionICFES({ session }) {
             </div>
           </div>
 
-          <div style={{ marginTop:10, fontSize:11, color:C.gray, fontFamily:'Inter', textAlign:'right' }}>
-            Fuente: ICFES — Clasificación de Planteles Saber 11 · {anio} P{periodo} G{grado}
+          {/* Paginación */}
+          {totalPags > 1 && (
+            <div style={{ display:'flex', justifyContent:'center', alignItems:'center',
+              gap:6, marginTop:16, fontFamily:'Inter', flexWrap:'wrap' }}>
+              <button onClick={() => cambiarPagina(1)} disabled={pagina===1}
+                style={{ padding:'6px 10px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+                  background:C.white, cursor:pagina===1?'not-allowed':'pointer',
+                  color:pagina===1?C.gray:C.navy, fontSize:12 }}>«</button>
+              <button onClick={() => cambiarPagina(pagina-1)} disabled={pagina===1}
+                style={{ padding:'6px 12px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+                  background:C.white, cursor:pagina===1?'not-allowed':'pointer',
+                  color:pagina===1?C.gray:C.navy, fontSize:12 }}>‹ Ant.</button>
+              {/* Páginas cercanas */}
+              {Array.from({ length: Math.min(5, totalPags) }, (_, i) => {
+                const start = Math.max(1, Math.min(pagina - 2, totalPags - 4))
+                const p = start + i
+                return (
+                  <button key={p} onClick={() => cambiarPagina(p)}
+                    style={{ padding:'6px 11px', border:`1px solid ${p===pagina ? C.navy : C.grayLt}`,
+                      borderRadius:6, background: p===pagina ? C.navy : C.white,
+                      color: p===pagina ? C.white : C.navy,
+                      fontWeight: p===pagina ? 700 : 400,
+                      cursor:'pointer', fontSize:12 }}>{p}</button>
+                )
+              })}
+              <button onClick={() => cambiarPagina(pagina+1)} disabled={pagina===totalPags}
+                style={{ padding:'6px 12px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+                  background:C.white, cursor:pagina===totalPags?'not-allowed':'pointer',
+                  color:pagina===totalPags?C.gray:C.navy, fontSize:12 }}>Sig. ›</button>
+              <button onClick={() => cambiarPagina(totalPags)} disabled={pagina===totalPags}
+                style={{ padding:'6px 10px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+                  background:C.white, cursor:pagina===totalPags?'not-allowed':'pointer',
+                  color:pagina===totalPags?C.gray:C.navy, fontSize:12 }}>»</button>
+              <span style={{ fontSize:12, color:C.gray, marginLeft:4 }}>
+                Página <strong style={{ color:C.navy }}>{pagina}</strong> de{' '}
+                <strong style={{ color:C.navy }}>{totalPags}</strong>
+                {' '}· {total.toLocaleString('es-CO')} sedes
+              </span>
+            </div>
+          )}
+
+          <div style={{ marginTop:8, fontSize:11, color:C.gray, fontFamily:'Inter', textAlign:'right' }}>
+            Fuente: ICFES — Clasificación de Planteles Saber 11 · {activeF?.anio || anio} P{activeF?.periodo || periodo} G{activeF?.grado || grado}
           </div>
         </>
       )}
