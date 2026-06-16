@@ -17,34 +17,39 @@ export default function EstudianteDashboard({ session, onLogout }) {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('resumen')
 
-  useEffect(() => { loadData() }, [])
-
-  const loadData = async () => {
-    try {
-      const { data: resultados } = await supabase
-        .from('resultados_estudiante')
-        .select('*, pruebas(codigo, nombre, fecha, grado)')
-        .eq('estudiante_id', session.id)
-        .order('created_at', { ascending: false })
-
-      setTodos(resultados || [])
-
-      if (resultados?.length) {
-        const r = resultados[0]
-        const { data: colegioPares } = await supabase
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const { data: resultados } = await supabase
           .from('resultados_estudiante')
-          .select('puntaje_global, estudiante_id, estudiantes(nombre)')
-          .eq('colegio_id', r.colegio_id)
-          .eq('prueba_id', r.prueba_id)
-          .order('puntaje_global', { ascending: false })
-        setCompañeros(colegioPares || [])
+          .select('*, pruebas(codigo, nombre, fecha, grado)')
+          .eq('estudiante_id', session.id)
+          .order('created_at', { ascending: false })
+
+        if (cancelled) return
+        setTodos(resultados || [])
+
+        if (resultados?.length) {
+          const r = resultados[0]
+          const { data: colegioPares } = await supabase
+            .from('resultados_estudiante')
+            .select('puntaje_global, estudiante_id, estudiantes(nombre)')
+            .eq('colegio_id', r.colegio_id)
+            .eq('prueba_id', r.prueba_id)
+            .order('puntaje_global', { ascending: false })
+          if (cancelled) return
+          setCompañeros(colegioPares || [])
+        }
+      } catch (e) {
+        // error de red — la UI muestra estado vacío
+      } finally {
+        if (!cancelled) setLoading(false)
       }
-    } catch (e) {
-      // error de red — la UI muestra estado vacío
-    } finally {
-      setLoading(false)
     }
-  }
+    load()
+    return () => { cancelled = true }
+  }, [])
 
   const handleSelectPrueba = async (idx) => {
     setSelectedIdx(idx)

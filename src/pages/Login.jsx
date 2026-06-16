@@ -64,7 +64,7 @@ export default function Login({ onLogin }) {
     const u = params.get('u')
     const p = params.get('p')
     if (u && p) {
-      window.history.replaceState({}, document.title, window.location.pathname)
+      if (window.location.hash) history.replaceState(null, '', window.location.pathname)
       doLogin(u, p, true)
     }
   }, [doLogin])

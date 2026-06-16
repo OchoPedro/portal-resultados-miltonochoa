@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, Suspense } from 'react'
 import { setSupabaseToken, clearSupabaseToken } from './lib/supabase'
 import Login from './pages/Login'
-import EstudianteDashboard from './pages/EstudianteDashboard'
-import ColegioDashboard from './pages/ColegioDashboard'
-import AdminDashboard from './pages/admin/AdminDashboard'
+
+const EstudianteDashboard = React.lazy(() => import('./pages/EstudianteDashboard'))
+const ColegioDashboard = React.lazy(() => import('./pages/ColegioDashboard'))
+const AdminDashboard = React.lazy(() => import('./pages/admin/AdminDashboard'))
+
+const LazyFallback = <div style={{padding:60,textAlign:'center',color:'#999'}}>Cargando...</div>
 
 // Decodifica el payload del JWT sin verificar la firma (solo para lectura de claims).
 // La firma la valida Supabase en cada petición — aquí solo necesitamos saber el rol.
@@ -30,7 +33,7 @@ export default function App() {
         try {
           const saved = sessionStorage.getItem('mo_session')
           if (saved) setSession(JSON.parse(saved))
-        } catch(e) {}
+        } catch(e) { console.error('Session parse error:', e) }
       } else {
         // Token expirado → limpiar
         sessionStorage.removeItem('mo_token')
@@ -65,8 +68,11 @@ export default function App() {
   )
 
   if (!session) return <Login onLogin={handleLogin} />
-  if (session.role === 'admin') return <AdminDashboard session={session.data} onLogout={handleLogout} />
-  if (session.role === 'colegio') return <ColegioDashboard session={session.data} onLogout={handleLogout} />
-  if (session.role === 'estudiante') return <EstudianteDashboard session={session.data} onLogout={handleLogout} />
-  return null
+  return (
+    <Suspense fallback={LazyFallback}>
+      {session.role === 'admin' && <AdminDashboard session={session.data} onLogout={handleLogout} />}
+      {session.role === 'colegio' && <ColegioDashboard session={session.data} onLogout={handleLogout} />}
+      {session.role === 'estudiante' && <EstudianteDashboard session={session.data} onLogout={handleLogout} />}
+    </Suspense>
+  )
 }

@@ -109,7 +109,7 @@ export default function ReportePlantel({ codigo, nombre, anioRef, onClose }) {
     // 1. Datos del plantel
     const { data: rows } = await supabase
       .from('ranking_colegios')
-      .select('*')
+      .select('anio, departamento, eval_estudiantes, lectura_critica, matematicas, ciencias_sociales, ciencias_naturales, ingles, ponderado, puntaje_global, puesto_anio, puesto_periodo, codigo')
       .eq('codigo', codigo)
       .order('anio', { ascending: true })
 
@@ -125,7 +125,7 @@ export default function ReportePlantel({ codigo, nombre, anioRef, onClose }) {
         .select('anio,lectura_critica,matematicas,ciencias_sociales,ciencias_naturales,ingles,ponderado,puntaje_global')
         .eq('departamento', depto)
         .in('anio', anios)
-        .limit(50000)
+        .limit(5000) // TODO: implement pagination for larger datasets
 
       // Agrupar por año y calcular promedios
       const byYear = {}
@@ -163,7 +163,7 @@ export default function ReportePlantel({ codigo, nombre, anioRef, onClose }) {
           .select('anio,lectura_critica,matematicas,ciencias_sociales,ciencias_naturales,ingles,ponderado,puntaje_global')
           .in('departamento', regionDepts)
           .in('anio', anios)
-          .limit(50000)
+          .limit(5000) // TODO: implement pagination for larger datasets
 
         const byYearR = {}
         ;(rRows || []).forEach(r => {

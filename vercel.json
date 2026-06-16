@@ -1,7 +1,9 @@
 {
   "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/aamo-admin", "destination": "/index.html" },
-    { "source": "/aamo-admin/(.*)", "destination": "/index.html" }
+    { "source": "/aamo-admin/(.*)", "destination": "/index.html" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
     {

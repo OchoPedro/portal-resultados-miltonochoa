@@ -5,8 +5,13 @@ import bcrypt from 'bcryptjs'
 const checkPassword = async (stored, entered) => {
   if (!stored || !entered) return false
   if (stored.startsWith('$2')) return bcrypt.compare(entered, stored)
-  return stored === entered
+  // Plaintext passwords are no longer accepted — force migration to bcrypt
+  return false
 }
+
+const PLAINTEXT_ERROR = 'Contraseña requiere actualización. Contacte al administrador.'
+
+const isPlaintextHash = (stored) => stored && !stored.startsWith('$2')
 
 export const config = { maxDuration: 30 }
 
@@ -17,6 +22,8 @@ const adminSupabase = createClient(
 )
 
 // Rate limiting en memoria del proceso servidor (no se puede bypassear recargando)
+// TODO: Move rate limiting to persistent store (Upstash Redis or Supabase table).
+// In-memory _serverAttempts resets on every Vercel cold start.
 const _serverAttempts = {}
 function _srvBlocked(ip) {
   const r = _serverAttempts[ip]
@@ -84,9 +91,13 @@ export default async function handler(req, res) {
         .from('administradores')
         .select('id, nombre, usuario, password_hash, activo, modulos')
         .eq('usuario', usuario.trim()).eq('activo', true).single()
-      if (admin && await checkPassword(admin.password_hash, password)) {
-        const { password_hash, ...safe } = admin
-        userResult = { role: 'admin', data: safe }
+      if (admin) {
+        if (isPlaintextHash(admin.password_hash))
+          return res.status(401).json({ error: PLAINTEXT_ERROR })
+        if (await checkPassword(admin.password_hash, password)) {
+          const { password_hash, ...safe } = admin
+          userResult = { role: 'admin', data: safe }
+        }
       }
     }
 
@@ -95,9 +106,13 @@ export default async function handler(req, res) {
         .from('colegios')
         .select('id, nombre, usuario, password_hash, ciudad, municipio, departamento_nombre, contactos, ultima_sesion')
         .eq('usuario', usuario.trim()).eq('activo', true).single()
-      if (colegio && await checkPassword(colegio.password_hash, password)) {
-        const { password_hash, ...safe } = colegio
-        userResult = { role: 'colegio', data: safe }
+      if (colegio) {
+        if (isPlaintextHash(colegio.password_hash))
+          return res.status(401).json({ error: PLAINTEXT_ERROR })
+        if (await checkPassword(colegio.password_hash, password)) {
+          const { password_hash, ...safe } = colegio
+          userResult = { role: 'colegio', data: safe }
+        }
       }
     }
 
@@ -106,9 +121,13 @@ export default async function handler(req, res) {
         .from('estudiantes')
         .select('id, nombre, usuario, password_hash, activo, grado, salon, colegio_id, ultima_sesion, colegios(nombre, ciudad)')
         .eq('usuario', usuario.trim()).eq('activo', true).single()
-      if (est && await checkPassword(est.password_hash, password)) {
-        const { password_hash, ...safe } = est
-        userResult = { role: 'estudiante', data: safe }
+      if (est) {
+        if (isPlaintextHash(est.password_hash))
+          return res.status(401).json({ error: PLAINTEXT_ERROR })
+        if (await checkPassword(est.password_hash, password)) {
+          const { password_hash, ...safe } = est
+          userResult = { role: 'estudiante', data: safe }
+        }
       }
     }
 

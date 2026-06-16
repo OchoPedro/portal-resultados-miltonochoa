@@ -1,18 +1,8 @@
 import { useState, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
-import { C } from '../../components/ui'
+import { C, Card, Badge } from '../../components/ui'
 import { generateCredentials } from '../../lib/utils'
 import * as XLSX from 'xlsx'
-
-const Card = ({children, style={}}) => (
-  <div style={{ background:C.white, borderRadius:12, padding:24,
-    boxShadow:'0 1px 4px rgba(10,31,61,0.07)', border:`1px solid ${C.grayLt}`, ...style }}>{children}</div>
-)
-
-const Badge = ({children, color}) => (
-  <span style={{ background:color+'18', color, border:`1px solid ${color}40`,
-    padding:'2px 8px', borderRadius:20, fontSize:11, fontWeight:500 }}>{children}</span>
-)
 
 export default function AdminEstudiantes({ onUpdate }) {
   const [archivos, setArchivos] = useState([]) // [{nombre, codigo, estudiantes, estado}]

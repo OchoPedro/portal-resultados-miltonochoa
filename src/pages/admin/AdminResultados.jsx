@@ -383,6 +383,7 @@ export default function AdminResultados({ onUpdate }) {
           const r = await visionImagen(archivos[i])
           todasLasPaginas.push({ usuario:r.usuario, sesion:Number(r.sesion), respuestas:r.respuestas || '' })
         } catch(e) {
+          console.error('Vision image error:', e)
           todasLasPaginas.push({ usuario:null, sesion:null, respuestas:'', error:e.message })
           setProgreso({ actual:i+1, total, msg:`⚠️ Error imagen ${i+1}: ${e.message.substring(0,60)}` })
           await new Promise(r => setTimeout(r, 1500))

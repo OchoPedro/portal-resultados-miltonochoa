@@ -1,11 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { C } from '../../components/ui'
-
-const Card = ({children, style={}}) => (
-  <div style={{ background:C.white, borderRadius:12, padding:24,
-    boxShadow:'0 1px 4px rgba(10,31,61,0.07)', border:`1px solid ${C.grayLt}`, ...style }}>{children}</div>
-)
+import { C, Card, Badge } from '../../components/ui'
 
 const Input = ({label, value, onChange, placeholder, type='text', required=false}) => (
   <div style={{ marginBottom:16 }}>
@@ -30,11 +25,6 @@ const Btn = ({children, onClick, color=C.navy, outline=false, small=false, disab
     cursor: disabled ? 'not-allowed' : 'pointer',
     opacity: disabled ? 0.6 : 1,
   }}>{children}</button>
-)
-
-const Badge = ({children, color}) => (
-  <span style={{ background:color+'18', color, border:`1px solid ${color}40`,
-    padding:'2px 8px', borderRadius:20, fontSize:11, fontWeight:500 }}>{children}</span>
 )
 
 const MODULOS_DISP = [

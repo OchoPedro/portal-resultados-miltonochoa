@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
-import { C } from '../../components/ui'
+import { C, Card, Badge } from '../../components/ui'
 import { generateCredentials } from '../../lib/utils'
 import { COLOMBIA } from '../../lib/colombia'
 import * as XLSX from 'xlsx'
@@ -10,12 +10,6 @@ const DEPARTAMENTOS = Object.keys(COLOMBIA).sort()
 const CALENDARIO_OPTIONS = ['A', 'B']
 const NATURALEZA_OPTIONS  = ['Oficial', 'Privada', 'Concesión']
 const JORNADA_OPTIONS     = ['Mañana', 'Tarde', 'Noche', 'Completa / Única', 'Sabatino']
-
-const Card = ({children, style={}}) => (
-  <div style={{ background:C.white, borderRadius:12, padding:24,
-    boxShadow:'0 1px 4px rgba(10,31,61,0.07), 0 4px 16px rgba(10,31,61,0.05)',
-    border:`1px solid ${C.grayLt}`, ...style }}>{children}</div>
-)
 
 const Input = ({label, value, onChange, placeholder, type='text', required=false}) => (
   <div style={{ marginBottom:14 }}>
@@ -57,11 +51,6 @@ const Btn = ({children, onClick, color=C.navy, outline=false, small=false, disab
     cursor: disabled ? 'not-allowed' : 'pointer',
     opacity: disabled ? 0.6 : 1, letterSpacing:'0.04em', whiteSpace:'nowrap',
   }}>{children}</button>
-)
-
-const Badge = ({children, color}) => (
-  <span style={{ background:color+'18', color, border:`1px solid ${color}40`,
-    padding:'2px 8px', borderRadius:20, fontSize:11, fontWeight:500 }}>{children}</span>
 )
 
 const SectionTitle = ({children}) => (

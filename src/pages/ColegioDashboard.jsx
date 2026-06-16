@@ -98,7 +98,7 @@ function PlantelEstudiantes({ colegioId }) {
   useEffect(() => {
     const load = async () => {
       const { data } = await supabase.from('estudiantes')
-        .select('*').eq('colegio_id', colegioId).eq('activo', true)
+        .select('id, nombre, usuario, grado, salon').eq('colegio_id', colegioId).eq('activo', true)
         .order('nombre')
       setEstudiantes(data || [])
       setLoading(false)
@@ -182,6 +182,7 @@ function PlantelEstudiantes({ colegioId }) {
 
 // ── PLANTEL: REPORTE DE RESULTADOS ───────────────────────────
 function PlantelResultados({ colegioId, pruebas }) {
+  const mobile = useMobile()
   const [estudiantes, setEstudiantes] = useState([])
   const [resultados, setResultados] = useState([])
   const [loading, setLoading] = useState(true)
@@ -192,7 +193,7 @@ function PlantelResultados({ colegioId, pruebas }) {
   useEffect(() => {
     const load = async () => {
       const { data: est } = await supabase.from('estudiantes')
-        .select('*').eq('colegio_id', colegioId).eq('activo', true).order('nombre')
+        .select('id, nombre, usuario, grado, salon').eq('colegio_id', colegioId).eq('activo', true).order('nombre')
       setEstudiantes(est || [])
       setLoading(false)
     }
@@ -317,6 +318,7 @@ function PlantelResultados({ colegioId, pruebas }) {
 
 // ── PLANTEL: MENCIÓN DE HONOR ─────────────────────────────────
 function PlantelMencion({ colegioId, pruebas }) {
+  const mobile = useMobile()
   const [filtroPrueba, setFiltroPrueba] = useState('')
   const [filtroGrado, setFiltroGrado] = useState('Todos')
   const [filtroSalon, setFiltroSalon] = useState('Todos')
@@ -345,7 +347,7 @@ function PlantelMencion({ colegioId, pruebas }) {
       setFiltroSalon('Todos')
     }
     updateSalones()
-  }, [filtroGrado])
+  }, [filtroGrado, colegioId])
 
   useEffect(() => {
     if (!filtroPrueba) return
@@ -482,7 +484,7 @@ function RecomendacionesClaude({ session, prueba }) {
       setLoading(true)
       if (!session?.id || !prueba?.id) { setLoading(false); return }
       const { data } = await supabase.from('analisis_ia')
-        .select('*')
+        .select('id, contenido, created_at, publicado')
         .eq('colegio_id', session.id)
         .eq('prueba_id', prueba.id)
         .eq('publicado', true)
@@ -595,7 +597,11 @@ export default function ColegioDashboard({session, onLogout}) {
   const [detallePreguntas, setDetallePreguntas] = useState([])
   const [allPruebasPromedio, setAllPruebasPromedio] = useState([])
 
-  useEffect(() => { loadAll() }, [])
+  useEffect(() => {
+    let cancelled = false
+    loadAll().finally(() => { if (cancelled) return })
+    return () => { cancelled = true }
+  }, [])
 
   // Filtered students based on selectors
   const students = allStudents.filter(s => {
@@ -627,7 +633,7 @@ export default function ColegioDashboard({session, onLogout}) {
 
       // Cargar todas las pruebas activas
       const { data: pruebasData } = await supabase
-        .from('pruebas').select('*').eq('activa', true)
+        .from('pruebas').select('id, codigo, nombre, fecha, grado, tipo, activa, created_at').eq('activa', true)
         .order('created_at', {ascending: false})
       setAllPruebas(pruebasData || [])
 
@@ -723,14 +729,14 @@ export default function ColegioDashboard({session, onLogout}) {
 
       // Oportunidades
       const { data: opor } = await supabase
-        .from('analisis_preguntas').select('*')
+        .from('analisis_preguntas').select('id, nro_pregunta, sesion, area, asignatura, competencia, pct_colegio, pct_nacional, oportunidad_mejora')
         .eq('colegio_id', cid).eq('prueba_id', pid)
         .eq('oportunidad_mejora', true).order('pct_colegio')
       setOportunidades(opor || [])
 
       // Detalle Prueba — todas las preguntas
       const { data: detalle } = await supabase
-        .from('analisis_preguntas').select('*')
+        .from('analisis_preguntas').select('id, nro_pregunta, sesion, area, asignatura, competencia, pct_colegio, pct_nacional, oportunidad_mejora')
         .eq('colegio_id', cid).eq('prueba_id', pid)
         .order('sesion').order('nro_pregunta')
       setDetallePreguntas(detalle || [])

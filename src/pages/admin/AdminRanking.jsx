@@ -116,7 +116,7 @@ export default function AdminRanking() {
         .from('ranking_colegios')
         .select('departamento,ciudad,eval_estudiantes,lectura_critica,matematicas,ciencias_sociales,ciencias_naturales,ingles,ponderado,puntaje_global')
         .eq('anio', year)
-        .limit(50000)
+        .limit(5000) // TODO: implement pagination for larger datasets
       if (modo === 'municipios' && dep) q = q.eq('departamento', dep)
       if (nat) q = q.eq('naturaleza', nat)
       if (cal) q = q.eq('calendario', cal)

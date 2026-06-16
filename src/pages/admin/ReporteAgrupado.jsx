@@ -133,7 +133,7 @@ export default function ReporteAgrupado({ tipo, nombre, departamento, anioRef, o
       .from('ranking_colegios')
       .select('anio,eval_estudiantes,lectura_critica,matematicas,ciencias_sociales,ciencias_naturales,ingles,ponderado,puntaje_global')
       .eq('anio', year)
-      .limit(50000)
+      .limit(5000) // TODO: implement pagination for larger datasets
 
     if (tipo === 'municipio')     { q = q.eq('ciudad', nombre).eq('departamento', departamento) }
     else if (tipo === 'departamento') { q = q.eq('departamento', nombre) }
@@ -149,7 +149,7 @@ export default function ReporteAgrupado({ tipo, nombre, departamento, anioRef, o
       .from('ranking_colegios')
       .select('anio,eval_estudiantes,lectura_critica,matematicas,ciencias_sociales,ciencias_naturales,ingles,ponderado,puntaje_global')
       .eq('anio', year)
-      .limit(50000)
+      .limit(5000) // TODO: implement pagination for larger datasets
 
     if (tipo === 'municipio') {
       // contexto = departamento
