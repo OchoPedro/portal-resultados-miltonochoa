@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { C, useMobile } from '../../components/ui'
-import AdminColegios from './AdminColegios'
-import AdminEstudiantes from './AdminEstudiantes'
+import AdminBaseDatos from './AdminBaseDatos'
 import AdminPruebas from './AdminPruebas'
 import AdminResultados from './AdminResultados'
 import AdminAdmins from './AdminAdmins'
@@ -11,8 +10,7 @@ import AdminRanking from './AdminRanking'
 import HojasRespuesta from '../../components/HojasRespuesta'
 
 const MENU_ALL = [
-  { id:'colegios',     label:'Colegios',           icon:'🏫', desc:'Gestión de instituciones' },
-  { id:'estudiantes',  label:'Estudiantes',         icon:'👥', desc:'Carga masiva de estudiantes' },
+  { id:'basedatos',    label:'Base de Datos',       icon:'🗄',  desc:'Colegios, Estudiantes y Colaboradores' },
   { id:'pruebas',      label:'Pruebas',             icon:'📋', desc:'Tipos y referencias' },
   { id:'resultados',   label:'Resultados',          icon:'📊', desc:'Cargar resultados de pruebas' },
   { id:'ranking',      label:'Ranking',             icon:'🏆', desc:'Ranking Colombia · Saber 11' },
@@ -33,7 +31,7 @@ export default function AdminDashboard({ session, onLogout }) {
     : MENU_ALL.filter(m => m.id !== 'admins' && session.modulos.includes(m.id))
 
   const [section, setSection] = useState(
-    esSuperadmin ? 'colegios' : (session.modulos?.[0] || 'colegios')
+    esSuperadmin ? 'basedatos' : (session.modulos?.[0] || 'basedatos')
   )
   const [stats, setStats] = useState({ colegios: 0, estudiantes: 0, pruebas: 0 })
 
@@ -182,8 +180,7 @@ export default function AdminDashboard({ session, onLogout }) {
         </div>
 
         {/* Contenido */}
-        {section==='colegios'    && <AdminColegios    onUpdate={loadStats} />}
-        {section==='estudiantes' && <AdminEstudiantes onUpdate={loadStats} />}
+        {section==='basedatos'   && <AdminBaseDatos   onUpdate={loadStats} />}
         {section==='pruebas'     && <AdminPruebas     onUpdate={loadStats} />}
         {section==='resultados'  && <AdminResultados  onUpdate={loadStats} />}
         {section==='ranking'     && <AdminRanking />}
