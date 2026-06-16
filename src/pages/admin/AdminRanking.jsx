@@ -198,10 +198,13 @@ function IndexChart({ stats }) {
               return (
                 <g key={si}>
                   <rect x={x} y={y} width={bW} height={bH}
-                    fill={bColors[si % bColors.length]} rx={2} opacity={0.88} />
+                    fill={bColors[si % bColors.length]} rx={2} opacity={0.88}
+                    style={{ cursor:'pointer' }}>
+                    <title>{labels[gi]} {s.anio}: {val.toFixed(4)}</title>
+                  </rect>
                   {bH > 14 && (
                     <text x={x+bW/2} y={y+9} fontSize={6.5} fill="white"
-                      textAnchor="middle" fontWeight="700">
+                      textAnchor="middle" fontWeight="700" style={{ pointerEvents:'none' }}>
                       {val.toFixed(4)}
                     </text>
                   )}
@@ -220,6 +223,123 @@ function IndexChart({ stats }) {
         </g>
       ))}
     </svg>
+  )
+}
+
+function ScatterChart({ data, aniosPond }) {
+  const [hovered, setHovered] = useState(null)
+  const W=580, H=260, PAD={ top:16, right:20, bottom:50, left:52 }
+  const cW = W-PAD.left-PAD.right, cH = H-PAD.top-PAD.bottom
+  const bColors = ['#0A1F3D','#2D9B6F','#3B82F6']
+  const colorMap = {}
+  ;(aniosPond||[]).forEach((a,i) => { colorMap[a] = bColors[i % bColors.length] })
+
+  const valid = data.filter(r => r.puntaje_global != null && r.idx_ingles != null)
+  const allX = valid.map(r => +r.puntaje_global)
+  const allY = valid.map(r => +r.idx_ingles)
+  const minX = Math.max(0, Math.min(...allX) - 0.02)
+  const maxX = Math.min(1, Math.max(...allX) + 0.02)
+  const minY = Math.max(0, Math.min(...allY) - 0.02)
+  const maxY = Math.min(1, Math.max(...allY) + 0.02)
+
+  const xPos = v => PAD.left + ((v - minX) / (maxX - minX || 1)) * cW
+  const yPos = v => PAD.top  + cH - ((v - minY) / (maxY - minY || 1)) * cH
+
+  const xTicks = 5, yTicks = 5
+  const xStep = (maxX - minX) / xTicks
+  const yStep = (maxY - minY) / yTicks
+
+  return (
+    <div style={{ position:'relative' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width:'100%', overflow:'visible' }}
+        onMouseLeave={() => setHovered(null)}>
+        {/* Grid Y */}
+        {Array.from({ length: yTicks+1 }, (_, i) => {
+          const v = minY + i * yStep
+          const y = yPos(v)
+          return (
+            <g key={i}>
+              <line x1={PAD.left} y1={y} x2={W-PAD.right} y2={y}
+                stroke={i===0 ? '#D1D5DB' : '#F3F4F6'} strokeWidth={i===0?1:0.75} />
+              <text x={PAD.left-4} y={y+3.5} fontSize={8} fill="#9CA3AF" textAnchor="end">
+                {v.toFixed(2)}
+              </text>
+            </g>
+          )
+        })}
+        {/* Grid X */}
+        {Array.from({ length: xTicks+1 }, (_, i) => {
+          const v = minX + i * xStep
+          const x = xPos(v)
+          return (
+            <g key={i}>
+              <line x1={x} y1={PAD.top} x2={x} y2={PAD.top+cH}
+                stroke='#F3F4F6' strokeWidth={0.75} />
+              <text x={x} y={PAD.top+cH+12} fontSize={8} fill="#9CA3AF" textAnchor="middle">
+                {v.toFixed(2)}
+              </text>
+            </g>
+          )
+        })}
+        {/* Puntos */}
+        {valid.map((r, i) => {
+          const cx = xPos(+r.puntaje_global)
+          const cy = yPos(+r.idx_ingles)
+          const color = colorMap[r.anio] || '#6B7280'
+          const isHov = hovered?.i === i
+          return (
+            <circle key={i} cx={cx} cy={cy} r={isHov ? 6 : 4}
+              fill={color} opacity={isHov ? 1 : 0.72} stroke="white" strokeWidth={isHov?1.5:0.5}
+              style={{ cursor:'pointer', transition:'r 0.1s, opacity 0.1s' }}
+              onMouseEnter={() => setHovered({ i, r, cx, cy })}
+            />
+          )
+        })}
+        {/* Ejes label */}
+        <text x={PAD.left + cW/2} y={H-4} fontSize={9} fill="#6B7280" textAnchor="middle" fontWeight="600">
+          Índice Total
+        </text>
+        <text x={10} y={PAD.top + cH/2} fontSize={9} fill="#6B7280" textAnchor="middle"
+          fontWeight="600" transform={`rotate(-90, 10, ${PAD.top + cH/2})`}>
+          Inglés
+        </text>
+        {/* Leyenda */}
+        {(aniosPond||[]).map((a,i) => (
+          <g key={a} transform={`translate(${PAD.left + i*90},${H-8})`}>
+            <rect x={0} y={-9} width={10} height={10} fill={bColors[i%bColors.length]} rx={2} />
+            <text x={14} y={0} fontSize={9} fill="#374151" fontWeight="600">{a}</text>
+          </g>
+        ))}
+      </svg>
+      {/* Tooltip flotante */}
+      {hovered && (
+        <div style={{
+          position:'absolute',
+          left: Math.min(hovered.cx / W * 100, 70) + '%',
+          top: (hovered.cy / H * 100) + '%',
+          transform:'translate(12px,-50%)',
+          background:C.navy, color:C.white, borderRadius:8,
+          padding:'8px 12px', fontSize:11, fontFamily:'Inter',
+          pointerEvents:'none', zIndex:10, minWidth:180,
+          boxShadow:'0 4px 16px rgba(10,31,61,0.25)', lineHeight:1.6,
+        }}>
+          <div style={{ fontWeight:700, marginBottom:2 }}>{hovered.r.nombre_sede}</div>
+          <div style={{ color:'rgba(255,255,255,0.65)', fontSize:10 }}>
+            {hovered.r.municipio} · {hovered.r.departamento}
+          </div>
+          <div style={{ marginTop:4, display:'grid', gridTemplateColumns:'1fr 1fr', gap:'2px 10px' }}>
+            <span style={{ color:'rgba(255,255,255,0.6)' }}>Año</span>
+            <span style={{ fontWeight:700 }}>{hovered.r.anio}</span>
+            <span style={{ color:'rgba(255,255,255,0.6)' }}>Clasificación</span>
+            <span style={{ fontWeight:700 }}>{hovered.r.clasificacion || '—'}</span>
+            <span style={{ color:'rgba(255,255,255,0.6)' }}>Índice Total</span>
+            <span style={{ fontWeight:700 }}>{parseFloat(hovered.r.puntaje_global).toFixed(4)}</span>
+            <span style={{ color:'rgba(255,255,255,0.6)' }}>Inglés</span>
+            <span style={{ fontWeight:700 }}>{parseFloat(hovered.r.idx_ingles).toFixed(4)}</span>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -1000,6 +1120,19 @@ function ClasificacionICFES({ session }) {
               <IndexChart stats={ponderadoStats} />
             </>)}
 
+            {/* Gráfica: Dispersión Índice Total vs Inglés */}
+            {card(<>
+              <div style={{ fontSize:11, fontWeight:700, color:C.navy, letterSpacing:'0.08em',
+                textTransform:'uppercase', fontFamily:'Inter', marginBottom:4,
+                paddingBottom:10, borderBottom:`1px solid ${C.bg2}` }}>
+                Dispersión — Índice Total vs Inglés por plantel
+              </div>
+              <div style={{ fontSize:11, color:C.gray, fontFamily:'Inter', marginBottom:12 }}>
+                Cada punto representa un plantel en un año. Pasa el cursor para ver el detalle.
+              </div>
+              <ScatterChart data={ponderadoData} aniosPond={aniosPond} />
+            </>)}
+
             {/* Gráfica: Cobertura */}
             {card(<>
               <div style={{ fontSize:11, fontWeight:700, color:C.navy, letterSpacing:'0.08em',
@@ -1087,7 +1220,7 @@ function ClasificacionICFES({ session }) {
                         pondMap[row.codigo_dane][row.anio] = row
                       })
                       return pageRows.map((r, i) => {
-                      const prevPond = pondMap[r.codigo_dane]?.[r.anio + 1] || null
+                      const prevPond = pondMap[r.codigo_dane]?.[r.anio - 1] || null
                       const n = (pondPagina-1)*POND_PAG + i + 1
                       const isNewGroup = i === 0 || pageRows[i-1].codigo_dane !== r.codigo_dane
                       const bg = isNewGroup
