@@ -181,7 +181,7 @@ function IndexChart({ stats }) {
             <line x1={PAD.left} y1={y} x2={W-PAD.right} y2={y}
               stroke={v===0 ? '#D1D5DB' : '#F3F4F6'} strokeWidth={v===0 ? 1 : 0.75} />
             <text x={PAD.left-4} y={y+3.5} fontSize={8} fill="#9CA3AF" textAnchor="end">
-              {(v*100).toFixed(0)}%
+              {v.toFixed(2)}
             </text>
           </g>
         )
@@ -202,7 +202,7 @@ function IndexChart({ stats }) {
                   {bH > 14 && (
                     <text x={x+bW/2} y={y+9} fontSize={7.5} fill="white"
                       textAnchor="middle" fontWeight="700">
-                      {(val*100).toFixed(0)}
+                      {val.toFixed(2)}
                     </text>
                   )}
                 </g>
@@ -566,50 +566,18 @@ function ClasificacionICFES({ session }) {
     const avgTotal = Math.round(stats.reduce((s, st) => s + st.total, 0) / stats.length)
     setByClass(avgByClass)
 
-    // 5. Tabla ponderada: agrupar por codigo_dane y promediar índices
-    const byDane = {}
+    // 5. Tabla: filas individuales por año (sin promediar), ordenadas por plantel → año desc
+    const tableRows = []
     last3.forEach(a => {
       rowsByAnio[a].forEach(r => {
-        if (!r.codigo_dane) return
-        if (!byDane[r.codigo_dane]) {
-          byDane[r.codigo_dane] = {
-            codigo_dane: r.codigo_dane, nombre_sede: r.nombre_sede,
-            municipio: r.municipio, departamento: r.departamento, sector: r.sector,
-            clasHist: {}, clasReciente: null, anioReciente: 0,
-            iMat:[], iCn:[], iSoc:[], iLc:[], iIng:[], iPont:[], nEval:0, nMat:0, cnt:0,
-          }
-        }
-        const e = byDane[r.codigo_dane]
-        e.clasHist[a] = r.clasificacion
-        if (a > e.anioReciente) { e.anioReciente = a; e.clasReciente = r.clasificacion }
-        if (r.idx_matematicas != null) e.iMat.push(+r.idx_matematicas)
-        if (r.idx_cn != null)          e.iCn.push(+r.idx_cn)
-        if (r.idx_sociales != null)    e.iSoc.push(+r.idx_sociales)
-        if (r.idx_lc != null)          e.iLc.push(+r.idx_lc)
-        if (r.idx_ingles != null)      e.iIng.push(+r.idx_ingles)
-        if (r.puntaje_global != null)  e.iPont.push(+r.puntaje_global)
-        e.nEval += r.num_evaluados || 0
-        e.nMat  += r.num_matriculados || 0
-        e.cnt++
+        if (r.codigo_dane) tableRows.push({ ...r })
       })
     })
-
-    const avg2 = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null
-    const ORDER = { 'A+':0, 'A':1, 'B':2, 'C':3, 'D':4 }
-
-    const tableRows = Object.values(byDane).map(e => ({
-      codigo_dane: e.codigo_dane, nombre_sede: e.nombre_sede,
-      municipio: e.municipio, departamento: e.departamento, sector: e.sector,
-      clasificacion: e.clasReciente, clasHist: e.clasHist,
-      idx_matematicas: avg2(e.iMat), idx_cn: avg2(e.iCn),
-      idx_sociales: avg2(e.iSoc), idx_lc: avg2(e.iLc),
-      idx_ingles: avg2(e.iIng), puntaje_global: avg2(e.iPont),
-      num_evaluados:   e.cnt > 0 ? Math.round(e.nEval / e.cnt) : null,
-      num_matriculados:e.cnt > 0 ? Math.round(e.nMat  / e.cnt) : null,
-      aniosPresentes: e.cnt,
-    })).sort((a, b) => {
-      const oa = ORDER[a.clasificacion] ?? 9, ob = ORDER[b.clasificacion] ?? 9
-      return oa !== ob ? oa - ob : (a.nombre_sede || '').localeCompare(b.nombre_sede || '')
+    tableRows.sort((a, b) => {
+      const na = (a.nombre_sede || '').toUpperCase()
+      const nb = (b.nombre_sede || '').toUpperCase()
+      if (na !== nb) return na.localeCompare(nb, 'es')
+      return b.anio - a.anio
     })
 
     setTotal(tableRows.length)
@@ -991,7 +959,7 @@ function ClasificacionICFES({ session }) {
                 <span key={a} style={{ background:C.green, color:C.white, padding:'3px 10px',
                   borderRadius:20, fontWeight:700, fontSize:12 }}>{a}</span>
               ))}
-              <span style={{ color:C.gray, marginLeft:4 }}>· {ponderadoData.length.toLocaleString('es-CO')} planteles únicos</span>
+              <span style={{ color:C.gray, marginLeft:4 }}>· {new Set(ponderadoData.map(r=>r.codigo_dane)).size.toLocaleString('es-CO')} planteles únicos</span>
             </div>
 
             {/* KPI cards */}
@@ -1001,7 +969,7 @@ function ClasificacionICFES({ session }) {
                 border:`1px solid ${C.grayLt}`, textAlign:'center',
                 gridColumn: mobile ? '1/4' : 'auto' }}>
                 <div style={{ fontSize:22, fontFamily:'Playfair Display, serif', color:C.navy, fontWeight:700 }}>
-                  {ponderadoData.length.toLocaleString('es-CO')}
+                  {new Set(ponderadoData.map(r=>r.codigo_dane)).size.toLocaleString('es-CO')}
                 </div>
                 <div style={{ fontSize:10, color:C.gray, textTransform:'uppercase',
                   letterSpacing:'0.08em', fontFamily:'Inter', marginTop:2 }}>Planteles únicos</div>
@@ -1096,9 +1064,11 @@ function ClasificacionICFES({ session }) {
                 fontSize:11, fontWeight:700, color:C.navy, fontFamily:'Inter',
                 letterSpacing:'0.08em', textTransform:'uppercase', display:'flex',
                 justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8 }}>
-                <span>Tabla ponderada por plantel (promedio {aniosPond.join(' · ')})</span>
+                <span>Detalle por año · {aniosPond.join(' · ')}</span>
                 <span style={{ fontWeight:400, color:C.gray }}>
-                  {ponderadoData.length.toLocaleString('es-CO')} planteles
+                  {ponderadoData.length.toLocaleString('es-CO')} filas
+                  {' · '}
+                  {new Set(ponderadoData.map(r => r.codigo_dane)).size.toLocaleString('es-CO')} planteles únicos
                 </span>
               </div>
               <div style={{ overflowX:'auto' }}>
@@ -1106,34 +1076,47 @@ function ClasificacionICFES({ session }) {
                   <thead>
                     <tr>
                       <Th>#</Th>
+                      <Th style={{ textAlign:'center' }}>Año</Th>
                       <Th>Código DANE</Th>
                       <Th>Establecimiento</Th>
                       <Th>Municipio</Th>
                       <Th>Departamento</Th>
                       <Th style={{ textAlign:'center' }}>Sector</Th>
                       <Th style={{ textAlign:'center' }}>Clasif.</Th>
-                      {aniosPond.map(a => (
-                        <Th key={a} style={{ textAlign:'center', fontSize:9 }}>{a}</Th>
-                      ))}
-                      <Th style={{ textAlign:'center' }}>Matr. prom.</Th>
-                      <Th style={{ textAlign:'center' }}>Eval. prom.</Th>
+                      <Th style={{ textAlign:'center' }}>Matr.</Th>
+                      <Th style={{ textAlign:'center' }}>Eval.</Th>
                       <Th style={{ textAlign:'center' }}>Mat.</Th>
                       <Th style={{ textAlign:'center' }}>C.N.</Th>
                       <Th style={{ textAlign:'center' }}>Soc.</Th>
                       <Th style={{ textAlign:'center' }}>L.C.</Th>
                       <Th style={{ textAlign:'center' }}>Ing.</Th>
-                      <Th style={{ textAlign:'center' }}>Total pond.</Th>
+                      <Th style={{ textAlign:'center' }}>Índice Total</Th>
                     </tr>
                   </thead>
                   <tbody>
                     {pageRows.map((r, i) => {
                       const n = (pondPagina-1)*POND_PAG + i + 1
-                      const bg = i%2===0 ? `${C.bg}60` : 'transparent'
+                      const isNewGroup = i === 0 || pageRows[i-1].codigo_dane !== r.codigo_dane
+                      const bg = isNewGroup
+                        ? `${C.bg}80`
+                        : i%2===0 ? `${C.bg}40` : 'transparent'
                       return (
-                        <tr key={r.codigo_dane} style={{ borderBottom:`1px solid ${C.bg2}`, background:bg }}
+                        <tr key={`${r.codigo_dane}_${r.anio}`}
+                          style={{
+                            borderBottom:`1px solid ${C.bg2}`,
+                            borderTop: isNewGroup && i > 0 ? `2px solid ${C.grayLt}` : undefined,
+                            background: bg,
+                          }}
                           onMouseEnter={e=>e.currentTarget.style.background=`${C.green}12`}
                           onMouseLeave={e=>e.currentTarget.style.background=bg}>
                           <Td style={{ color:C.gray, fontSize:11, textAlign:'center' }}>{n}</Td>
+                          <Td style={{ textAlign:'center' }}>
+                            <span style={{ display:'inline-block', padding:'2px 8px',
+                              borderRadius:10, fontSize:11, fontWeight:700,
+                              background:`${C.navy}15`, color:C.navy, fontFamily:'Inter' }}>
+                              {r.anio}
+                            </span>
+                          </Td>
                           <Td style={{ color:C.gray, fontSize:11, fontFamily:'monospace', whiteSpace:'nowrap' }}>
                             {r.codigo_dane}
                           </Td>
@@ -1145,11 +1128,6 @@ function ClasificacionICFES({ session }) {
                           <Td style={{ color:C.gray, fontSize:11, whiteSpace:'nowrap' }}>{r.departamento}</Td>
                           <Td style={{ textAlign:'center', fontSize:11, color:C.gray }}>{r.sector || '—'}</Td>
                           <Td style={{ textAlign:'center' }}><ClasBadge val={r.clasificacion} /></Td>
-                          {aniosPond.map(a => (
-                            <Td key={a} style={{ textAlign:'center', padding:'10px 6px' }}>
-                              <MiniClasPill val={r.clasHist?.[a]} />
-                            </Td>
-                          ))}
                           <Td style={{ textAlign:'center', color:C.gray, fontSize:11 }}>
                             {r.num_matriculados?.toLocaleString('es-CO') || '—'}
                           </Td>
@@ -1206,7 +1184,7 @@ function ClasificacionICFES({ session }) {
                 <span style={{ fontSize:12, color:C.gray, marginLeft:4 }}>
                   Pág. <strong style={{ color:C.navy }}>{pondPagina}</strong> de{' '}
                   <strong style={{ color:C.navy }}>{pondPags}</strong>
-                  {' '}· {ponderadoData.length.toLocaleString('es-CO')} planteles
+                  {' '}· {ponderadoData.length.toLocaleString('es-CO')} filas
                 </span>
               </div>
             )}
