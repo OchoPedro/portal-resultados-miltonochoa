@@ -84,6 +84,27 @@ const MsgBox = ({msg}) => msg ? (
   </div>
 ) : null
 
+// ─── CheckList helper ─────────────────────────────────────────────────────────
+
+function CheckList({ opts, sel, onToggle, placeholder='Sin opciones', maxHeight=150 }) {
+  return (
+    <div style={{ border:`1px solid ${C.grayLt}`, borderRadius:6, background:C.white,
+      maxHeight, overflowY:'auto', padding:'4px 0' }}>
+      {opts.length === 0
+        ? <div style={{ padding:'8px 13px', fontSize:12, color:C.gray, fontFamily:'Inter' }}>{placeholder}</div>
+        : opts.map(o => (
+          <label key={o} style={{ display:'flex', alignItems:'center', gap:8, padding:'5px 13px',
+            cursor:'pointer', fontSize:12, fontFamily:'Inter', color:C.text, userSelect:'none' }}>
+            <input type="checkbox" checked={sel.includes(o)} onChange={() => onToggle(o)}
+              style={{ accentColor:C.navy, cursor:'pointer' }} />
+            <span>{o}</span>
+          </label>
+        ))
+      }
+    </div>
+  )
+}
+
 // ─── Modo selector ────────────────────────────────────────────────────────────
 
 function ModoSelector({ onSelect }) {
@@ -94,6 +115,8 @@ function ModoSelector({ onSelect }) {
       desc:'Analiza el historial de posicionamiento en ICFES Saber 11 — desde el nivel nacional hasta un colegio específico.' },
     { key:'comparativo', icon:'⚖️', titulo:'Comparativo Simulacros vs Ranking',
       desc:'Cruza los resultados de los simulacros internos con el historial real de Saber 11 del colegio. Identifica qué tan bien predicen los simulacros el rendimiento real.' },
+    { key:'icfes', icon:'📈', titulo:'Análisis Clasificación ICFES',
+      desc:'Analiza la clasificación de planteles ICFES Saber 11° comparando 2023, 2024 y 2025. Identifica tendencias, distribución por categorías A+/A/B/C/D y evolución de índices.' },
   ]
   return (
     <div>
@@ -1359,6 +1382,357 @@ Basa el análisis exclusivamente en los datos proporcionados. Tono profesional y
   )
 }
 
+// ─── Análisis Clasificación ICFES ────────────────────────────────────────────
+
+const ANIOS_ICFES = [2023, 2024, 2025]
+const CLAS_ICFES  = ['A+', 'A', 'B', 'C', 'D']
+
+function AnalisisICFES() {
+  const mobile = useMobile()
+
+  // Filtros
+  const [periodo,    setPeriodo]    = useState(1)
+  const [grado,      setGrado]      = useState(11)
+  const [codigoDane, setCodigoDane] = useState('')
+  const [deptoOpts,  setDeptoOpts]  = useState([])
+  const [deptoSel,   setDeptoSel]   = useState([])
+  const [muniOpts,   setMuniOpts]   = useState([])
+  const [muniSel,    setMuniSel]    = useState([])
+  const [estOpts,    setEstOpts]    = useState([])
+  const [estSel,     setEstSel]     = useState([])
+  const [sector,     setSector]     = useState('')
+  const [clasSel,    setClasSel]    = useState([])
+
+  // Análisis
+  const [promptCustom, setPromptCustom] = useState('')
+  const [generando,    setGenerando]    = useState(false)
+  const [borrador,     setBorrador]     = useState(null)
+  const [guardados,    setGuardados]    = useState([])
+  const [expandido,    setExpandido]    = useState(null)
+  const [msg,          setMsg]          = useState('')
+
+  useEffect(() => { cargarDeptos(); cargarGuardados() }, [])
+
+  const cargarDeptos = async () => {
+    const { data } = await supabase.from('clasificacion_icfes')
+      .select('departamento').in('anio', ANIOS_ICFES).order('departamento')
+    const uniq = [...new Set((data||[]).map(r=>r.departamento).filter(Boolean))].sort()
+    setDeptoOpts(uniq)
+  }
+
+  const cargarGuardados = async () => {
+    const { data } = await supabase.from('analisis_ia')
+      .select('*').like('generado_por', 'icfes:%')
+      .order('created_at', { ascending:false }).limit(10)
+    setGuardados(data || [])
+  }
+
+  // Cascade depto → muni
+  useEffect(() => {
+    if (!deptoSel.length) { setMuniOpts([]); setMuniSel([]); setEstOpts([]); setEstSel([]); return }
+    const run = async () => {
+      const { data } = await supabase.from('clasificacion_icfes')
+        .select('municipio').in('anio', ANIOS_ICFES).in('departamento', deptoSel).order('municipio')
+      const uniq = [...new Set((data||[]).map(r=>r.municipio).filter(Boolean))].sort()
+      setMuniOpts(uniq)
+      setMuniSel(prev => prev.filter(m => uniq.includes(m)))
+    }
+    run()
+  }, [deptoSel])
+
+  // Cascade muni → establecimiento
+  useEffect(() => {
+    if (!muniSel.length) { setEstOpts([]); setEstSel([]); return }
+    const run = async () => {
+      const { data } = await supabase.from('clasificacion_icfes')
+        .select('nombre_sede').in('anio', ANIOS_ICFES).in('municipio', muniSel).order('nombre_sede')
+      const uniq = [...new Set((data||[]).map(r=>r.nombre_sede).filter(Boolean))].sort()
+      setEstOpts(uniq)
+      setEstSel(prev => prev.filter(e => uniq.includes(e)))
+    }
+    run()
+  }, [muniSel])
+
+  const toggle = (item, setSel) =>
+    setSel(prev => prev.includes(item) ? prev.filter(x=>x!==item) : [...prev, item])
+
+  const copiarTexto = (texto) => {
+    navigator.clipboard.writeText(texto)
+    setMsg('✅ Copiado al portapapeles.')
+    setTimeout(() => setMsg(''), 3000)
+  }
+
+  const eliminarAnalisis = async (id) => {
+    if (!confirm('¿Eliminar este análisis?')) return
+    await supabase.from('analisis_ia').delete().eq('id', id)
+    cargarGuardados()
+  }
+
+  const generarAnalisis = async () => {
+    setGenerando(true); setBorrador(null); setMsg('')
+    try {
+      const buildQ = (anio) => {
+        let q = supabase.from('clasificacion_icfes')
+          .select('clasificacion,num_evaluados,num_matriculados,idx_matematicas,idx_cn,idx_sociales,idx_lc,idx_ingles,puntaje_global')
+          .eq('anio', anio).eq('periodo', periodo).eq('grado', grado).limit(5000)
+        if (codigoDane.trim()) q = q.ilike('codigo_dane', `%${codigoDane.trim()}%`)
+        if (deptoSel.length)   q = q.in('departamento', deptoSel)
+        if (muniSel.length)    q = q.in('municipio', muniSel)
+        if (estSel.length)     q = q.in('nombre_sede', estSel)
+        if (sector)            q = q.eq('sector', sector)
+        if (clasSel.length)    q = q.in('clasificacion', clasSel)
+        return q
+      }
+
+      const results = await Promise.all(ANIOS_ICFES.map(a => buildQ(a)))
+      const byAnio = {}
+      ANIOS_ICFES.forEach((a, i) => { byAnio[a] = results[i].data || [] })
+
+      const avg = arr => {
+        const vals = arr.filter(v => v != null && !isNaN(Number(v)))
+        return vals.length ? (vals.reduce((a,b)=>a+Number(b),0)/vals.length).toFixed(3) : '—'
+      }
+
+      const resumen = ANIOS_ICFES.map(anio => {
+        const rows = byAnio[anio]
+        if (!rows.length) return `  ${anio}: Sin datos para el filtro seleccionado.`
+        const clasCounts = {}
+        CLAS_ICFES.forEach(c => { clasCounts[c] = 0 })
+        rows.forEach(r => { if (r.clasificacion) clasCounts[r.clasificacion] = (clasCounts[r.clasificacion]||0)+1 })
+        const clasStr = CLAS_ICFES.map(c=>`${c}=${clasCounts[c]}`).join(' | ')
+        const totEval = rows.reduce((s,r)=>s+(r.num_evaluados||0), 0)
+        const totMat  = rows.reduce((s,r)=>s+(r.num_matriculados||0), 0)
+        return [
+          `  ${anio} (${rows.length} sedes): ${clasStr}`,
+          `    Índices: Mat=${avg(rows.map(r=>r.idx_matematicas))} | CN=${avg(rows.map(r=>r.idx_cn))} | Soc=${avg(rows.map(r=>r.idx_sociales))} | LC=${avg(rows.map(r=>r.idx_lc))} | Ing=${avg(rows.map(r=>r.idx_ingles))} | Total=${avg(rows.map(r=>r.puntaje_global))}`,
+          `    Evaluados: ${totEval.toLocaleString('es-CO')} | Matriculados: ${totMat.toLocaleString('es-CO')}`,
+        ].join('\n')
+      }).join('\n\n')
+
+      const scopeParts = []
+      if (deptoSel.length)   scopeParts.push(`Departamentos: ${deptoSel.join(', ')}`)
+      if (muniSel.length)    scopeParts.push(`Municipios: ${muniSel.join(', ')}`)
+      if (estSel.length)     scopeParts.push(`${estSel.length} establecimientos`)
+      if (sector)            scopeParts.push(`Sector: ${sector}`)
+      if (clasSel.length)    scopeParts.push(`Clasif: ${clasSel.join(', ')}`)
+      if (codigoDane.trim()) scopeParts.push(`DANE contiene: ${codigoDane.trim()}`)
+      const scopeLabel = scopeParts.length ? scopeParts.join(' | ') : 'Nacional — todos los planteles'
+
+      const instruccionCustom = promptCustom.trim()
+        ? `\nENFOQUE ESPECÍFICO: ${promptCustom.trim()}\nUsa ÚNICAMENTE los datos suministrados.`
+        : ''
+
+      const prompt = `Eres un experto en evaluación educativa colombiana con profundo conocimiento del sistema ICFES y la Clasificación de Planteles Saber 11°.
+
+ÁMBITO: ${scopeLabel}
+PERÍODO: ${periodo === 1 ? 'Primer semestre' : 'Segundo semestre'} | Grado ${grado}
+AÑOS ANALIZADOS: 2023, 2024 y 2025
+
+DATOS POR AÑO (sedes, distribución A+/A/B/C/D e índices promedio):
+${resumen}
+${instruccionCustom}
+Genera un informe estructurado con:
+1. EVOLUCIÓN DE LA CLASIFICACIÓN (2023→2024→2025): distribución A+/A/B/C/D año a año, identifica si hay mejora o retroceso
+2. DESEMPEÑO POR ÁREA: áreas con mejor y peor resultado y su evolución (Matemáticas, CN, Sociales, Lectura Crítica, Inglés)
+3. COBERTURA: tendencia en evaluados vs matriculados
+4. DIAGNÓSTICO GENERAL: síntesis y factores clave
+5. RECOMENDACIONES ESTRATÉGICAS: acciones concretas para mejorar la clasificación
+
+Basa el análisis EXCLUSIVAMENTE en los datos proporcionados. Tono profesional, cita los números. Sé específico y propositivo.`
+
+      const token = sessionStorage.getItem('mo_token')
+      const response = await fetch('/api/vision', {
+        method:'POST',
+        headers:{'Content-Type':'application/json', ...(token && {Authorization:`Bearer ${token}`})},
+        body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:2000, messages:[{role:'user', content:prompt}] }),
+      })
+      if (!response.ok) throw new Error(`Error ${response.status}`)
+      const data = await response.json()
+      const texto = data.content?.filter(b=>b.type==='text').map(b=>b.text).join('') || ''
+      if (!texto) throw new Error('Respuesta vacía del modelo')
+      setBorrador(texto)
+      await supabase.from('analisis_ia').insert({
+        colegio_id:null, prueba_id:null, contenido:texto,
+        publicado:false, generado_por:`icfes:${scopeLabel.substring(0,200)}`,
+      })
+      await cargarGuardados()
+    } catch(e) {
+      setMsg('Error al generar el análisis: ' + e.message)
+    } finally { setGenerando(false) }
+  }
+
+  const ColHeader = ({ label, opts, sel, setSel }) => (
+    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
+      <Label>{label}</Label>
+      {opts.length > 0 && (
+        <div style={{ display:'flex', gap:4 }}>
+          <button onClick={() => setSel([...opts])}
+            style={{ fontSize:10, color:C.navy, fontFamily:'Inter', background:'none',
+              border:`1px solid ${C.grayLt}`, borderRadius:4, padding:'2px 7px', cursor:'pointer' }}>
+            Todos
+          </button>
+          <button onClick={() => setSel([])}
+            style={{ fontSize:10, color:C.gray, fontFamily:'Inter', background:'none',
+              border:`1px solid ${C.grayLt}`, borderRadius:4, padding:'2px 7px', cursor:'pointer' }}>
+            Ninguno
+          </button>
+        </div>
+      )}
+    </div>
+  )
+
+  return (
+    <div style={{ display:'grid', gap:20 }}>
+      <Card>
+        <SectionTitle>Análisis Clasificación ICFES — 2023 · 2024 · 2025</SectionTitle>
+
+        <div style={{ marginBottom:16, padding:'8px 14px', background:'#EEF2FF',
+          border:'1px solid #C7D2FE', borderRadius:6, fontSize:12, color:'#3730A3', fontFamily:'Inter' }}>
+          📅 Se analizan automáticamente los años <strong>2023, 2024 y 2025</strong>. Usa los filtros para acotar el ámbito.
+        </div>
+
+        {/* Período, Grado, Código DANE */}
+        <div style={{ display:'grid', gridTemplateColumns: mobile ? '1fr' : '1fr 1fr 1fr', gap:12, marginBottom:16 }}>
+          <div>
+            <Label>Período</Label>
+            <select value={periodo} onChange={e => setPeriodo(Number(e.target.value))} style={selStyle}>
+              <option value={1}>Período 1</option>
+              <option value={2}>Período 2</option>
+            </select>
+          </div>
+          <div>
+            <Label>Grado</Label>
+            <select value={grado} onChange={e => setGrado(Number(e.target.value))} style={selStyle}>
+              <option value={11}>Grado 11</option>
+              <option value={26}>Grado 26 (adultos)</option>
+            </select>
+          </div>
+          <div>
+            <Label>Código DANE</Label>
+            <input type="text" value={codigoDane} onChange={e => setCodigoDane(e.target.value)}
+              placeholder="Ej: 110001..." style={{ ...selStyle, cursor:'text' }} />
+          </div>
+        </div>
+
+        {/* Listas multi-selección en cascada */}
+        <div style={{ display:'grid', gridTemplateColumns: mobile ? '1fr' : '1fr 1fr 1fr', gap:16, marginBottom:16 }}>
+          <div>
+            <ColHeader label="Departamento" opts={deptoOpts} sel={deptoSel} setSel={setDeptoSel} />
+            <CheckList opts={deptoOpts} sel={deptoSel} onToggle={o => toggle(o, setDeptoSel)}
+              placeholder="Cargando..." />
+          </div>
+          <div>
+            <ColHeader label="Municipio" opts={muniOpts} sel={muniSel} setSel={setMuniSel} />
+            <CheckList opts={muniOpts} sel={muniSel} onToggle={o => toggle(o, setMuniSel)}
+              placeholder={deptoSel.length ? 'Cargando...' : 'Selecciona departamento primero'} />
+          </div>
+          <div>
+            <ColHeader label="Establecimiento" opts={estOpts} sel={estSel} setSel={setEstSel} />
+            <CheckList opts={estOpts} sel={estSel} onToggle={o => toggle(o, setEstSel)}
+              placeholder={muniSel.length ? 'Cargando...' : 'Selecciona municipio primero'} />
+          </div>
+        </div>
+
+        {/* Sector y Clasificación */}
+        <div style={{ display:'grid', gridTemplateColumns: mobile ? '1fr' : '1fr 1fr', gap:12, marginBottom:16 }}>
+          <div>
+            <Label>Sector</Label>
+            <select value={sector} onChange={e => setSector(e.target.value)} style={selStyle}>
+              <option value="">Todos los sectores</option>
+              <option value="OFICIAL">Oficial</option>
+              <option value="NO OFICIAL">No oficial</option>
+            </select>
+          </div>
+          <div>
+            <Label>Clasificación (dejar en blanco = todas)</Label>
+            <div style={{ display:'flex', gap:14, flexWrap:'wrap', paddingTop:8 }}>
+              {CLAS_ICFES.map(c => (
+                <label key={c} style={{ display:'flex', alignItems:'center', gap:6,
+                  fontSize:13, fontFamily:'Inter', cursor:'pointer' }}>
+                  <input type="checkbox" checked={clasSel.includes(c)} onChange={() => toggle(c, setClasSel)}
+                    style={{ accentColor:C.navy }} />
+                  {c}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Enfoque personalizado */}
+        <div style={{ marginBottom:16 }}>
+          <Label>Enfoque específico (opcional)</Label>
+          <textarea value={promptCustom} onChange={e => setPromptCustom(e.target.value)}
+            placeholder="Ej: Enfócate en la evolución de los planteles A+ y analiza qué áreas explican el cambio..."
+            style={textareaStyle} />
+          <div style={{ fontSize:11, color:C.gray, fontFamily:'Inter', marginTop:4 }}>
+            Claude analizará los datos de Clasificación ICFES 2023–2025. Solo se usan los datos suministrados.
+          </div>
+        </div>
+
+        <div style={{ display:'flex', gap:10, alignItems:'center' }}>
+          <Btn onClick={generarAnalisis} disabled={generando} color={C.green}>
+            {generando ? '⏳ Analizando...' : '📊 Generar análisis ICFES con IA'}
+          </Btn>
+          {generando && <span style={{ fontSize:12, color:C.gray, fontFamily:'Inter' }}>Consultando datos y generando análisis...</span>}
+        </div>
+        <MsgBox msg={msg} />
+      </Card>
+
+      {borrador && (
+        <Card>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
+            marginBottom:16, paddingBottom:12, borderBottom:`1px solid ${C.bg2}` }}>
+            <div>
+              <div style={{ fontSize:11, fontWeight:600, color:C.navy, letterSpacing:'0.08em', textTransform:'uppercase' }}>
+                Análisis ICFES generado — 2023 · 2024 · 2025
+              </div>
+              <div style={{ fontSize:11, color:C.gray, fontFamily:'Inter', marginTop:3 }}>
+                Solo visible para administradores
+              </div>
+            </div>
+            <div style={{ display:'flex', gap:8 }}>
+              <Btn onClick={generarAnalisis} outline color={C.gray} small>↺ Regenerar</Btn>
+              <Btn onClick={() => copiarTexto(borrador)} outline color={C.navy} small>📋 Copiar</Btn>
+            </div>
+          </div>
+          <div style={{ background:C.bg, borderRadius:8, padding:'20px 24px' }}>{formatText(borrador)}</div>
+        </Card>
+      )}
+
+      {guardados.length > 0 && (
+        <Card>
+          <SectionTitle>Análisis Guardados — Clasificación ICFES</SectionTitle>
+          {guardados.map((a, i) => (
+            <div key={a.id} style={{ borderBottom: i<guardados.length-1?`1px solid ${C.bg2}`:'none',
+              paddingBottom:16, marginBottom:16 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+                <span style={{ fontSize:11, color:C.gray, fontFamily:'Inter' }}>
+                  {new Date(a.created_at).toLocaleString('es-CO', {timeZone:'America/Bogota'})}
+                </span>
+                <div style={{ display:'flex', gap:6 }}>
+                  <Btn onClick={() => setExpandido(expandido===a.id?null:a.id)} small outline color={C.navy}>
+                    {expandido===a.id?'Contraer':'Ver'}
+                  </Btn>
+                  <Btn onClick={() => copiarTexto(a.contenido)} small outline color={C.navy}>📋</Btn>
+                  <Btn onClick={() => eliminarAnalisis(a.id)} small outline color={C.red}>Eliminar</Btn>
+                </div>
+              </div>
+              {expandido===a.id
+                ? <div style={{ background:C.bg, borderRadius:8, padding:'16px 20px' }}>{formatText(a.contenido)}</div>
+                : <div style={{ background:C.bg, borderRadius:8, padding:'14px 18px',
+                    fontSize:12, color:C.gray, fontFamily:'Inter', lineHeight:1.7 }}>
+                    {a.contenido.substring(0,280)}
+                    <span style={{color:C.navy, cursor:'pointer'}} onClick={()=>setExpandido(a.id)}> ... Ver completo →</span>
+                  </div>
+              }
+            </div>
+          ))}
+        </Card>
+      )}
+    </div>
+  )
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export default function AdminAnalisis() {
@@ -1390,7 +1764,10 @@ export default function AdminAnalisis() {
             ← Volver
           </button>
           <div style={{ fontSize:13, color:C.gray, fontFamily:'Inter' }}>
-            {modo === 'pruebas' ? '📊 Análisis de Pruebas Internas' : modo === 'ranking' ? '🏆 Análisis de Ranking Saber 11' : '⚖️ Comparativo Simulacros vs Ranking'}
+            {modo === 'pruebas' ? '📊 Análisis de Pruebas Internas'
+              : modo === 'ranking' ? '🏆 Análisis de Ranking Saber 11'
+              : modo === 'comparativo' ? '⚖️ Comparativo Simulacros vs Ranking'
+              : '📈 Análisis Clasificación ICFES'}
           </div>
         </div>
       )}
@@ -1405,6 +1782,7 @@ export default function AdminAnalisis() {
       {modo === 'pruebas'      && <AnalisisPruebas colegios={colegios} pruebas={pruebas} />}
       {modo === 'ranking'      && <AnalisisRanking />}
       {modo === 'comparativo'  && <AnalisisComparativo colegios={colegios} />}
+      {modo === 'icfes'        && <AnalisisICFES />}
     </div>
   )
 }
