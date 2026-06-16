@@ -187,7 +187,7 @@ export default function AdminDashboard({ session, onLogout }) {
         {section==='estudiantes' && <AdminEstudiantes onUpdate={loadStats} />}
         {section==='pruebas'     && <AdminPruebas     onUpdate={loadStats} />}
         {section==='resultados'  && <AdminResultados  onUpdate={loadStats} />}
-        {section==='ranking'     && <AdminRanking />}
+        {section==='ranking'     && <AdminRanking session={session} />}
         {section==='hojas'       && <HojasRespuesta />}
         {section==='analisis'    && <AdminAnalisis />}
         {section==='admins'      && <AdminAdmins      session={session}    onUpdate={loadStats} />}
