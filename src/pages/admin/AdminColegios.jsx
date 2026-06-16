@@ -822,75 +822,49 @@ const ModalImportarColegios = ({ onClose, onSave }) => {
 
 // ── MODAL HISTÓRICOS ──────────────────────────────────────────
 const ModalHistoricos = ({ colegio, onClose }) => {
-  const [anios, setAnios]     = useState([])
-  const [loading, setLoading] = useState(true)
+  const [años, setAños]       = useState((colegio.años_activos || []).slice().sort((a,b) => b - a))
+  const [nuevoAño, setNuevoAño] = useState('')
   const [saving, setSaving]   = useState(false)
   const [msg, setMsg]         = useState('')
 
-  useEffect(() => { loadAnios() }, [])
+  const añoActual = new Date().getFullYear()
 
-  const loadAnios = async () => {
-    setLoading(true)
-    const { data } = await supabase
-      .from('colegio_anios')
-      .select('*')
-      .eq('colegio_id', colegio.id)
-      .order('anio', { ascending: false })
-    setAnios(data || [])
-    setLoading(false)
-  }
-
-  const anioActivo = anios.find(a => a.activo)
-  const anioActual = new Date().getFullYear()
-
-  const handleIniciarAnio = async () => {
-    if (anioActivo) {
-      setMsg('⚠️ Ya existe un año activo. Ciérralo antes de iniciar uno nuevo.')
-      return
-    }
+  const guardar = async (nuevaLista) => {
     setSaving(true); setMsg('')
-    const { error } = await supabase.from('colegio_anios').insert({
-      colegio_id:   colegio.id,
-      anio:         anioActual,
-      activo:       true,
-      fecha_inicio: new Date().toISOString().split('T')[0],
-    })
-    if (error) setMsg('❌ Error: ' + error.message)
-    else { setMsg(`✅ Año ${anioActual} iniciado correctamente.`); await loadAnios() }
+    const sorted = [...new Set(nuevaLista)].sort((a,b) => b - a)
+    const { error } = await supabase
+      .from('colegios')
+      .update({ años_activos: sorted })
+      .eq('id', colegio.id)
+    if (error) { setMsg('❌ Error: ' + error.message) }
+    else { setAños(sorted); setMsg('✅ Histórico guardado.') }
     setSaving(false)
   }
 
-  const handleCerrarAnio = async () => {
-    if (!anioActivo) return
-    if (!confirm(`¿Cerrar el año ${anioActivo.anio}? Los resultados quedarán archivados y podrás iniciar el siguiente año.`)) return
-    setSaving(true); setMsg('')
-    const { error } = await supabase.from('colegio_anios').update({
-      activo:       false,
-      fecha_cierre: new Date().toISOString().split('T')[0],
-    }).eq('id', anioActivo.id)
-    if (error) setMsg('❌ Error: ' + error.message)
-    else { setMsg(`✅ Año ${anioActivo.anio} cerrado y archivado.`); await loadAnios() }
-    setSaving(false)
+  const agregarAño = () => {
+    const n = parseInt(nuevoAño)
+    if (!n || n < 2000 || n > añoActual + 1) { setMsg('⚠️ Ingresa un año válido (2000 – ' + (añoActual+1) + ').'); return }
+    if (años.includes(n)) { setMsg('⚠️ Ese año ya está registrado.'); return }
+    guardar([...años, n])
+    setNuevoAño('')
   }
 
-  const formatFecha = (f) => f ? new Date(f + 'T12:00:00').toLocaleDateString('es-CO', { year:'numeric', month:'long', day:'numeric' }) : '—'
+  const quitarAño = (a) => guardar(años.filter(x => x !== a))
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)',
       display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999, padding:24 }}>
       <div style={{ background:C.white, borderRadius:12, padding:32,
-        width:'100%', maxWidth:620, maxHeight:'88vh', overflowY:'auto',
+        width:'100%', maxWidth:520, maxHeight:'88vh', overflowY:'auto',
         boxShadow:'0 20px 60px rgba(0,0,0,0.3)' }}>
 
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
           <h2 style={{ fontFamily:'Playfair Display, serif', fontSize:22, color:C.navy }}>
-            Históricos
+            📅 Históricos
           </h2>
           <button onClick={onClose} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer', color:C.gray }}>✕</button>
         </div>
-        <div style={{ fontSize:13, color:C.gray, fontFamily:'Inter', marginBottom:24 }}>
-          {colegio.nombre}
-        </div>
+        <div style={{ fontSize:13, color:C.gray, fontFamily:'Inter', marginBottom:24 }}>{colegio.nombre}</div>
 
         {msg && (
           <div style={{ background: msg.startsWith('✅') ? '#F0FFF4' : '#FEF2F2',
@@ -899,56 +873,56 @@ const ModalHistoricos = ({ colegio, onClose }) => {
             color: msg.startsWith('✅') ? C.green : C.red, fontFamily:'Inter' }}>{msg}</div>
         )}
 
-        {/* Acciones */}
-        <div style={{ display:'flex', gap:10, marginBottom:24 }}>
-          {!anioActivo && (
-            <Btn onClick={handleIniciarAnio} disabled={saving} color={C.green}>
-              + Iniciar año {anioActual}
-            </Btn>
-          )}
-          {anioActivo && (
-            <Btn onClick={handleCerrarAnio} disabled={saving} color={C.amber}>
-              Cerrar y archivar año {anioActivo.anio}
-            </Btn>
-          )}
-        </div>
-
-        {/* Lista de años */}
-        {loading ? (
-          <div style={{ textAlign:'center', padding:32, color:C.gray, fontFamily:'Inter' }}>Cargando...</div>
-        ) : anios.length === 0 ? (
-          <div style={{ textAlign:'center', padding:32, color:C.gray, fontFamily:'Inter', background:C.bg, borderRadius:8 }}>
-            <div style={{ fontSize:32, marginBottom:8 }}>📅</div>
-            <div style={{ fontSize:14, color:C.navy, fontFamily:'Playfair Display, serif', marginBottom:4 }}>Sin histórico registrado</div>
-            <div style={{ fontSize:12 }}>Inicia el año {anioActual} para comenzar a registrar resultados.</div>
+        {/* Años como chips */}
+        <SectionTitle>Años en que fue cliente activo</SectionTitle>
+        {años.length === 0 ? (
+          <div style={{ background:C.bg, borderRadius:8, padding:24, textAlign:'center',
+            fontSize:13, color:C.gray, fontFamily:'Inter', marginBottom:20 }}>
+            Sin histórico registrado aún.
           </div>
         ) : (
-          <div>
-            <SectionTitle>Años registrados</SectionTitle>
-            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-              {anios.map(a => (
-                <div key={a.id} style={{
-                  background: a.activo ? '#F0FFF4' : C.bg,
-                  border:`1px solid ${a.activo ? '#BBF7D0' : C.grayLt}`,
-                  borderRadius:8, padding:'14px 18px',
-                  display:'flex', justifyContent:'space-between', alignItems:'center',
-                }}>
-                  <div>
-                    <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                      <span style={{ fontFamily:'Playfair Display, serif', fontSize:20, color:C.navy, fontWeight:700 }}>{a.anio}</span>
-                      {a.activo && <Badge color={C.green}>Año activo</Badge>}
-                      {!a.activo && <Badge color={C.gray}>Archivado</Badge>}
-                    </div>
-                    <div style={{ fontSize:12, color:C.gray, fontFamily:'Inter', marginTop:4 }}>
-                      Inicio: {formatFecha(a.fecha_inicio)}
-                      {a.fecha_cierre && <> · Cierre: {formatFecha(a.fecha_cierre)}</>}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:20 }}>
+            {años.map(a => (
+              <div key={a} style={{
+                display:'flex', alignItems:'center', gap:6,
+                background: a === añoActual ? C.navy + '12' : C.bg,
+                border:`1px solid ${a === añoActual ? C.navy + '40' : C.grayLt}`,
+                borderRadius:20, padding:'6px 14px',
+              }}>
+                <span style={{ fontFamily:'Playfair Display, serif', fontSize:17,
+                  color: a === añoActual ? C.navy : C.text, fontWeight:600 }}>{a}</span>
+                {a === añoActual && (
+                  <span style={{ fontSize:9, color:C.navy, fontWeight:700,
+                    textTransform:'uppercase', letterSpacing:'0.08em' }}>activo</span>
+                )}
+                <button onClick={() => quitarAño(a)} disabled={saving}
+                  style={{ background:'none', border:'none', cursor:'pointer',
+                    color:C.gray, fontSize:14, padding:0, lineHeight:1 }}>✕</button>
+              </div>
+            ))}
           </div>
         )}
+
+        {/* Agregar año */}
+        <SectionTitle>Agregar año</SectionTitle>
+        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+          <input
+            type="number" value={nuevoAño}
+            onChange={e => setNuevoAño(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && agregarAño()}
+            placeholder={String(añoActual)}
+            min="2000" max={añoActual + 1}
+            style={{ flex:1, padding:'9px 13px', border:`1px solid ${C.grayLt}`,
+              borderRadius:6, fontFamily:'Inter', fontSize:16, outline:'none',
+              color:C.navy, fontWeight:600 }}
+          />
+          <Btn onClick={agregarAño} disabled={saving} color={C.green}>
+            {saving ? '…' : '+ Agregar'}
+          </Btn>
+        </div>
+        <div style={{ fontSize:11, color:C.gray, fontFamily:'Inter', marginTop:6 }}>
+          Presiona Enter o haz clic en Agregar. Los cambios se guardan inmediatamente.
+        </div>
       </div>
     </div>
   )
