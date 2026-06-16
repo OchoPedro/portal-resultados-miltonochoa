@@ -161,10 +161,11 @@ function DistBar({ anio, counts, total }) {
 }
 
 function IndexChart({ stats }) {
+  const [tooltip, setTooltip] = useState(null)
   const areas  = ['mat','cn','soc','lc','ing','total']
   const labels = ['Matemáticas','C. Naturales','Soc. y Ciu.','Lect. Crítica','Inglés','Índice Total']
   const bColors = ['#0A1F3D','#2D9B6F','#3B82F6']
-  const W=580, H=200, PAD={ top:14, right:16, bottom:52, left:42 }
+  const W=580, H=200, PAD={ top:14, right:16, bottom:52, left:48 }
   const cW = W-PAD.left-PAD.right, cH = H-PAD.top-PAD.bottom
   const nG = areas.length, nB = stats.length
   const gW = cW / nG
@@ -173,170 +174,260 @@ function IndexChart({ stats }) {
   const yS = v => PAD.top + cH - v * cH
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width:'100%', overflow:'visible' }}>
-      {[0, 0.25, 0.5, 0.75, 1.0].map(v => {
-        const y = yS(v)
-        return (
-          <g key={v}>
-            <line x1={PAD.left} y1={y} x2={W-PAD.right} y2={y}
-              stroke={v===0 ? '#D1D5DB' : '#F3F4F6'} strokeWidth={v===0 ? 1 : 0.75} />
-            <text x={PAD.left-4} y={y+3.5} fontSize={8} fill="#9CA3AF" textAnchor="end">
-              {v.toFixed(2)}
-            </text>
-          </g>
-        )
-      })}
-      {areas.map((area, gi) => {
-        const gX = PAD.left + gi * gW
-        return (
-          <g key={area}>
-            {stats.map((s, si) => {
-              const val = Math.min(s.avgIdx[area] || 0, 1)
-              const x = gX + bGap + si * (bW + bGap / Math.max(nB,1))
-              const bH = Math.max(val * cH, 1)
-              const y = PAD.top + cH - bH
-              return (
-                <g key={si}>
-                  <rect x={x} y={y} width={bW} height={bH}
-                    fill={bColors[si % bColors.length]} rx={2} opacity={0.88}
-                    style={{ cursor:'pointer' }}>
-                    <title>{labels[gi]} {s.anio}: {val.toFixed(4)}</title>
-                  </rect>
-                  {bH > 14 && (
-                    <text x={x+bW/2} y={y+9} fontSize={6.5} fill="white"
-                      textAnchor="middle" fontWeight="700" style={{ pointerEvents:'none' }}>
-                      {val.toFixed(4)}
-                    </text>
-                  )}
-                </g>
-              )
-            })}
-            <text x={gX+gW/2} y={H-PAD.bottom+13} fontSize={8.5} fill="#374151"
-              textAnchor="middle" fontWeight="600">{labels[gi]}</text>
-          </g>
-        )
-      })}
-      {stats.map((s, si) => (
-        <g key={si} transform={`translate(${PAD.left + si*90},${H-8})`}>
-          <rect x={0} y={-9} width={10} height={10} fill={bColors[si%bColors.length]} rx={2} />
-          <text x={14} y={0} fontSize={9} fill="#374151" fontWeight="600">{s.anio}</text>
-        </g>
-      ))}
-    </svg>
-  )
-}
-
-function ScatterChart({ data, aniosPond }) {
-  const [hovered, setHovered] = useState(null)
-  const W=580, H=260, PAD={ top:16, right:20, bottom:50, left:52 }
-  const cW = W-PAD.left-PAD.right, cH = H-PAD.top-PAD.bottom
-  const bColors = ['#0A1F3D','#2D9B6F','#3B82F6']
-  const colorMap = {}
-  ;(aniosPond||[]).forEach((a,i) => { colorMap[a] = bColors[i % bColors.length] })
-
-  const valid = data.filter(r => r.puntaje_global != null && r.idx_ingles != null)
-  const allX = valid.map(r => +r.puntaje_global)
-  const allY = valid.map(r => +r.idx_ingles)
-  const minX = Math.max(0, Math.min(...allX) - 0.02)
-  const maxX = Math.min(1, Math.max(...allX) + 0.02)
-  const minY = Math.max(0, Math.min(...allY) - 0.02)
-  const maxY = Math.min(1, Math.max(...allY) + 0.02)
-
-  const xPos = v => PAD.left + ((v - minX) / (maxX - minX || 1)) * cW
-  const yPos = v => PAD.top  + cH - ((v - minY) / (maxY - minY || 1)) * cH
-
-  const xTicks = 5, yTicks = 5
-  const xStep = (maxX - minX) / xTicks
-  const yStep = (maxY - minY) / yTicks
-
-  return (
-    <div style={{ position:'relative' }}>
+    <div style={{ position:'relative', userSelect:'none' }}>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width:'100%', overflow:'visible' }}
-        onMouseLeave={() => setHovered(null)}>
-        {/* Grid Y */}
-        {Array.from({ length: yTicks+1 }, (_, i) => {
-          const v = minY + i * yStep
-          const y = yPos(v)
+        onMouseLeave={() => setTooltip(null)}>
+        {[0, 0.25, 0.5, 0.75, 1.0].map(v => {
+          const y = yS(v)
           return (
-            <g key={i}>
+            <g key={v}>
               <line x1={PAD.left} y1={y} x2={W-PAD.right} y2={y}
-                stroke={i===0 ? '#D1D5DB' : '#F3F4F6'} strokeWidth={i===0?1:0.75} />
+                stroke={v===0 ? '#D1D5DB' : '#F3F4F6'} strokeWidth={v===0 ? 1 : 0.75} />
               <text x={PAD.left-4} y={y+3.5} fontSize={8} fill="#9CA3AF" textAnchor="end">
                 {v.toFixed(2)}
               </text>
             </g>
           )
         })}
+        {areas.map((area, gi) => {
+          const gX = PAD.left + gi * gW
+          return (
+            <g key={area}>
+              {stats.map((s, si) => {
+                const val = Math.min(s.avgIdx[area] || 0, 1)
+                const x = gX + bGap + si * (bW + bGap / Math.max(nB,1))
+                const bH = Math.max(val * cH, 1)
+                const y = PAD.top + cH - bH
+                const color = bColors[si % bColors.length]
+                return (
+                  <g key={si}>
+                    <rect x={x} y={y} width={bW} height={bH}
+                      fill={color} rx={2}
+                      opacity={tooltip && (tooltip.gi!==gi || tooltip.si!==si) ? 0.45 : 0.9}
+                      style={{ cursor:'pointer' }}
+                      onMouseEnter={e => {
+                        const svgRect = e.currentTarget.closest('svg').getBoundingClientRect()
+                        const elRect  = e.currentTarget.getBoundingClientRect()
+                        setTooltip({
+                          gi, si, val,
+                          label: labels[gi], anio: s.anio, color,
+                          pctX: (elRect.left + elRect.width/2 - svgRect.left) / svgRect.width * 100,
+                          pctY: (elRect.top - svgRect.top) / svgRect.height * 100,
+                        })
+                      }}
+                    />
+                    {bH > 18 && (
+                      <text x={x+bW/2} y={y+10} fontSize={6} fill="white"
+                        textAnchor="middle" fontWeight="700" style={{ pointerEvents:'none' }}>
+                        {val.toFixed(4)}
+                      </text>
+                    )}
+                  </g>
+                )
+              })}
+              <text x={gX+gW/2} y={H-PAD.bottom+13} fontSize={8.5} fill="#374151"
+                textAnchor="middle" fontWeight="600">{labels[gi]}</text>
+            </g>
+          )
+        })}
+        {stats.map((s, si) => (
+          <g key={si} transform={`translate(${PAD.left + si*90},${H-8})`}>
+            <rect x={0} y={-9} width={10} height={10} fill={bColors[si%bColors.length]} rx={2} />
+            <text x={14} y={0} fontSize={9} fill="#374151" fontWeight="600">{s.anio}</text>
+          </g>
+        ))}
+      </svg>
+      {tooltip && (
+        <div style={{
+          position:'absolute',
+          left:`${Math.min(tooltip.pctX, 75)}%`,
+          top:`${tooltip.pctY}%`,
+          transform:'translate(-50%,-115%)',
+          background:C.navy, color:C.white, borderRadius:8,
+          padding:'8px 14px', fontSize:12, fontFamily:'Inter',
+          pointerEvents:'none', zIndex:20, whiteSpace:'nowrap',
+          boxShadow:'0 4px 20px rgba(10,31,61,0.3)', lineHeight:1.5,
+        }}>
+          <div style={{ fontSize:10, color:'rgba(255,255,255,0.55)', marginBottom:2 }}>
+            {tooltip.label} · <strong style={{ color:C.white }}>{tooltip.anio}</strong>
+          </div>
+          <div style={{ fontSize:16, fontWeight:700, color:'#6EE7B7' }}>
+            {tooltip.val.toFixed(4)}
+          </div>
+          <div style={{
+            position:'absolute', bottom:-6, left:'50%', transform:'translateX(-50%)',
+            width:0, height:0,
+            borderLeft:'6px solid transparent', borderRight:'6px solid transparent',
+            borderTop:`6px solid ${C.navy}`,
+          }} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ScatterChart({ data, aniosPond }) {
+  const [tooltip, setTooltip] = useState(null)
+  const W=600, H=300, PAD={ top:20, right:140, bottom:50, left:52 }
+  const cW = W-PAD.left-PAD.right, cH = H-PAD.top-PAD.bottom
+  const bColors = ['#0A1F3D','#2D9B6F','#3B82F6']
+  const colorMap = {}
+  ;(aniosPond||[]).forEach((a,i) => { colorMap[a] = bColors[i % bColors.length] })
+
+  const valid = data.filter(r => r.puntaje_global != null && r.idx_ingles != null)
+  if (!valid.length) return <div style={{ color:C.gray, fontSize:12, padding:20, textAlign:'center' }}>Sin datos suficientes</div>
+
+  const allX = valid.map(r => +r.puntaje_global)
+  const allY = valid.map(r => +r.idx_ingles)
+  // Rango mínimo de 0.08 para que los puntos no se vean aplastados
+  const MR = 0.08
+  const rawMinX = Math.min(...allX), rawMaxX = Math.max(...allX)
+  const rawMinY = Math.min(...allY), rawMaxY = Math.max(...allY)
+  const padX = Math.max((MR - (rawMaxX - rawMinX)) / 2, 0.015)
+  const padY = Math.max((MR - (rawMaxY - rawMinY)) / 2, 0.015)
+  const minX = Math.max(0, rawMinX - padX)
+  const maxX = Math.min(1, rawMaxX + padX)
+  const minY = Math.max(0, rawMinY - padY)
+  const maxY = Math.min(1, rawMaxY + padY)
+
+  const xPos = v => PAD.left + ((v - minX) / (maxX - minX)) * cW
+  const yPos = v => PAD.top  + cH - ((v - minY) / (maxY - minY)) * cH
+
+  const TICKS = 5
+  const xStep = (maxX - minX) / TICKS
+  const yStep = (maxY - minY) / TICKS
+
+  return (
+    <div style={{ position:'relative', userSelect:'none' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width:'100%', overflow:'visible' }}
+        onMouseLeave={() => setTooltip(null)}>
+        {/* Fondo área del gráfico */}
+        <rect x={PAD.left} y={PAD.top} width={cW} height={cH}
+          fill="#F9FAFB" rx={4} stroke="#E5E7EB" strokeWidth={0.5} />
+        {/* Grid Y */}
+        {Array.from({ length: TICKS+1 }, (_, i) => {
+          const v = minY + i * yStep
+          const y = yPos(v)
+          return (
+            <g key={i}>
+              <line x1={PAD.left} y1={y} x2={PAD.left+cW} y2={y}
+                stroke={i===0?'#D1D5DB':'#E5E7EB'} strokeWidth={i===0?1:0.75} strokeDasharray={i>0?'3,3':''} />
+              <text x={PAD.left-5} y={y+3.5} fontSize={8} fill="#9CA3AF" textAnchor="end">
+                {v.toFixed(3)}
+              </text>
+            </g>
+          )
+        })}
         {/* Grid X */}
-        {Array.from({ length: xTicks+1 }, (_, i) => {
+        {Array.from({ length: TICKS+1 }, (_, i) => {
           const v = minX + i * xStep
           const x = xPos(v)
           return (
             <g key={i}>
               <line x1={x} y1={PAD.top} x2={x} y2={PAD.top+cH}
-                stroke='#F3F4F6' strokeWidth={0.75} />
-              <text x={x} y={PAD.top+cH+12} fontSize={8} fill="#9CA3AF" textAnchor="middle">
-                {v.toFixed(2)}
+                stroke='#E5E7EB' strokeWidth={0.75} strokeDasharray="3,3" />
+              <text x={x} y={PAD.top+cH+13} fontSize={8} fill="#9CA3AF" textAnchor="middle">
+                {v.toFixed(3)}
               </text>
             </g>
           )
+        })}
+        {/* Puntos — líneas entre años del mismo plantel */}
+        {Object.entries(
+          valid.reduce((acc, r) => {
+            if (!acc[r.codigo_dane]) acc[r.codigo_dane] = []
+            acc[r.codigo_dane].push(r)
+            return acc
+          }, {})
+        ).map(([dane, rows]) => {
+          const sorted = [...rows].sort((a,b)=>a.anio-b.anio)
+          return sorted.slice(0,-1).map((r,i) => {
+            const next = sorted[i+1]
+            return (
+              <line key={`${dane}_${i}`}
+                x1={xPos(+r.puntaje_global)} y1={yPos(+r.idx_ingles)}
+                x2={xPos(+next.puntaje_global)} y2={yPos(+next.idx_ingles)}
+                stroke="#CBD5E1" strokeWidth={1} strokeDasharray="3,2" />
+            )
+          })
         })}
         {/* Puntos */}
         {valid.map((r, i) => {
           const cx = xPos(+r.puntaje_global)
           const cy = yPos(+r.idx_ingles)
           const color = colorMap[r.anio] || '#6B7280'
-          const isHov = hovered?.i === i
+          const isHov = tooltip?.i === i
           return (
-            <circle key={i} cx={cx} cy={cy} r={isHov ? 6 : 4}
-              fill={color} opacity={isHov ? 1 : 0.72} stroke="white" strokeWidth={isHov?1.5:0.5}
-              style={{ cursor:'pointer', transition:'r 0.1s, opacity 0.1s' }}
-              onMouseEnter={() => setHovered({ i, r, cx, cy })}
+            <circle key={i} cx={cx} cy={cy} r={isHov ? 7 : 5}
+              fill={color} opacity={isHov ? 1 : 0.8}
+              stroke="white" strokeWidth={isHov?2:1}
+              style={{ cursor:'pointer' }}
+              onMouseEnter={e => {
+                const svgRect = e.currentTarget.closest('svg').getBoundingClientRect()
+                const elRect  = e.currentTarget.getBoundingClientRect()
+                setTooltip({
+                  i, r,
+                  pctX: (elRect.left + elRect.width/2 - svgRect.left) / svgRect.width * 100,
+                  pctY: (elRect.top - svgRect.top) / svgRect.height * 100,
+                })
+              }}
             />
           )
         })}
-        {/* Ejes label */}
-        <text x={PAD.left + cW/2} y={H-4} fontSize={9} fill="#6B7280" textAnchor="middle" fontWeight="600">
-          Índice Total
-        </text>
-        <text x={10} y={PAD.top + cH/2} fontSize={9} fill="#6B7280" textAnchor="middle"
-          fontWeight="600" transform={`rotate(-90, 10, ${PAD.top + cH/2})`}>
-          Inglés
-        </text>
-        {/* Leyenda */}
+        {/* Eje X label */}
+        <text x={PAD.left + cW/2} y={H-6} fontSize={9} fill="#4B5563"
+          textAnchor="middle" fontWeight="600">→ Índice Total</text>
+        {/* Eje Y label */}
+        <text x={12} y={PAD.top + cH/2} fontSize={9} fill="#4B5563"
+          textAnchor="middle" fontWeight="600"
+          transform={`rotate(-90, 12, ${PAD.top + cH/2})`}>↑ Inglés</text>
+        {/* Leyenda dentro del gráfico (derecha) */}
+        <rect x={PAD.left+cW+10} y={PAD.top} width={120} height={36+(aniosPond||[]).length*18}
+          rx={6} fill="white" stroke="#E5E7EB" strokeWidth={0.75} />
+        <text x={PAD.left+cW+16} y={PAD.top+12} fontSize={8} fill="#6B7280" fontWeight="600">AÑO</text>
         {(aniosPond||[]).map((a,i) => (
-          <g key={a} transform={`translate(${PAD.left + i*90},${H-8})`}>
-            <rect x={0} y={-9} width={10} height={10} fill={bColors[i%bColors.length]} rx={2} />
-            <text x={14} y={0} fontSize={9} fill="#374151" fontWeight="600">{a}</text>
+          <g key={a} transform={`translate(${PAD.left+cW+16},${PAD.top+24+i*18})`}>
+            <circle cx={5} cy={0} r={5} fill={bColors[i%bColors.length]} />
+            <text x={14} y={4} fontSize={9} fill="#374151" fontWeight="600">{a}</text>
           </g>
         ))}
+        {/* Nota: n puntos */}
+        <text x={PAD.left+cW} y={PAD.top+cH+34} fontSize={8} fill="#9CA3AF" textAnchor="end">
+          {valid.length} registros · {new Set(valid.map(r=>r.codigo_dane)).size} planteles
+        </text>
       </svg>
       {/* Tooltip flotante */}
-      {hovered && (
+      {tooltip && (
         <div style={{
           position:'absolute',
-          left: Math.min(hovered.cx / W * 100, 70) + '%',
-          top: (hovered.cy / H * 100) + '%',
-          transform:'translate(12px,-50%)',
+          left:`${Math.min(tooltip.pctX, 68)}%`,
+          top:`${tooltip.pctY}%`,
+          transform:'translate(-50%,-115%)',
           background:C.navy, color:C.white, borderRadius:8,
-          padding:'8px 12px', fontSize:11, fontFamily:'Inter',
-          pointerEvents:'none', zIndex:10, minWidth:180,
-          boxShadow:'0 4px 16px rgba(10,31,61,0.25)', lineHeight:1.6,
+          padding:'10px 14px', fontSize:11, fontFamily:'Inter',
+          pointerEvents:'none', zIndex:20, minWidth:200,
+          boxShadow:'0 4px 20px rgba(10,31,61,0.35)', lineHeight:1.6,
         }}>
-          <div style={{ fontWeight:700, marginBottom:2 }}>{hovered.r.nombre_sede}</div>
-          <div style={{ color:'rgba(255,255,255,0.65)', fontSize:10 }}>
-            {hovered.r.municipio} · {hovered.r.departamento}
+          <div style={{ fontWeight:700, fontSize:12, marginBottom:2 }}>{tooltip.r.nombre_sede}</div>
+          <div style={{ color:'rgba(255,255,255,0.6)', fontSize:10, marginBottom:6 }}>
+            {tooltip.r.municipio} · {tooltip.r.departamento}
           </div>
-          <div style={{ marginTop:4, display:'grid', gridTemplateColumns:'1fr 1fr', gap:'2px 10px' }}>
-            <span style={{ color:'rgba(255,255,255,0.6)' }}>Año</span>
-            <span style={{ fontWeight:700 }}>{hovered.r.anio}</span>
-            <span style={{ color:'rgba(255,255,255,0.6)' }}>Clasificación</span>
-            <span style={{ fontWeight:700 }}>{hovered.r.clasificacion || '—'}</span>
-            <span style={{ color:'rgba(255,255,255,0.6)' }}>Índice Total</span>
-            <span style={{ fontWeight:700 }}>{parseFloat(hovered.r.puntaje_global).toFixed(4)}</span>
-            <span style={{ color:'rgba(255,255,255,0.6)' }}>Inglés</span>
-            <span style={{ fontWeight:700 }}>{parseFloat(hovered.r.idx_ingles).toFixed(4)}</span>
+          <div style={{ display:'grid', gridTemplateColumns:'auto 1fr', gap:'1px 10px', fontSize:11 }}>
+            <span style={{ color:'rgba(255,255,255,0.55)' }}>Año</span>
+            <span style={{ fontWeight:700 }}>{tooltip.r.anio}</span>
+            <span style={{ color:'rgba(255,255,255,0.55)' }}>Clasificación</span>
+            <span style={{ fontWeight:700 }}>{tooltip.r.clasificacion || '—'}</span>
+            <span style={{ color:'rgba(255,255,255,0.55)' }}>Índice Total</span>
+            <span style={{ fontWeight:700, color:'#6EE7B7' }}>{parseFloat(tooltip.r.puntaje_global).toFixed(4)}</span>
+            <span style={{ color:'rgba(255,255,255,0.55)' }}>Inglés</span>
+            <span style={{ fontWeight:700, color:'#6EE7B7' }}>{parseFloat(tooltip.r.idx_ingles).toFixed(4)}</span>
           </div>
+          <div style={{
+            position:'absolute', bottom:-6, left:'50%', transform:'translateX(-50%)',
+            width:0, height:0,
+            borderLeft:'6px solid transparent', borderRight:'6px solid transparent',
+            borderTop:`6px solid ${C.navy}`,
+          }} />
         </div>
       )}
     </div>
