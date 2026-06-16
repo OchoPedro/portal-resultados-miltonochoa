@@ -1,12 +1,9 @@
-import React, { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect } from 'react'
 import { setSupabaseToken, clearSupabaseToken } from './lib/supabase'
 import Login from './pages/Login'
-
-const EstudianteDashboard = React.lazy(() => import('./pages/EstudianteDashboard'))
-const ColegioDashboard = React.lazy(() => import('./pages/ColegioDashboard'))
-const AdminDashboard = React.lazy(() => import('./pages/admin/AdminDashboard'))
-
-const LazyFallback = <div style={{padding:60,textAlign:'center',color:'#999'}}>Cargando...</div>
+import EstudianteDashboard from './pages/EstudianteDashboard'
+import ColegioDashboard from './pages/ColegioDashboard'
+import AdminDashboard from './pages/admin/AdminDashboard'
 
 // Decodifica el payload del JWT sin verificar la firma (solo para lectura de claims).
 // La firma la valida Supabase en cada petición — aquí solo necesitamos saber el rol.
@@ -69,10 +66,10 @@ export default function App() {
 
   if (!session) return <Login onLogin={handleLogin} />
   return (
-    <Suspense fallback={LazyFallback}>
+    <>
       {session.role === 'admin' && <AdminDashboard session={session.data} onLogout={handleLogout} />}
       {session.role === 'colegio' && <ColegioDashboard session={session.data} onLogout={handleLogout} />}
       {session.role === 'estudiante' && <EstudianteDashboard session={session.data} onLogout={handleLogout} />}
-    </Suspense>
+    </>
   )
 }
