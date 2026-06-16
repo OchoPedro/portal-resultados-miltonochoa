@@ -357,8 +357,14 @@ function ClasificacionICFES({ session }) {
       'Departamento': r.departamento,
       'Sector': r.sector,
       'Clasificación': r.clasificacion,
-      'Evaluados': r.num_evaluados,
-      'Puntaje Global': r.puntaje_global,
+      'Matriculados (últ. 3 años)': r.num_matriculados,
+      'Evaluados (últ. 3 años)': r.num_evaluados,
+      'Índice Matemáticas': r.idx_matematicas,
+      'Índice C. Naturales': r.idx_cn,
+      'Índice Soc. y Ciu.': r.idx_sociales,
+      'Índice Lect. Crítica': r.idx_lc,
+      'Índice Inglés': r.idx_ingles,
+      'Índice Total': r.puntaje_global,
     }))
     const ws = XLSX.utils.json_to_sheet(rows)
     const wb = XLSX.utils.book_new()
@@ -618,22 +624,28 @@ function ClasificacionICFES({ session }) {
                     <Th>Municipio</Th>
                     <Th>Departamento</Th>
                     <Th style={{ textAlign:'center' }}>Sector</Th>
-                    <Th style={{ textAlign:'center' }}>Clasificación</Th>
+                    <Th style={{ textAlign:'center' }}>Clasif.</Th>
+                    <Th style={{ textAlign:'center' }}>Matriculados</Th>
                     <Th style={{ textAlign:'center' }}>Evaluados</Th>
-                    <Th style={{ textAlign:'center' }}>Puntaje</Th>
+                    <Th style={{ textAlign:'center' }}>Matemáticas</Th>
+                    <Th style={{ textAlign:'center' }}>C. Naturales</Th>
+                    <Th style={{ textAlign:'center' }}>Soc. y Ciu.</Th>
+                    <Th style={{ textAlign:'center' }}>Lect. Crítica</Th>
+                    <Th style={{ textAlign:'center' }}>Inglés</Th>
+                    <Th style={{ textAlign:'center' }}>Índice Total</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.map((r, i) => {
-                    const s  = CLAS_COLOR[r.clasificacion] || CLAS_COLOR['D']
                     const bg = i % 2 === 0 ? `${C.bg}60` : 'transparent'
+                    const idx = (v) => v ? parseFloat(v).toFixed(4) : '—'
                     return (
                       <tr key={r.id} style={{ borderBottom:`1px solid ${C.bg2}`, background:bg }}
                         onMouseEnter={e => e.currentTarget.style.background = `${C.green}12`}
                         onMouseLeave={e => e.currentTarget.style.background = bg}>
                         <Td style={{ color:C.gray, fontSize:11, textAlign:'center' }}>{i + 1}</Td>
-                        <Td style={{ color:C.gray, fontSize:11, fontFamily:'monospace' }}>{r.codigo_dane}</Td>
-                        <Td style={{ fontWeight:600, color:C.navy, maxWidth:260,
+                        <Td style={{ color:C.gray, fontSize:11, fontFamily:'monospace', whiteSpace:'nowrap' }}>{r.codigo_dane}</Td>
+                        <Td style={{ fontWeight:600, color:C.navy, maxWidth:220,
                           whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
                           {r.nombre_sede}
                         </Td>
@@ -648,9 +660,15 @@ function ClasificacionICFES({ session }) {
                         <Td style={{ textAlign:'center' }}>
                           <ClasBadge val={r.clasificacion} />
                         </Td>
-                        <Td style={{ textAlign:'center', color:C.gray }}>{r.num_evaluados?.toLocaleString('es-CO') || '—'}</Td>
-                        <Td style={{ textAlign:'center', fontWeight:700, color:C.navy }}>
-                          {r.puntaje_global ? parseFloat(r.puntaje_global).toFixed(2) : '—'}
+                        <Td style={{ textAlign:'center', color:C.gray, fontSize:11 }}>{r.num_matriculados?.toLocaleString('es-CO') || '—'}</Td>
+                        <Td style={{ textAlign:'center', color:C.gray, fontSize:11 }}>{r.num_evaluados?.toLocaleString('es-CO') || '—'}</Td>
+                        <Td style={{ textAlign:'center', fontWeight:600, fontSize:11, color:C.navy }}>{idx(r.idx_matematicas)}</Td>
+                        <Td style={{ textAlign:'center', fontWeight:600, fontSize:11, color:C.navy }}>{idx(r.idx_cn)}</Td>
+                        <Td style={{ textAlign:'center', fontWeight:600, fontSize:11, color:C.navy }}>{idx(r.idx_sociales)}</Td>
+                        <Td style={{ textAlign:'center', fontWeight:600, fontSize:11, color:C.navy }}>{idx(r.idx_lc)}</Td>
+                        <Td style={{ textAlign:'center', fontWeight:600, fontSize:11, color:C.navy }}>{idx(r.idx_ingles)}</Td>
+                        <Td style={{ textAlign:'center', fontWeight:700, color:C.green, fontSize:12 }}>
+                          {r.puntaje_global ? parseFloat(r.puntaje_global).toFixed(4) : '—'}
                         </Td>
                       </tr>
                     )
