@@ -580,7 +580,7 @@ function MiniClasPill({ val }) {
 function TrendArrow({ curr, prev }) {
   if (curr == null || prev == null || isNaN(+curr) || isNaN(+prev)) return null
   const diff = +curr - +prev
-  if (Math.abs(diff) < 0.0005)
+  if (Math.abs(diff) < 0.00005)
     return <span style={{ color:'#9CA3AF', fontSize:11, lineHeight:1 }} title="Sin cambio (→)">→</span>
   if (diff > 0)
     return <span style={{ color:'#059669', fontSize:12, fontWeight:700, lineHeight:1 }}
