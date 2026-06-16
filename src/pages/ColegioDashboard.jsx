@@ -89,6 +89,7 @@ const Loading = () => (
 
 // ── PLANTEL: LISTADO DE ESTUDIANTES ──────────────────────────
 function PlantelEstudiantes({ colegioId }) {
+  const mobile = useMobile()
   const [estudiantes, setEstudiantes] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -152,29 +153,31 @@ function PlantelEstudiantes({ colegioId }) {
           No se encontraron estudiantes.
         </div>
       ) : (
-        <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter'}}>
-          <thead>
-            <tr style={{borderBottom:`2px solid ${C.bg2}`}}>
-              {['#','Nombre','Documento','Grado','Salón','Usuario'].map(h => (
-                <th key={h} style={{textAlign:'left', padding:'8px 12px', fontSize:10,
-                  color:C.gray, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em'}}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((e,i) => (
-              <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`,
-                background:i%2===0?`${C.bg}80`:'transparent'}}>
-                <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{i+1}</td>
-                <td style={{padding:'10px 12px', fontSize:13, color:C.text, fontWeight:500}}>{e.nombre}</td>
-                <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{e.usuario}</td>
-                <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{e.grado||'—'}</td>
-                <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{e.salon||'—'}</td>
-                <td style={{padding:'10px 12px', fontSize:12, color:C.navy, fontWeight:500}}>{e.usuario}</td>
+        <div style={{overflowX:'auto'}}>
+          <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter', minWidth: mobile ? 480 : 'auto'}}>
+            <thead>
+              <tr style={{borderBottom:`2px solid ${C.bg2}`}}>
+                {['#','Nombre','Documento','Grado','Salón','Usuario'].map(h => (
+                  <th key={h} style={{textAlign:'left', padding:'8px 12px', fontSize:10,
+                    color:C.gray, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em', whiteSpace:'nowrap'}}>{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filtered.map((e,i) => (
+                <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`,
+                  background:i%2===0?`${C.bg}80`:'transparent'}}>
+                  <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{i+1}</td>
+                  <td style={{padding:'10px 12px', fontSize:13, color:C.text, fontWeight:500, whiteSpace:'nowrap'}}>{e.nombre}</td>
+                  <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{e.usuario}</td>
+                  <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{e.grado||'—'}</td>
+                  <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{e.salon||'—'}</td>
+                  <td style={{padding:'10px 12px', fontSize:12, color:C.navy, fontWeight:500}}>{e.usuario}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </Card>
   )
@@ -273,43 +276,45 @@ function PlantelResultados({ colegioId, pruebas }) {
         {loading ? (
           <div style={{textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter'}}>Cargando...</div>
         ) : (
-          <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter'}}>
-            <thead>
-              <tr style={{borderBottom:`2px solid ${C.bg2}`}}>
-                {['#','Nombre','Grado','Salón','Estado','Puntaje'].map(h => (
-                  <th key={h} style={{textAlign:'left', padding:'8px 12px', fontSize:10,
-                    color:C.gray, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em'}}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((e,i) => {
-                const res = resultados.find(r => r.estudiante_id === e.id)
-                return (
-                  <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`,
-                    background:i%2===0?`${C.bg}80`:'transparent'}}>
-                    <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{i+1}</td>
-                    <td style={{padding:'10px 12px', fontSize:13, color:C.text, fontWeight:500}}>{e.nombre}</td>
-                    <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{e.grado||'—'}</td>
-                    <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{e.salon||'—'}</td>
-                    <td style={{padding:'10px 12px'}}>
-                      {!filtroPrueba ? (
-                        <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Selecciona una prueba</span>
-                      ) : res ? (
-                        <Badge color={C.green}>Con resultados</Badge>
-                      ) : (
-                        <Badge color={C.amber}>Sin resultados</Badge>
-                      )}
-                    </td>
-                    <td style={{padding:'10px 12px', fontSize:14, fontWeight:700,
-                      color:C.navy, fontFamily:'Playfair Display, serif'}}>
-                      {res?.puntaje_global ?? '—'}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+          <div style={{overflowX:'auto'}}>
+            <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter', minWidth: mobile ? 420 : 'auto'}}>
+              <thead>
+                <tr style={{borderBottom:`2px solid ${C.bg2}`}}>
+                  {['#','Nombre','Grado','Salón','Estado','Puntaje'].map(h => (
+                    <th key={h} style={{textAlign:'left', padding:'8px 12px', fontSize:10,
+                      color:C.gray, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em', whiteSpace:'nowrap'}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((e,i) => {
+                  const res = resultados.find(r => r.estudiante_id === e.id)
+                  return (
+                    <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`,
+                      background:i%2===0?`${C.bg}80`:'transparent'}}>
+                      <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{i+1}</td>
+                      <td style={{padding:'10px 12px', fontSize:13, color:C.text, fontWeight:500, whiteSpace:'nowrap'}}>{e.nombre}</td>
+                      <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{e.grado||'—'}</td>
+                      <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{e.salon||'—'}</td>
+                      <td style={{padding:'10px 12px'}}>
+                        {!filtroPrueba ? (
+                          <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Selecciona una prueba</span>
+                        ) : res ? (
+                          <Badge color={C.green}>Con resultados</Badge>
+                        ) : (
+                          <Badge color={C.amber}>Sin resultados</Badge>
+                        )}
+                      </td>
+                      <td style={{padding:'10px 12px', fontSize:14, fontWeight:700,
+                        color:C.navy, fontFamily:'Playfair Display, serif'}}>
+                        {res?.puntaje_global ?? '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </Card>
     </div>
@@ -1153,7 +1158,7 @@ export default function ColegioDashboard({session, onLogout}) {
         {/* ══ ÁREAS ════════════════════════════════════════════ */}
         {tab==='areas' && (
           students.length === 0 ? <EmptyState/> :
-          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:16}}>
+          <div style={{display:'grid', gridTemplateColumns: mobile ? '1fr' : '1fr 1fr', gap:16}}>
             <Card>
               <CardTitle sub="Perfil del colegio por área">Radar — Desempeño por Área</CardTitle>
               <ResponsiveContainer width="100%" height={300}>
@@ -1302,12 +1307,12 @@ export default function ColegioDashboard({session, onLogout}) {
         {/* ══ COMPETENCIAS ═════════════════════════════════════ */}
         {tab==='competencias' && (
           students.length === 0 ? <EmptyState/> :
-          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:16}}>
+          <div style={{display:'grid', gridTemplateColumns: mobile ? '1fr' : '1fr 1fr', gap:16}}>
             {competencias.length === 0 ? (
-              <div style={{gridColumn:'1/3'}}><EmptyState/></div>
+              <div style={{gridColumn: mobile ? 'auto' : '1/3'}}><EmptyState/></div>
             ) : (
               <>
-                <Card style={{gridColumn:'1/3'}}>
+                <Card style={{gridColumn: mobile ? 'auto' : '1/3'}}>
                   <CardTitle sub="Promedio por competencia evaluada">Desempeño por Competencia</CardTitle>
                   <ResponsiveContainer width="100%" height={Math.max(300, competencias.length*28)}>
                     <BarChart data={competencias} layout="vertical"

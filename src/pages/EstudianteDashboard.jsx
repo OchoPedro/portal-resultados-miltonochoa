@@ -202,7 +202,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
 
         {/* RESUMEN */}
         {tab === 'resumen' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : '220px 1fr', gap: 16 }}>
             <Card style={{ display: 'flex', flexDirection: 'column', alignItems: 'center',
               justifyContent: 'center' }}>
               <CardTitle>Puntaje</CardTitle>
@@ -273,7 +273,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
 
         {/* PERFIL */}
         {tab === 'perfil' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : '1fr 1fr', gap: 16 }}>
             <Card>
               <CardTitle sub="Radar de tu perfil por área">Perfil Académico</CardTitle>
               <ResponsiveContainer width="100%" height={300}>
@@ -307,7 +307,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
 
         {/* MI POSICIÓN */}
         {tab === 'posicion' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : '1fr 1fr', gap: 16 }}>
             <Card>
               <CardTitle sub="Distribución de puntajes del curso">Distribución del Curso</CardTitle>
               <ResponsiveContainer width="100%" height={240}>
