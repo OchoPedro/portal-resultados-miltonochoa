@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { C } from '../../components/ui'
+import { C, useMobile } from '../../components/ui'
 import AdminColegios from './AdminColegios'
 import AdminEstudiantes from './AdminEstudiantes'
 import AdminPruebas from './AdminPruebas'
@@ -22,6 +22,9 @@ const MENU_ALL = [
 ]
 
 export default function AdminDashboard({ session, onLogout }) {
+  const mobile = useMobile()
+  const [menuOpen, setMenuOpen] = useState(false)
+
   // session.modulos === null → superadmin (todo acceso)
   // session.modulos === [...] → solo esos módulos; 'admins' nunca aparece para sub-admins
   const esSuperadmin = !session?.modulos
@@ -51,67 +54,119 @@ export default function AdminDashboard({ session, onLogout }) {
     hour:'2-digit', minute:'2-digit', timeZone:'America/Bogota'
   })
 
+  const navItems = (
+    <nav style={{ flex:1, padding:'12px' }}>
+      <div style={{ fontSize:9, color:'rgba(255,255,255,0.35)', fontFamily:'Inter',
+        letterSpacing:'0.15em', textTransform:'uppercase', marginBottom:8, paddingLeft:4 }}>
+        Módulos
+      </div>
+      {MENU.map(item => (
+        <button key={item.id} onClick={() => { setSection(item.id); setMenuOpen(false) }} style={{
+          width:'100%', textAlign:'left', padding:'10px 12px', borderRadius:8,
+          border:'none', cursor:'pointer', marginBottom:4,
+          display:'flex', alignItems:'center', gap:10,
+          fontFamily:'Inter', fontSize:12,
+          background: section===item.id ? 'rgba(255,255,255,0.1)' : 'transparent',
+          color: section===item.id ? C.white : 'rgba(255,255,255,0.55)',
+          borderLeft: section===item.id ? `3px solid ${C.green}` : '3px solid transparent',
+          transition:'all 0.2s',
+        }}>
+          <span style={{ fontSize:16 }}>{item.icon}</span>
+          <div>
+            <div style={{ fontWeight:500 }}>{item.label}</div>
+            {!mobile && <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)', marginTop:1 }}>{item.desc}</div>}
+          </div>
+        </button>
+      ))}
+    </nav>
+  )
+
+  const sidebarFooter = (
+    <div style={{ padding:'16px 20px', borderTop:'1px solid rgba(255,255,255,0.08)' }}>
+      <div style={{ fontSize:12, color:C.white, fontFamily:'Inter', fontWeight:500, marginBottom:2 }}>
+        {session?.nombre}
+      </div>
+      <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', fontFamily:'Inter', marginBottom:12 }}>
+        Administrador AAMO
+      </div>
+      <button onClick={onLogout} style={{ width:'100%', padding:'8px', borderRadius:7,
+        border:'1px solid rgba(255,255,255,0.15)', background:'transparent',
+        color:'rgba(255,255,255,0.5)', fontFamily:'Inter', fontSize:11, cursor:'pointer' }}>
+        Cerrar sesión
+      </button>
+    </div>
+  )
+
   return (
     <div style={{ display:'flex', minHeight:'100vh', background:C.bg }}>
 
-      {/* SIDEBAR */}
-      <div style={{ width:240, minHeight:'100vh', background:C.navy,
-        display:'flex', flexDirection:'column', flexShrink:0 }}>
-
-        {/* Header con logo */}
-        <div style={{ padding:'20px 16px 16px', borderBottom:'1px solid rgba(255,255,255,0.08)' }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', marginBottom:10 }}>
-            <img src="/logo-sidebar-blanco.png" alt="Milton Ochoa"
-              style={{ width:'100%', maxWidth:190, height:'auto', display:'block' }} />
-          </div>
-          <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', fontFamily:'Inter',
-            letterSpacing:'0.12em', textTransform:'uppercase', textAlign:'center' }}>Panel Administrador</div>
-        </div>
-
-        {/* Menú */}
-        <nav style={{ flex:1, padding:'12px' }}>
-          <div style={{ fontSize:9, color:'rgba(255,255,255,0.35)', fontFamily:'Inter',
-            letterSpacing:'0.15em', textTransform:'uppercase', marginBottom:8, paddingLeft:4 }}>
-            Módulos
-          </div>
-          {MENU.map(item => (
-            <button key={item.id} onClick={() => setSection(item.id)} style={{
-              width:'100%', textAlign:'left', padding:'10px 12px', borderRadius:8,
-              border:'none', cursor:'pointer', marginBottom:4,
-              display:'flex', alignItems:'center', gap:10,
-              fontFamily:'Inter', fontSize:12,
-              background: section===item.id ? 'rgba(255,255,255,0.1)' : 'transparent',
-              color: section===item.id ? C.white : 'rgba(255,255,255,0.55)',
-              borderLeft: section===item.id ? `3px solid ${C.green}` : '3px solid transparent',
-              transition:'all 0.2s',
-            }}>
-              <span style={{ fontSize:16 }}>{item.icon}</span>
-              <div>
-                <div style={{ fontWeight:500 }}>{item.label}</div>
-                <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)', marginTop:1 }}>{item.desc}</div>
+      {mobile ? (
+        <>
+          {/* Navbar móvil */}
+          <div style={{
+            position:'fixed', top:0, left:0, right:0, zIndex:200,
+            background:C.navy, height:56,
+            display:'flex', alignItems:'center', justifyContent:'space-between',
+            padding:'0 16px', boxShadow:'0 2px 12px rgba(10,31,61,0.3)',
+          }}>
+            <div>
+              <div style={{ fontSize:13, fontFamily:'Playfair Display, serif', color:C.white, lineHeight:1.2 }}>
+                Milton Ochoa
               </div>
-            </button>
-          ))}
-        </nav>
+              <div style={{ fontSize:9, color:'rgba(255,255,255,0.4)', fontFamily:'Inter',
+                letterSpacing:'0.1em', textTransform:'uppercase' }}>Panel Admin</div>
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+              <span style={{ fontSize:11, color:'rgba(255,255,255,0.5)', fontFamily:'Inter' }}>
+                {MENU.find(m=>m.id===section)?.icon} {MENU.find(m=>m.id===section)?.label}
+              </span>
+              <button onClick={() => setMenuOpen(o => !o)} style={{
+                background:'none', border:'none', padding:8, cursor:'pointer',
+                display:'flex', flexDirection:'column', gap:5,
+              }}>
+                {menuOpen
+                  ? <span style={{ color:C.white, fontSize:22, lineHeight:1 }}>✕</span>
+                  : <>
+                      <span style={{ display:'block', width:22, height:2, background:C.white, borderRadius:2 }} />
+                      <span style={{ display:'block', width:22, height:2, background:C.white, borderRadius:2 }} />
+                      <span style={{ display:'block', width:22, height:2, background:C.white, borderRadius:2 }} />
+                    </>
+                }
+              </button>
+            </div>
+          </div>
 
-        {/* Footer */}
-        <div style={{ padding:'16px 20px', borderTop:'1px solid rgba(255,255,255,0.08)' }}>
-          <div style={{ fontSize:12, color:C.white, fontFamily:'Inter', fontWeight:500, marginBottom:2 }}>
-            {session?.nombre}
+          {/* Menú overlay móvil */}
+          {menuOpen && (
+            <div style={{
+              position:'fixed', top:56, left:0, right:0, bottom:0, zIndex:199,
+              background:C.navy, overflowY:'auto',
+              display:'flex', flexDirection:'column',
+            }}>
+              {navItems}
+              {sidebarFooter}
+            </div>
+          )}
+        </>
+      ) : (
+        /* SIDEBAR desktop */
+        <div style={{ width:240, minHeight:'100vh', background:C.navy,
+          display:'flex', flexDirection:'column', flexShrink:0 }}>
+          <div style={{ padding:'20px 16px 16px', borderBottom:'1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'center', marginBottom:10 }}>
+              <img src="/logo-sidebar-blanco.png" alt="Milton Ochoa"
+                style={{ width:'100%', maxWidth:190, height:'auto', display:'block' }} />
+            </div>
+            <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', fontFamily:'Inter',
+              letterSpacing:'0.12em', textTransform:'uppercase', textAlign:'center' }}>Panel Administrador</div>
           </div>
-          <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', fontFamily:'Inter', marginBottom:12 }}>
-            Administrador AAMO
-          </div>
-          <button onClick={onLogout} style={{ width:'100%', padding:'8px', borderRadius:7,
-            border:'1px solid rgba(255,255,255,0.15)', background:'transparent',
-            color:'rgba(255,255,255,0.5)', fontFamily:'Inter', fontSize:11, cursor:'pointer' }}>
-            Cerrar sesión
-          </button>
+          {navItems}
+          {sidebarFooter}
         </div>
-      </div>
+      )}
 
       {/* MAIN */}
-      <main style={{ flex:1, padding:'36px 40px', overflowY:'auto' }}>
+      <main style={{ flex:1, padding: mobile ? '72px 16px 24px' : '36px 40px', overflowY:'auto', minWidth:0 }}>
         {/* Header */}
         <div style={{ marginBottom:32 }}>
           <div style={{ fontSize:11, color:C.green, letterSpacing:'0.12em',

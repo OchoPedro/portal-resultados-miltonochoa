@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import {
   C, getColor, getLevel, avg,
-  Card, CardTitle, Badge, KpiCard, TabBar, ScoreGauge, Sidebar
+  Card, CardTitle, Badge, KpiCard, TabBar, ScoreGauge, Sidebar, useMobile
 } from '../components/ui'
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer,
@@ -10,6 +10,7 @@ import {
 } from 'recharts'
 
 export default function EstudianteDashboard({ session, onLogout }) {
+  const mobile = useMobile()
   const [todos, setTodos] = useState([])          // todos los resultados del estudiante
   const [selectedIdx, setSelectedIdx] = useState(0) // prueba activa
   const [compañeros, setCompañeros] = useState([])
@@ -164,7 +165,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
         </div>
       </Sidebar>
 
-      <main style={{ flex: 1, padding: '36px 40px', overflowY: 'auto' }}>
+      <main style={{ flex: 1, padding: mobile ? '72px 16px 24px' : '36px 40px', overflowY: 'auto', minWidth: 0 }}>
         {/* Header */}
         <div style={{ marginBottom: 28 }}>
           <div style={{ fontSize: 11, color: C.green, letterSpacing: '0.15em',
@@ -185,7 +186,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
         </div>
 
         {/* KPIs */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: mobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: 12, marginBottom: 24 }}>
           <KpiCard label="Puntaje Global" value={r.puntaje_global} sub="Escala 0–500" color={getColor((r.puntaje_global / 500) * 100)} />
           <KpiCard label="Desempeño" value={`${r.desempeno_pct?.toFixed(1)}%`} sub="Promedio ponderado" color={getColor(r.desempeno_pct)} />
           <KpiCard label="Puesto" value={miPuesto ? `#${miPuesto}` : '—'} sub={`de ${compañeros.length} estudiantes`} color={C.navy} />
@@ -233,7 +234,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
 
         {/* POR ÁREA */}
         {tab === 'areas' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(3,1fr)', gap: 12 }}>
             {areaData.map((a, i) => (
               <Card key={i}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: C.navy, fontFamily: 'Inter',
