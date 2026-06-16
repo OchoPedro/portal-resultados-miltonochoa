@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { C } from '../../components/ui'
 import ReportePlantel from './ReportePlantel'
+import ReporteAgrupado from './ReporteAgrupado'
 
 const ANIOS = [2026, 2025, 2024, 2023, 2022, 2021, 2020]
 const POR_PAGINA = 100
@@ -100,6 +101,7 @@ export default function AdminRanking() {
   const [filtroCalend, setFiltroCalend] = useState('')
   const [filtroRegion, setFiltroRegion] = useState('')
   const [reporte, setReporte] = useState(null)
+  const [reporteAgrupado, setReporteAgrupado] = useState(null) // { tipo, nombre, departamento }
   const [vista, setVista] = useState('colegios') // 'colegios' | 'departamentos' | 'regiones'
   const [agrupado, setAgrupado] = useState([])
   const [loadingAgrp, setLoadingAgrp] = useState(false)
@@ -328,15 +330,20 @@ export default function AdminRanking() {
                     </tr>
                   </thead>
                   <tbody>
-                    {agrupado.map((g, i) => (
-                      <tr key={g.nombre + g.departamento} style={{
-                        borderBottom:`1px solid ${C.bg2}`,
-                        background: i===0 ? '#FFFDE7' : i===1 ? '#FFF8E1' : i===2 ? '#F9FBE7' : i%2===0?`${C.bg}80`:'transparent'
-                      }}>
+                    {agrupado.map((g, i) => {
+                      const baseBg = i===0 ? '#FFFDE7' : i===1 ? '#FFF8E1' : i===2 ? '#F9FBE7' : i%2===0?`${C.bg}80`:'transparent'
+                      return (
+                      <tr key={g.nombre + g.departamento}
+                        onClick={() => setReporteAgrupado({ tipo: vista === 'regiones' ? 'region' : vista === 'municipios' ? 'municipio' : 'departamento', nombre: g.nombre, departamento: g.departamento })}
+                        style={{ borderBottom:`1px solid ${C.bg2}`, background: baseBg, cursor:'pointer' }}
+                        onMouseEnter={e => e.currentTarget.style.background = C.green+'15'}
+                        onMouseLeave={e => e.currentTarget.style.background = baseBg}
+                      >
                         <Td style={{ fontWeight:700, color:C.navy, textAlign:'center' }}>
                           {i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}
                         </Td>
-                        <Td style={{ fontWeight:600, color:C.navy }}>{g.nombre}</Td>
+                        <Td style={{ fontWeight:600, color:C.navy,
+                          textDecoration:'underline', textDecorationColor: C.green+'80' }}>{g.nombre}</Td>
                         {vista === 'municipios' && (
                           <Td style={{ color:C.gray, fontSize:11 }}>{g.departamento}</Td>
                         )}
@@ -360,7 +367,8 @@ export default function AdminRanking() {
                         <Td style={{ textAlign:'center', fontWeight:700, color:C.navy }}>{g.pond.toFixed(3)}</Td>
                         <Td style={{ textAlign:'center', fontWeight:700, color:C.navy }}>{g.glob.toFixed(1)}</Td>
                       </tr>
-                    ))}
+                    )})}
+
                   </tbody>
                 </table>
               </div>
@@ -577,6 +585,16 @@ export default function AdminRanking() {
           nombre={reporte.nombre}
           anioRef={reporte.anio}
           onClose={() => setReporte(null)}
+        />
+      )}
+
+      {reporteAgrupado && (
+        <ReporteAgrupado
+          tipo={reporteAgrupado.tipo}
+          nombre={reporteAgrupado.nombre}
+          departamento={reporteAgrupado.departamento}
+          anioRef={anio}
+          onClose={() => setReporteAgrupado(null)}
         />
       )}
     </div>
