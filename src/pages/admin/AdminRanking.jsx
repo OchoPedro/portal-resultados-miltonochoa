@@ -106,6 +106,132 @@ const ClasBadge = ({ val }) => {
   )
 }
 
+// ─── Ponderado chart helpers ──────────────────────────────────────────────────
+
+const CLAS_COL_BG  = { 'A+':'#6EE7B7', 'A':'#93C5FD', 'B':'#FCD34D', 'C':'#FCA5A5', 'D':'#D1D5DB' }
+const CLAS_COL_TXT = { 'A+':'#065F46', 'A':'#1E40AF', 'B':'#92400E', 'C':'#991B1B', 'D':'#6B7280' }
+
+function DistBar({ anio, counts, total }) {
+  const OPTS = ['A+', 'A', 'B', 'C', 'D']
+  return (
+    <div style={{ marginBottom:14 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:5 }}>
+        <span style={{ fontSize:13, fontWeight:700, color: anio === 'prom' ? C.green : C.navy,
+          fontFamily:'Playfair Display, serif' }}>
+          {anio === 'prom' ? '⊘ Promedio 3 años' : anio}
+        </span>
+        <span style={{ fontSize:11, color:C.gray, fontFamily:'Inter' }}>
+          {total.toLocaleString('es-CO')} sedes
+        </span>
+      </div>
+      <div style={{ display:'flex', height:28, borderRadius:6, overflow:'hidden',
+        border:`1px solid ${C.grayLt}`, boxShadow:'inset 0 1px 2px rgba(0,0,0,0.04)' }}>
+        {OPTS.map(c => {
+          const cnt = counts[c] || 0
+          const pct = total > 0 ? cnt / total * 100 : 0
+          if (pct < 0.1) return null
+          return (
+            <div key={c} style={{ width:`${pct}%`, background:CLAS_COL_BG[c],
+              display:'flex', alignItems:'center', justifyContent:'center',
+              fontSize:10, fontWeight:700, color:CLAS_COL_TXT[c], transition:'width 0.3s ease' }}
+              title={`${c}: ${cnt.toLocaleString('es-CO')} (${pct.toFixed(1)}%)`}>
+              {pct > 5 ? c : ''}
+            </div>
+          )
+        })}
+      </div>
+      <div style={{ display:'flex', gap:12, marginTop:5, flexWrap:'wrap' }}>
+        {OPTS.map(c => {
+          const cnt = counts[c] || 0
+          const pct = total > 0 ? cnt / total * 100 : 0
+          return (
+            <span key={c} style={{ fontSize:10, fontFamily:'Inter', display:'flex', alignItems:'center', gap:3 }}>
+              <span style={{ display:'inline-block', width:8, height:8, borderRadius:2,
+                background:CLAS_COL_BG[c], flexShrink:0 }} />
+              <span style={{ color:C.gray }}>
+                {c}: <strong style={{ color:CLAS_COL_TXT[c] }}>{cnt.toLocaleString('es-CO')}</strong>
+                <span style={{ color:C.grayLt }}> ({pct.toFixed(1)}%)</span>
+              </span>
+            </span>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function IndexChart({ stats }) {
+  const areas  = ['mat','cn','soc','lc','ing','total']
+  const labels = ['Matemáticas','C. Naturales','Soc. y Ciu.','Lect. Crítica','Inglés','Índice Total']
+  const bColors = ['#0A1F3D','#2D9B6F','#3B82F6']
+  const W=580, H=200, PAD={ top:14, right:16, bottom:52, left:42 }
+  const cW = W-PAD.left-PAD.right, cH = H-PAD.top-PAD.bottom
+  const nG = areas.length, nB = stats.length
+  const gW = cW / nG
+  const bW = Math.min((gW * 0.72) / Math.max(nB, 1), 18)
+  const bGap = (gW - bW * nB) / (nB + 1)
+  const yS = v => PAD.top + cH - v * cH
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width:'100%', overflow:'visible' }}>
+      {[0, 0.25, 0.5, 0.75, 1.0].map(v => {
+        const y = yS(v)
+        return (
+          <g key={v}>
+            <line x1={PAD.left} y1={y} x2={W-PAD.right} y2={y}
+              stroke={v===0 ? '#D1D5DB' : '#F3F4F6'} strokeWidth={v===0 ? 1 : 0.75} />
+            <text x={PAD.left-4} y={y+3.5} fontSize={8} fill="#9CA3AF" textAnchor="end">
+              {(v*100).toFixed(0)}%
+            </text>
+          </g>
+        )
+      })}
+      {areas.map((area, gi) => {
+        const gX = PAD.left + gi * gW
+        return (
+          <g key={area}>
+            {stats.map((s, si) => {
+              const val = Math.min(s.avgIdx[area] || 0, 1)
+              const x = gX + bGap + si * (bW + bGap / Math.max(nB,1))
+              const bH = Math.max(val * cH, 1)
+              const y = PAD.top + cH - bH
+              return (
+                <g key={si}>
+                  <rect x={x} y={y} width={bW} height={bH}
+                    fill={bColors[si % bColors.length]} rx={2} opacity={0.88} />
+                  {bH > 14 && (
+                    <text x={x+bW/2} y={y+9} fontSize={7.5} fill="white"
+                      textAnchor="middle" fontWeight="700">
+                      {(val*100).toFixed(0)}
+                    </text>
+                  )}
+                </g>
+              )
+            })}
+            <text x={gX+gW/2} y={H-PAD.bottom+13} fontSize={8.5} fill="#374151"
+              textAnchor="middle" fontWeight="600">{labels[gi]}</text>
+          </g>
+        )
+      })}
+      {stats.map((s, si) => (
+        <g key={si} transform={`translate(${PAD.left + si*90},${H-8})`}>
+          <rect x={0} y={-9} width={10} height={10} fill={bColors[si%bColors.length]} rx={2} />
+          <text x={14} y={0} fontSize={9} fill="#374151" fontWeight="600">{s.anio}</text>
+        </g>
+      ))}
+    </svg>
+  )
+}
+
+function MiniClasPill({ val }) {
+  const bg  = CLAS_COL_BG[val]  || '#F3F4F6'
+  const txt = CLAS_COL_TXT[val] || '#6B7280'
+  return val
+    ? <span style={{ display:'inline-block', padding:'2px 7px', borderRadius:12,
+        fontSize:11, fontWeight:700, fontFamily:'Inter', background:bg, color:txt }}>{val}</span>
+    : <span style={{ color:'#D1D5DB' }}>—</span>
+}
+
 // ─── Dual-list picker ─────────────────────────────────────────────────────────
 function DualList({ available, selected, onSelect, label, height=160 }) {
   const [search, setSearch] = useState('')
@@ -221,13 +347,21 @@ function ClasificacionICFES({ session }) {
   const [estSel,     setEstSel]     = useState([])
   const [codigoDane, setCodigoDane] = useState('')
 
-  // Paginación
+  // Paginación normal
   const POR_PAG = 20
   const [pagina,   setPagina]   = useState(1)
   const [total,    setTotal]    = useState(0)
   const [byClass,  setByClass]  = useState({})
   // Filtros "activos" (congelados al hacer Consultar, usados en cambio de página)
   const [activeF,  setActiveF]  = useState(null)
+
+  // Modo Ponderado
+  const [isPonderado,    setIsPonderado]    = useState(false)
+  const [aniosPond,      setAniosPond]      = useState([])      // e.g. [2025,2024,2023]
+  const [ponderadoData,  setPonderadoData]  = useState([])      // filas ponderadas por plantel
+  const [ponderadoStats, setPonderadoStats] = useState([])      // stats por año para gráficas
+  const [pondPagina,     setPondPagina]     = useState(1)
+  const POND_PAG = 20
 
   // Data / options
   const [data,      setData]      = useState([])
@@ -241,33 +375,37 @@ function ClasificacionICFES({ session }) {
   const [lastUpdate, setLastUpdate] = useState(null)
   const [consulted, setConsulted]   = useState(false)
 
-  // Carga departamentos y municipios cuando cambia año/periodo/grado
+  // Carga departamentos y municipios cuando cambia año/periodo/grado (o modo ponderado)
   useEffect(() => {
     setDeptoSel([]); setMuniSel([]); setEstSel([])
     setDeptoOpts([]); setMuniAll([]); setMuniOpts([]); setEstOpts([])
     setData([]); setConsulted(false); setLastUpdate(null)
     setTotal(0); setByClass({}); setPagina(1); setActiveF(null)
+    setPonderadoData([]); setPonderadoStats([]); setAniosPond([])
 
-    supabase
-      .from('clasificacion_icfes')
-      .select('municipio, departamento')
-      .eq('anio', anio).eq('periodo', periodo).eq('grado', grado)
+    let q = supabase.from('clasificacion_icfes').select('municipio, departamento')
+    if (isPonderado) {
+      q = q.in('anio', ANIOS_CLAS.slice(0, 3))
+    } else {
+      q = q.eq('anio', anio)
+    }
+    q.eq('periodo', periodo).eq('grado', grado)
       .order('departamento').order('municipio')
       .then(({ data: rows }) => {
         const pairs = (rows || []).filter(r => r.municipio)
         const uniqueDeptos = [...new Set(pairs.map(r => r.departamento).filter(Boolean))].sort()
         setDeptoOpts(uniqueDeptos)
         setMuniAll(pairs)
-        const uniqueMunis = [...new Set(pairs.map(r => r.municipio))]
-        setMuniOpts(uniqueMunis)
-        return supabase
-          .from('clasificacion_icfes')
-          .select('created_at')
-          .eq('anio', anio).eq('periodo', periodo).eq('grado', grado)
-          .order('created_at', { ascending: false }).limit(1)
+        setMuniOpts([...new Set(pairs.map(r => r.municipio))])
+        if (!isPonderado) {
+          return supabase.from('clasificacion_icfes').select('created_at')
+            .eq('anio', anio).eq('periodo', periodo).eq('grado', grado)
+            .order('created_at', { ascending: false }).limit(1)
+        }
+        return { data: null }
       })
       .then(({ data: lu }) => setLastUpdate(lu?.[0]?.created_at || null))
-  }, [anio, periodo, grado])
+  }, [anio, periodo, grado, isPonderado])
 
   // Cuando cambia deptoSel → filtra municipios en cascada
   useEffect(() => {
@@ -323,7 +461,135 @@ function ClasificacionICFES({ session }) {
     setLoading(false)
   }, [])
 
+  // ── Ponderado: promedia los últimos 3 años cargados ──────────────────────────
+  const consultarPonderado = useCallback(async () => {
+    setLoading(true); setConsulted(true); setPondPagina(1)
+    setPonderadoData([]); setPonderadoStats([])
+
+    // 1. Detectar cuáles años de ANIOS_CLAS tienen datos para este periodo/grado
+    const yearChecks = await Promise.all(
+      ANIOS_CLAS.map(a =>
+        supabase.from('clasificacion_icfes')
+          .select('anio', { count:'exact', head:true })
+          .eq('anio', a).eq('periodo', periodo).eq('grado', grado)
+      )
+    )
+    const last3 = ANIOS_CLAS.filter((a, i) => (yearChecks[i].count || 0) > 0).slice(0, 3)
+    setAniosPond(last3)
+
+    if (last3.length === 0) { setLoading(false); return }
+
+    // 2. Fetch datos de cada año con los filtros activos
+    const applyF = (q) => {
+      if (sector)           q = q.eq('sector', sector)
+      if (clasSel.length)   q = q.in('clasificacion', clasSel)
+      if (deptoSel.length)  q = q.in('departamento', deptoSel)
+      if (muniSel.length)   q = q.in('municipio', muniSel)
+      if (estSel.length)    q = q.in('nombre_sede', estSel)
+      if (codigoDane.trim()) q = q.ilike('codigo_dane', `%${codigoDane.trim()}%`)
+      return q
+    }
+
+    const fetches = await Promise.all(
+      last3.map(a =>
+        applyF(
+          supabase.from('clasificacion_icfes').select('*')
+            .eq('anio', a).eq('periodo', periodo).eq('grado', grado).limit(5000)
+        )
+      )
+    )
+    const rowsByAnio = {}
+    last3.forEach((a, i) => { rowsByAnio[a] = fetches[i].data || [] })
+
+    // 3. Stats por año (para gráficas)
+    const avg = arr => {
+      const vals = arr.filter(v => v != null && !isNaN(Number(v)))
+      return vals.length ? vals.reduce((a, b) => a + Number(b), 0) / vals.length : 0
+    }
+    const stats = last3.map(a => {
+      const rows = rowsByAnio[a]
+      const byC = {}; CLAS_OPTS.forEach(c => { byC[c] = 0 })
+      rows.forEach(r => { if (r.clasificacion) byC[r.clasificacion] = (byC[r.clasificacion] || 0) + 1 })
+      return {
+        anio: a,
+        total: rows.length,
+        byClass: byC,
+        avgIdx: {
+          mat:   avg(rows.map(r => r.idx_matematicas)),
+          cn:    avg(rows.map(r => r.idx_cn)),
+          soc:   avg(rows.map(r => r.idx_sociales)),
+          lc:    avg(rows.map(r => r.idx_lc)),
+          ing:   avg(rows.map(r => r.idx_ingles)),
+          total: avg(rows.map(r => r.puntaje_global)),
+        },
+        totalEval: rows.reduce((s, r) => s + (r.num_evaluados || 0), 0),
+        totalMat:  rows.reduce((s, r) => s + (r.num_matriculados || 0), 0),
+      }
+    })
+    setPonderadoStats(stats)
+
+    // 4. Calcular promedio global (para barra de resumen)
+    const avgByClass = {}
+    CLAS_OPTS.forEach(c => {
+      avgByClass[c] = Math.round(stats.reduce((s, st) => s + (st.byClass[c] || 0), 0) / stats.length)
+    })
+    const avgTotal = Math.round(stats.reduce((s, st) => s + st.total, 0) / stats.length)
+    setByClass(avgByClass)
+
+    // 5. Tabla ponderada: agrupar por codigo_dane y promediar índices
+    const byDane = {}
+    last3.forEach(a => {
+      rowsByAnio[a].forEach(r => {
+        if (!r.codigo_dane) return
+        if (!byDane[r.codigo_dane]) {
+          byDane[r.codigo_dane] = {
+            codigo_dane: r.codigo_dane, nombre_sede: r.nombre_sede,
+            municipio: r.municipio, departamento: r.departamento, sector: r.sector,
+            clasHist: {}, clasReciente: null, anioReciente: 0,
+            iMat:[], iCn:[], iSoc:[], iLc:[], iIng:[], iPont:[], nEval:0, nMat:0, cnt:0,
+          }
+        }
+        const e = byDane[r.codigo_dane]
+        e.clasHist[a] = r.clasificacion
+        if (a > e.anioReciente) { e.anioReciente = a; e.clasReciente = r.clasificacion }
+        if (r.idx_matematicas != null) e.iMat.push(+r.idx_matematicas)
+        if (r.idx_cn != null)          e.iCn.push(+r.idx_cn)
+        if (r.idx_sociales != null)    e.iSoc.push(+r.idx_sociales)
+        if (r.idx_lc != null)          e.iLc.push(+r.idx_lc)
+        if (r.idx_ingles != null)      e.iIng.push(+r.idx_ingles)
+        if (r.puntaje_global != null)  e.iPont.push(+r.puntaje_global)
+        e.nEval += r.num_evaluados || 0
+        e.nMat  += r.num_matriculados || 0
+        e.cnt++
+      })
+    })
+
+    const avg2 = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null
+    const ORDER = { 'A+':0, 'A':1, 'B':2, 'C':3, 'D':4 }
+
+    const tableRows = Object.values(byDane).map(e => ({
+      codigo_dane: e.codigo_dane, nombre_sede: e.nombre_sede,
+      municipio: e.municipio, departamento: e.departamento, sector: e.sector,
+      clasificacion: e.clasReciente, clasHist: e.clasHist,
+      idx_matematicas: avg2(e.iMat), idx_cn: avg2(e.iCn),
+      idx_sociales: avg2(e.iSoc), idx_lc: avg2(e.iLc),
+      idx_ingles: avg2(e.iIng), puntaje_global: avg2(e.iPont),
+      num_evaluados:   e.cnt > 0 ? Math.round(e.nEval / e.cnt) : null,
+      num_matriculados:e.cnt > 0 ? Math.round(e.nMat  / e.cnt) : null,
+      aniosPresentes: e.cnt,
+    })).sort((a, b) => {
+      const oa = ORDER[a.clasificacion] ?? 9, ob = ORDER[b.clasificacion] ?? 9
+      return oa !== ob ? oa - ob : (a.nombre_sede || '').localeCompare(b.nombre_sede || '')
+    })
+
+    setTotal(tableRows.length)
+    setPonderadoData(tableRows)
+    setLoading(false)
+  }, [periodo, grado, sector, clasSel, deptoSel, muniSel, estSel, codigoDane])
+
+  // ── Consultar normal ──────────────────────────────────────────────────────────
   const consultar = useCallback(async () => {
+    if (isPonderado) { await consultarPonderado(); return }
     setLoading(true)
     setConsulted(true)
     setPagina(1)
@@ -349,7 +615,7 @@ function ClasificacionICFES({ session }) {
     setByClass(bc)
 
     await loadPage(1, f)
-  }, [anio, periodo, grado, sector, clasSel, deptoSel, muniSel, estSel, codigoDane, loadPage])
+  }, [isPonderado, consultarPonderado, anio, periodo, grado, sector, clasSel, deptoSel, muniSel, estSel, codigoDane, loadPage])
 
   const importar = async () => {
     setImporting(true)
@@ -429,9 +695,24 @@ function ClasificacionICFES({ session }) {
         <div style={{ display:'flex', gap:12, flexWrap:'wrap', alignItems:'flex-end', marginBottom:16 }}>
           <div>
             <div style={{ fontSize:11, color:C.gray, fontFamily:'Inter', marginBottom:4 }}>Año</div>
-            <select value={anio} onChange={e => setAnio(+e.target.value)}
-              style={{ padding:'8px 12px', border:`1px solid ${C.grayLt}`, borderRadius:7,
-                fontFamily:'Inter', fontSize:13, background:C.white, outline:'none', cursor:'pointer' }}>
+            <select
+              value={isPonderado ? 'ponderado' : anio}
+              onChange={e => {
+                if (e.target.value === 'ponderado') {
+                  setIsPonderado(true)
+                  setData([]); setConsulted(false); setTotal(0); setByClass({})
+                  setPonderadoData([]); setPonderadoStats([]); setAniosPond([])
+                } else {
+                  setIsPonderado(false)
+                  setAnio(+e.target.value)
+                }
+              }}
+              style={{ padding:'8px 12px', border: isPonderado ? `2px solid ${C.green}` : `1px solid ${C.grayLt}`,
+                borderRadius:7, fontFamily:'Inter', fontSize:13,
+                background: isPonderado ? '#F0FDF4' : C.white,
+                color: isPonderado ? C.green : C.text,
+                outline:'none', cursor:'pointer', fontWeight: isPonderado ? 700 : 400 }}>
+              <option value="ponderado">⚖️ Ponderado</option>
               {ANIOS_CLAS.map(a => <option key={a} value={a}>{a}</option>)}
             </select>
           </div>
@@ -595,8 +876,22 @@ function ClasificacionICFES({ session }) {
         )}
       </div>
 
-      {/* Sin datos todavía */}
-      {!consulted && !loading && (
+      {/* Indicador modo ponderado */}
+      {isPonderado && !consulted && !loading && (
+        <div style={{ textAlign:'center', padding:'60px 0', color:C.gray, fontFamily:'Inter' }}>
+          <div style={{ fontSize:40, marginBottom:12 }}>⚖️</div>
+          <div style={{ fontSize:17, fontFamily:'Playfair Display, serif', color:C.green, marginBottom:6 }}>
+            Modo Ponderado
+          </div>
+          <div style={{ fontSize:13, maxWidth:420, margin:'0 auto', lineHeight:1.6 }}>
+            Se detectarán automáticamente los <strong>últimos 3 años</strong> con datos cargados
+            y se calcularán promedios por plantel. Aplica los filtros y haz clic en <strong>Consultar</strong>.
+          </div>
+        </div>
+      )}
+
+      {/* Sin datos todavía (modo normal) */}
+      {!isPonderado && !consulted && !loading && (
         <div style={{ textAlign:'center', padding:'60px 0', color:C.gray, fontFamily:'Inter' }}>
           <div style={{ fontSize:40, marginBottom:12 }}>🏫</div>
           <div style={{ fontSize:17, fontFamily:'Playfair Display, serif', color:C.navy, marginBottom:6 }}>
@@ -621,6 +916,279 @@ function ClasificacionICFES({ session }) {
         </div>
       )}
 
+      {/* ── RESULTADOS PONDERADO ─────────────────────────────────────────────── */}
+      {isPonderado && consulted && !loading && ponderadoStats.length > 0 && (() => {
+        const pondPags = Math.ceil(ponderadoData.length / POND_PAG)
+        const pageRows = ponderadoData.slice((pondPagina-1)*POND_PAG, pondPagina*POND_PAG)
+
+        // Promedio global entre todos los años
+        const avgStats = {
+          anio: 'Prom.',
+          total: Math.round(ponderadoStats.reduce((s,st)=>s+st.total,0)/ponderadoStats.length),
+          byClass: {},
+          avgIdx: {
+            mat:   ponderadoStats.reduce((s,st)=>s+st.avgIdx.mat,0)/ponderadoStats.length,
+            cn:    ponderadoStats.reduce((s,st)=>s+st.avgIdx.cn,0)/ponderadoStats.length,
+            soc:   ponderadoStats.reduce((s,st)=>s+st.avgIdx.soc,0)/ponderadoStats.length,
+            lc:    ponderadoStats.reduce((s,st)=>s+st.avgIdx.lc,0)/ponderadoStats.length,
+            ing:   ponderadoStats.reduce((s,st)=>s+st.avgIdx.ing,0)/ponderadoStats.length,
+            total: ponderadoStats.reduce((s,st)=>s+st.avgIdx.total,0)/ponderadoStats.length,
+          },
+          totalEval: Math.round(ponderadoStats.reduce((s,st)=>s+st.totalEval,0)/ponderadoStats.length),
+          totalMat:  Math.round(ponderadoStats.reduce((s,st)=>s+st.totalMat,0)/ponderadoStats.length),
+        }
+        CLAS_OPTS.forEach(c => {
+          avgStats.byClass[c] = Math.round(ponderadoStats.reduce((s,st)=>s+(st.byClass[c]||0),0)/ponderadoStats.length)
+        })
+
+        const card = (children) => (
+          <div style={{ background:C.white, borderRadius:10, border:`1px solid ${C.grayLt}`,
+            padding:'20px 24px', marginBottom:20, boxShadow:'0 1px 4px rgba(10,31,61,0.05)' }}>
+            {children}
+          </div>
+        )
+        const idx4 = v => v != null ? parseFloat(v).toFixed(4) : '—'
+
+        return (
+          <div>
+            {/* Años detectados */}
+            <div style={{ marginBottom:16, padding:'10px 16px', background:'#F0FDF4',
+              border:`1px solid ${C.green}40`, borderRadius:8, display:'flex', alignItems:'center',
+              gap:10, fontFamily:'Inter', fontSize:12, color:C.green, flexWrap:'wrap' }}>
+              <span style={{ fontWeight:700 }}>⚖️ Ponderado —</span>
+              <span>Promediando los años:</span>
+              {aniosPond.map(a => (
+                <span key={a} style={{ background:C.green, color:C.white, padding:'3px 10px',
+                  borderRadius:20, fontWeight:700, fontSize:12 }}>{a}</span>
+              ))}
+              <span style={{ color:C.gray, marginLeft:4 }}>· {ponderadoData.length.toLocaleString('es-CO')} planteles únicos</span>
+            </div>
+
+            {/* KPI cards */}
+            <div style={{ display:'grid', gridTemplateColumns: mobile ? 'repeat(3,1fr)' : 'repeat(6,1fr)',
+              gap:10, marginBottom:20 }}>
+              <div style={{ background:C.white, borderRadius:9, padding:'12px 14px',
+                border:`1px solid ${C.grayLt}`, textAlign:'center',
+                gridColumn: mobile ? '1/4' : 'auto' }}>
+                <div style={{ fontSize:22, fontFamily:'Playfair Display, serif', color:C.navy, fontWeight:700 }}>
+                  {ponderadoData.length.toLocaleString('es-CO')}
+                </div>
+                <div style={{ fontSize:10, color:C.gray, textTransform:'uppercase',
+                  letterSpacing:'0.08em', fontFamily:'Inter', marginTop:2 }}>Planteles únicos</div>
+              </div>
+              {CLAS_OPTS.map(c => {
+                const s = CLAS_COLOR[c]
+                return (
+                  <div key={c} style={{ background:s.bg, borderRadius:9, padding:'12px 14px',
+                    border:`1px solid ${s.border}`, textAlign:'center' }}>
+                    <div style={{ fontSize:20, fontFamily:'Playfair Display, serif', color:s.color, fontWeight:700 }}>
+                      {(avgStats.byClass[c] || 0).toLocaleString('es-CO')}
+                    </div>
+                    <div style={{ fontSize:10, color:s.color, fontWeight:700, fontFamily:'Inter', marginTop:2 }}>
+                      {c} <span style={{ fontWeight:400 }}>(prom/año)</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Gráfica: Distribución por clasificación */}
+            {card(<>
+              <div style={{ fontSize:11, fontWeight:700, color:C.navy, letterSpacing:'0.08em',
+                textTransform:'uppercase', fontFamily:'Inter', marginBottom:16,
+                paddingBottom:10, borderBottom:`1px solid ${C.bg2}` }}>
+                Distribución por clasificación — evolución anual
+              </div>
+              {ponderadoStats.map(s => (
+                <DistBar key={s.anio} anio={s.anio} counts={s.byClass} total={s.total} />
+              ))}
+              <div style={{ borderTop:`1px dashed ${C.grayLt}`, paddingTop:14, marginTop:4 }}>
+                <DistBar anio="prom" counts={avgStats.byClass} total={avgStats.total} />
+              </div>
+            </>)}
+
+            {/* Gráfica: Índices por área */}
+            {card(<>
+              <div style={{ fontSize:11, fontWeight:700, color:C.navy, letterSpacing:'0.08em',
+                textTransform:'uppercase', fontFamily:'Inter', marginBottom:16,
+                paddingBottom:10, borderBottom:`1px solid ${C.bg2}` }}>
+                Promedios por área — comparativo anual
+              </div>
+              <IndexChart stats={ponderadoStats} />
+            </>)}
+
+            {/* Gráfica: Cobertura */}
+            {card(<>
+              <div style={{ fontSize:11, fontWeight:700, color:C.navy, letterSpacing:'0.08em',
+                textTransform:'uppercase', fontFamily:'Inter', marginBottom:16,
+                paddingBottom:10, borderBottom:`1px solid ${C.bg2}` }}>
+                Cobertura — Matriculados vs Evaluados por año
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns: mobile ? '1fr' : `repeat(${ponderadoStats.length},1fr)`, gap:16 }}>
+                {ponderadoStats.map(s => {
+                  const pctEval = s.totalMat > 0 ? s.totalEval / s.totalMat * 100 : 0
+                  return (
+                    <div key={s.anio} style={{ textAlign:'center' }}>
+                      <div style={{ fontSize:15, fontFamily:'Playfair Display, serif',
+                        color:C.navy, fontWeight:700, marginBottom:8 }}>{s.anio}</div>
+                      {[
+                        { label:'Matriculados', val:s.totalMat, color:C.navy },
+                        { label:'Evaluados',    val:s.totalEval, color:C.green },
+                      ].map(item => (
+                        <div key={item.label} style={{ marginBottom:8 }}>
+                          <div style={{ display:'flex', justifyContent:'space-between',
+                            fontSize:11, fontFamily:'Inter', marginBottom:3 }}>
+                            <span style={{ color:C.gray }}>{item.label}</span>
+                            <span style={{ fontWeight:700, color:item.color }}>
+                              {item.val.toLocaleString('es-CO')}
+                            </span>
+                          </div>
+                          <div style={{ height:8, background:`${C.grayLt}50`, borderRadius:4, overflow:'hidden' }}>
+                            <div style={{ height:'100%', borderRadius:4,
+                              width: item.label==='Matriculados' ? '100%' : `${pctEval}%`,
+                              background: item.color, transition:'width 0.4s ease' }} />
+                          </div>
+                        </div>
+                      ))}
+                      <div style={{ fontSize:11, color:C.green, fontWeight:600, fontFamily:'Inter', marginTop:4 }}>
+                        {pctEval.toFixed(1)}% cobertura
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </>)}
+
+            {/* Tabla ponderada por plantel */}
+            <div style={{ background:C.white, borderRadius:10, border:`1px solid ${C.grayLt}`,
+              overflow:'hidden', boxShadow:'0 1px 4px rgba(10,31,61,0.05)', marginBottom:16 }}>
+              <div style={{ padding:'14px 20px', borderBottom:`1px solid ${C.bg2}`,
+                fontSize:11, fontWeight:700, color:C.navy, fontFamily:'Inter',
+                letterSpacing:'0.08em', textTransform:'uppercase', display:'flex',
+                justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8 }}>
+                <span>Tabla ponderada por plantel (promedio {aniosPond.join(' · ')})</span>
+                <span style={{ fontWeight:400, color:C.gray }}>
+                  {ponderadoData.length.toLocaleString('es-CO')} planteles
+                </span>
+              </div>
+              <div style={{ overflowX:'auto' }}>
+                <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter' }}>
+                  <thead>
+                    <tr>
+                      <Th>#</Th>
+                      <Th>Código DANE</Th>
+                      <Th>Establecimiento</Th>
+                      <Th>Municipio</Th>
+                      <Th>Departamento</Th>
+                      <Th style={{ textAlign:'center' }}>Sector</Th>
+                      <Th style={{ textAlign:'center' }}>Clasif.</Th>
+                      {aniosPond.map(a => (
+                        <Th key={a} style={{ textAlign:'center', fontSize:9 }}>{a}</Th>
+                      ))}
+                      <Th style={{ textAlign:'center' }}>Matr. prom.</Th>
+                      <Th style={{ textAlign:'center' }}>Eval. prom.</Th>
+                      <Th style={{ textAlign:'center' }}>Mat.</Th>
+                      <Th style={{ textAlign:'center' }}>C.N.</Th>
+                      <Th style={{ textAlign:'center' }}>Soc.</Th>
+                      <Th style={{ textAlign:'center' }}>L.C.</Th>
+                      <Th style={{ textAlign:'center' }}>Ing.</Th>
+                      <Th style={{ textAlign:'center' }}>Total pond.</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pageRows.map((r, i) => {
+                      const n = (pondPagina-1)*POND_PAG + i + 1
+                      const bg = i%2===0 ? `${C.bg}60` : 'transparent'
+                      return (
+                        <tr key={r.codigo_dane} style={{ borderBottom:`1px solid ${C.bg2}`, background:bg }}
+                          onMouseEnter={e=>e.currentTarget.style.background=`${C.green}12`}
+                          onMouseLeave={e=>e.currentTarget.style.background=bg}>
+                          <Td style={{ color:C.gray, fontSize:11, textAlign:'center' }}>{n}</Td>
+                          <Td style={{ color:C.gray, fontSize:11, fontFamily:'monospace', whiteSpace:'nowrap' }}>
+                            {r.codigo_dane}
+                          </Td>
+                          <Td style={{ fontWeight:600, color:C.navy, maxWidth:200,
+                            whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                            {r.nombre_sede}
+                          </Td>
+                          <Td style={{ color:C.gray, fontSize:11, whiteSpace:'nowrap' }}>{r.municipio}</Td>
+                          <Td style={{ color:C.gray, fontSize:11, whiteSpace:'nowrap' }}>{r.departamento}</Td>
+                          <Td style={{ textAlign:'center', fontSize:11, color:C.gray }}>{r.sector || '—'}</Td>
+                          <Td style={{ textAlign:'center' }}><ClasBadge val={r.clasificacion} /></Td>
+                          {aniosPond.map(a => (
+                            <Td key={a} style={{ textAlign:'center', padding:'10px 6px' }}>
+                              <MiniClasPill val={r.clasHist?.[a]} />
+                            </Td>
+                          ))}
+                          <Td style={{ textAlign:'center', color:C.gray, fontSize:11 }}>
+                            {r.num_matriculados?.toLocaleString('es-CO') || '—'}
+                          </Td>
+                          <Td style={{ textAlign:'center', color:C.gray, fontSize:11 }}>
+                            {r.num_evaluados?.toLocaleString('es-CO') || '—'}
+                          </Td>
+                          <Td style={{ textAlign:'center', fontSize:11, fontWeight:600, color:C.navy }}>{idx4(r.idx_matematicas)}</Td>
+                          <Td style={{ textAlign:'center', fontSize:11, fontWeight:600, color:C.navy }}>{idx4(r.idx_cn)}</Td>
+                          <Td style={{ textAlign:'center', fontSize:11, fontWeight:600, color:C.navy }}>{idx4(r.idx_sociales)}</Td>
+                          <Td style={{ textAlign:'center', fontSize:11, fontWeight:600, color:C.navy }}>{idx4(r.idx_lc)}</Td>
+                          <Td style={{ textAlign:'center', fontSize:11, fontWeight:600, color:C.navy }}>{idx4(r.idx_ingles)}</Td>
+                          <Td style={{ textAlign:'center', fontWeight:700, color:C.green, fontSize:12 }}>
+                            {idx4(r.puntaje_global)}
+                          </Td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Paginación tabla ponderada */}
+            {pondPags > 1 && (
+              <div style={{ display:'flex', justifyContent:'center', alignItems:'center',
+                gap:6, marginBottom:16, fontFamily:'Inter', flexWrap:'wrap' }}>
+                <button onClick={() => setPondPagina(1)} disabled={pondPagina===1}
+                  style={{ padding:'6px 10px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+                    background:C.white, cursor:pondPagina===1?'not-allowed':'pointer',
+                    color:pondPagina===1?C.gray:C.navy, fontSize:12 }}>«</button>
+                <button onClick={() => setPondPagina(p=>Math.max(1,p-1))} disabled={pondPagina===1}
+                  style={{ padding:'6px 12px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+                    background:C.white, cursor:pondPagina===1?'not-allowed':'pointer',
+                    color:pondPagina===1?C.gray:C.navy, fontSize:12 }}>‹ Ant.</button>
+                {Array.from({ length: Math.min(5, pondPags) }, (_, i) => {
+                  const start = Math.max(1, Math.min(pondPagina-2, pondPags-4))
+                  const p = start + i
+                  return (
+                    <button key={p} onClick={() => setPondPagina(p)}
+                      style={{ padding:'6px 11px', border:`1px solid ${p===pondPagina?C.green:C.grayLt}`,
+                        borderRadius:6, background:p===pondPagina?C.green:C.white,
+                        color:p===pondPagina?C.white:C.navy,
+                        fontWeight:p===pondPagina?700:400, cursor:'pointer', fontSize:12 }}>{p}</button>
+                  )
+                })}
+                <button onClick={() => setPondPagina(p=>Math.min(pondPags,p+1))} disabled={pondPagina===pondPags}
+                  style={{ padding:'6px 12px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+                    background:C.white, cursor:pondPagina===pondPags?'not-allowed':'pointer',
+                    color:pondPagina===pondPags?C.gray:C.navy, fontSize:12 }}>Sig. ›</button>
+                <button onClick={() => setPondPagina(pondPags)} disabled={pondPagina===pondPags}
+                  style={{ padding:'6px 10px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+                    background:C.white, cursor:pondPagina===pondPags?'not-allowed':'pointer',
+                    color:pondPagina===pondPags?C.gray:C.navy, fontSize:12 }}>»</button>
+                <span style={{ fontSize:12, color:C.gray, marginLeft:4 }}>
+                  Pág. <strong style={{ color:C.navy }}>{pondPagina}</strong> de{' '}
+                  <strong style={{ color:C.navy }}>{pondPags}</strong>
+                  {' '}· {ponderadoData.length.toLocaleString('es-CO')} planteles
+                </span>
+              </div>
+            )}
+
+            <div style={{ fontSize:11, color:C.gray, fontFamily:'Inter', textAlign:'right', marginBottom:8 }}>
+              Fuente: ICFES — Clasificación de Planteles Saber 11 · Promedio {aniosPond.join(' · ')} P{periodo} G{grado}
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ── RESULTADOS NORMALES ───────────────────────────────────────────────── */}
       {data.length > 0 && (
         <>
           {/* KPI cards */}
