@@ -29,25 +29,36 @@ export default function AdminEstudiantesOrganizados() {
 
   const cargar = async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('estudiantes')
-      .select('nombre, documento, grado, salon, colegios(nombre, municipio, departamento_nombre)')
-    if (!data) { setLoading(false); return }
 
-    const sorted = data
-      .filter(e => e.colegios)
-      .sort((a, b) => {
-        const dep = (a.colegios.departamento_nombre || '').localeCompare(b.colegios.departamento_nombre || '', 'es')
-        if (dep !== 0) return dep
-        const mun = (a.colegios.municipio || '').localeCompare(b.colegios.municipio || '', 'es')
-        if (mun !== 0) return mun
-        const col = (a.colegios.nombre || '').localeCompare(b.colegios.nombre || '', 'es')
-        if (col !== 0) return col
-        const gA = parseInt(a.grado) || 0
-        const gB = parseInt(b.grado) || 0
-        if (gA !== gB) return gA - gB
-        return (a.salon || '').localeCompare(b.salon || '', 'es')
-      })
+    const [{ data: colegiosData }, { data: estudiantesData }] = await Promise.all([
+      supabase.from('colegios').select('id, nombre, municipio, departamento_nombre'),
+      supabase.from('estudiantes').select('nombre, documento, grado, salon, colegio_id'),
+    ])
+
+    if (!estudiantesData) { setLoading(false); return }
+
+    const colMap = {}
+    for (const c of (colegiosData || [])) colMap[c.id] = c
+
+    const joined = estudiantesData.map(e => ({
+      ...e,
+      colegio: colMap[e.colegio_id] || null,
+    }))
+
+    const sorted = joined.sort((a, b) => {
+      const depA = a.colegio?.departamento_nombre || ''
+      const depB = b.colegio?.departamento_nombre || ''
+      const dep = depA.localeCompare(depB, 'es')
+      if (dep !== 0) return dep
+      const mun = (a.colegio?.municipio || '').localeCompare(b.colegio?.municipio || '', 'es')
+      if (mun !== 0) return mun
+      const col = (a.colegio?.nombre || '').localeCompare(b.colegio?.nombre || '', 'es')
+      if (col !== 0) return col
+      const gA = parseInt(a.grado) || 0
+      const gB = parseInt(b.grado) || 0
+      if (gA !== gB) return gA - gB
+      return (a.salon || '').localeCompare(b.salon || '', 'es')
+    })
 
     setRows(sorted)
     setTotal(sorted.length)
@@ -60,9 +71,9 @@ export default function AdminEstudiantesOrganizados() {
     return (
       e.nombre?.toLowerCase().includes(q) ||
       e.documento?.toLowerCase().includes(q) ||
-      e.colegios?.nombre?.toLowerCase().includes(q) ||
-      e.colegios?.municipio?.toLowerCase().includes(q) ||
-      e.colegios?.departamento_nombre?.toLowerCase().includes(q)
+      e.colegio?.nombre?.toLowerCase().includes(q) ||
+      e.colegio?.municipio?.toLowerCase().includes(q) ||
+      e.colegio?.departamento_nombre?.toLowerCase().includes(q)
     )
   })
 
@@ -72,9 +83,9 @@ export default function AdminEstudiantesOrganizados() {
   let munActual = null
   let colActual = null
   for (const e of filtrados) {
-    const dep = e.colegios?.departamento_nombre || '—'
-    const mun = e.colegios?.municipio || '—'
-    const col = e.colegios?.nombre || '—'
+    const dep = e.colegio?.departamento_nombre || '—'
+    const mun = e.colegio?.municipio || '—'
+    const col = e.colegio?.nombre || '—'
     if (dep !== depActual) {
       grupos.push({ type: 'dep', label: dep })
       depActual = dep; munActual = null; colActual = null
