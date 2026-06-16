@@ -211,53 +211,81 @@ function ClasificacionICFES({ session }) {
   const mobile = useMobile()
 
   // Filtros
-  const [anio,     setAnio]     = useState(2024)
-  const [periodo,  setPeriodo]  = useState(1)
-  const [grado,    setGrado]    = useState(11)
-  const [sector,   setSector]   = useState('')
-  const [clasSel,  setClasSel]  = useState([])     // [] = todos
-  const [muniSel,  setMuniSel]  = useState([])     // [] = todos
-  const [search,   setSearch]   = useState('')
+  const [anio,       setAnio]       = useState(2025)
+  const [periodo,    setPeriodo]    = useState(1)
+  const [grado,      setGrado]      = useState(11)
+  const [sector,     setSector]     = useState('')
+  const [clasSel,    setClasSel]    = useState([])
+  const [deptoSel,   setDeptoSel]   = useState([])
+  const [muniSel,    setMuniSel]    = useState([])
+  const [estSel,     setEstSel]     = useState([])
+  const [codigoDane, setCodigoDane] = useState('')
 
-  // Data
+  // Data / options
   const [data,      setData]      = useState([])
-  const [muniOpts,  setMuniOpts]  = useState([])
+  const [deptoOpts, setDeptoOpts] = useState([])
+  const [muniAll,   setMuniAll]   = useState([])  // {municipio, departamento}[]
+  const [muniOpts,  setMuniOpts]  = useState([])  // municipios filtrados por deptoSel
+  const [estOpts,   setEstOpts]   = useState([])
   const [loading,   setLoading]   = useState(false)
   const [importing, setImporting] = useState(false)
   const [importMsg, setImportMsg] = useState(null)
   const [lastUpdate, setLastUpdate] = useState(null)
   const [consulted, setConsulted]   = useState(false)
 
-  // Load municipios available for this año/periodo/grado
+  // Carga departamentos y municipios cuando cambia año/periodo/grado
   useEffect(() => {
-    setMuniSel([])
-    setMuniOpts([])
-    setData([])
-    setConsulted(false)
-    setLastUpdate(null)
+    setDeptoSel([]); setMuniSel([]); setEstSel([])
+    setDeptoOpts([]); setMuniAll([]); setMuniOpts([]); setEstOpts([])
+    setData([]); setConsulted(false); setLastUpdate(null)
 
     supabase
       .from('clasificacion_icfes')
-      .select('municipio')
-      .eq('anio', anio)
-      .eq('periodo', periodo)
-      .eq('grado', grado)
-      .order('municipio')
+      .select('municipio, departamento')
+      .eq('anio', anio).eq('periodo', periodo).eq('grado', grado)
+      .order('departamento').order('municipio')
       .then(({ data: rows }) => {
-        const unique = [...new Set((rows || []).map(r => r.municipio).filter(Boolean))]
-        setMuniOpts(unique)
-        // Check last update
+        const pairs = (rows || []).filter(r => r.municipio)
+        const uniqueDeptos = [...new Set(pairs.map(r => r.departamento).filter(Boolean))].sort()
+        setDeptoOpts(uniqueDeptos)
+        setMuniAll(pairs)
+        const uniqueMunis = [...new Set(pairs.map(r => r.municipio))]
+        setMuniOpts(uniqueMunis)
         return supabase
           .from('clasificacion_icfes')
           .select('created_at')
           .eq('anio', anio).eq('periodo', periodo).eq('grado', grado)
-          .order('created_at', { ascending: false })
-          .limit(1)
+          .order('created_at', { ascending: false }).limit(1)
       })
-      .then(({ data: lu }) => {
-        setLastUpdate(lu?.[0]?.created_at || null)
-      })
+      .then(({ data: lu }) => setLastUpdate(lu?.[0]?.created_at || null))
   }, [anio, periodo, grado])
+
+  // Cuando cambia deptoSel → filtra municipios en cascada
+  useEffect(() => {
+    setMuniSel([]); setEstSel([]); setEstOpts([])
+    if (deptoSel.length === 0) {
+      setMuniOpts([...new Set(muniAll.map(r => r.municipio))])
+    } else {
+      const filtered = muniAll.filter(r => deptoSel.includes(r.departamento))
+      setMuniOpts([...new Set(filtered.map(r => r.municipio))])
+    }
+  }, [deptoSel, muniAll])
+
+  // Cuando cambia muniSel → carga establecimientos en cascada
+  useEffect(() => {
+    setEstSel([]); setEstOpts([])
+    if (!muniSel.length) return
+    supabase
+      .from('clasificacion_icfes')
+      .select('nombre_sede')
+      .eq('anio', anio).eq('periodo', periodo).eq('grado', grado)
+      .in('municipio', muniSel)
+      .order('nombre_sede')
+      .then(({ data: rows }) => {
+        const unique = [...new Set((rows || []).map(r => r.nombre_sede).filter(Boolean))]
+        setEstOpts(unique)
+      })
+  }, [muniSel, anio, periodo, grado])
 
   const consultar = useCallback(async () => {
     setLoading(true)
@@ -271,17 +299,19 @@ function ClasificacionICFES({ session }) {
       .eq('grado', grado)
       .order('clasificacion', { ascending: true })
       .order('nombre_sede', { ascending: true })
-      .limit(3000)
+      .limit(5000)
 
-    if (sector) q = q.eq('sector', sector)
-    if (clasSel.length) q = q.in('clasificacion', clasSel)
-    if (muniSel.length) q = q.in('municipio', muniSel)
-    if (search.trim()) q = q.ilike('nombre_sede', `%${search.trim()}%`)
+    if (sector)          q = q.eq('sector', sector)
+    if (clasSel.length)  q = q.in('clasificacion', clasSel)
+    if (deptoSel.length) q = q.in('departamento', deptoSel)
+    if (muniSel.length)  q = q.in('municipio', muniSel)
+    if (estSel.length)   q = q.in('nombre_sede', estSel)
+    if (codigoDane.trim()) q = q.ilike('codigo_dane', `%${codigoDane.trim()}%`)
 
     const { data: rows } = await q
     setData(rows || [])
     setLoading(false)
-  }, [anio, periodo, grado, sector, clasSel, muniSel, search])
+  }, [anio, periodo, grado, sector, clasSel, deptoSel, muniSel, estSel, codigoDane])
 
   const importar = async () => {
     setImporting(true)
@@ -418,10 +448,32 @@ function ClasificacionICFES({ session }) {
           </div>
         </div>
 
-        {/* Row 3: Municipio dual-list */}
+        {/* Row 3: Código DANE */}
+        <div style={{ marginBottom:16 }}>
+          <div style={{ fontSize:11, color:C.gray, fontFamily:'Inter', marginBottom:4 }}>Código DANE</div>
+          <input
+            value={codigoDane} onChange={e => setCodigoDane(e.target.value)}
+            placeholder="Ej: 311001065489"
+            style={{ padding:'8px 12px', border:`1px solid ${C.grayLt}`, borderRadius:7,
+              fontFamily:'Inter', fontSize:13, outline:'none', width:220, boxSizing:'border-box' }}
+          />
+        </div>
+
+        {/* Row 4: Departamento dual-list */}
         <div style={{ marginBottom:16 }}>
           <DualList
-            label={`Municipio ${muniOpts.length ? `(${muniOpts.length} disponibles)` : '— importe datos primero'}`}
+            label={`Departamento ${deptoOpts.length ? `(${deptoOpts.length} disponibles)` : '— sin datos'}`}
+            available={deptoOpts}
+            selected={deptoSel}
+            onSelect={setDeptoSel}
+            height={130}
+          />
+        </div>
+
+        {/* Row 5: Municipio dual-list (cascada desde departamento) */}
+        <div style={{ marginBottom:16 }}>
+          <DualList
+            label={`Municipio ${muniOpts.length ? `(${muniOpts.length} disponibles${deptoSel.length ? ` en ${deptoSel.length} depto(s)` : ''})` : '— sin datos'}`}
             available={muniOpts}
             selected={muniSel}
             onSelect={setMuniSel}
@@ -429,14 +481,29 @@ function ClasificacionICFES({ session }) {
           />
         </div>
 
-        {/* Row 4: Search + buttons */}
-        <div style={{ display:'flex', gap:10, flexWrap:'wrap', alignItems:'center' }}>
-          <input
-            value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar establecimiento..."
-            style={{ padding:'8px 14px', border:`1px solid ${C.grayLt}`, borderRadius:7,
-              fontFamily:'Inter', fontSize:13, outline:'none', flex:1, minWidth:200 }}
+        {/* Row 6: Establecimiento dual-list (cascada desde municipio) */}
+        <div style={{ marginBottom:16 }}>
+          <DualList
+            label={
+              muniSel.length
+                ? `Establecimiento Educativo (${estOpts.length} disponibles en municipios seleccionados)`
+                : 'Establecimiento Educativo — selecciona municipios primero'
+            }
+            available={estOpts}
+            selected={estSel}
+            onSelect={setEstSel}
+            height={130}
           />
+        </div>
+
+        {/* Row 7: Action buttons */}
+        <div style={{ display:'flex', gap:10, flexWrap:'wrap', alignItems:'center' }}>
+          <div style={{ fontSize:11, color:C.gray, fontFamily:'Inter' }}>
+            {deptoSel.length > 0 && <span style={{ marginRight:8 }}>🗺 {deptoSel.length} depto(s)</span>}
+            {muniSel.length > 0  && <span style={{ marginRight:8 }}>🏙 {muniSel.length} municipio(s)</span>}
+            {estSel.length > 0   && <span style={{ marginRight:8 }}>🏫 {estSel.length} establecimiento(s)</span>}
+          </div>
+          <div style={{ flex:1 }} />
           <button onClick={consultar} disabled={loading} style={{
             padding:'9px 24px', borderRadius:8, border:'none', cursor:'pointer',
             background: loading ? C.grayLt : C.navy, color:C.white,
