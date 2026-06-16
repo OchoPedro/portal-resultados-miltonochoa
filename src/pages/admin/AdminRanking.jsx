@@ -266,6 +266,139 @@ function IndexChart({ stats }) {
   )
 }
 
+function RadarChart({ stats }) {
+  const [tooltip, setTooltip] = useState(null)
+  const areas  = ['mat','cn','soc','lc','ing','total']
+  const labels = ['Matemáticas','C. Naturales','Soc. y Ciu.','Lect. Crítica','Inglés','Índice Total']
+  const bColors = ['#0A1F3D','#2D9B6F','#3B82F6']
+  const W=480, H=420, cx=220, cy=195, R=145
+  const N = areas.length
+  const ang = i => (i / N) * 2 * Math.PI - Math.PI / 2
+  const pt  = (v, i) => ({ x: cx + R*v*Math.cos(ang(i)), y: cy + R*v*Math.sin(ang(i)) })
+
+  if (!stats || !stats.length) return null
+
+  // Determinar rango dinámico para que las diferencias sean visibles
+  const allVals = stats.flatMap(s => areas.map(a => s.avgIdx[a] || 0)).filter(v => v>0)
+  const dataMin = allVals.length ? Math.max(0, Math.min(...allVals) - 0.05) : 0
+  const dataMax = allVals.length ? Math.min(1, Math.max(...allVals) + 0.02) : 1
+  const range = dataMax - dataMin || 1
+  // Normalizar valor al rango [dataMin, dataMax] → [0,1] para posición en radar
+  const norm = v => Math.max(0, Math.min(1, (v - dataMin) / range))
+
+  const polyPts = s => areas.map((a,i) => {
+    const p = pt(norm(s.avgIdx[a] || 0), i)
+    return `${p.x},${p.y}`
+  }).join(' ')
+
+  const gridLevels = [0.25, 0.5, 0.75, 1.0]
+  const gridVal = lvl => (dataMin + lvl * range).toFixed(3)
+
+  return (
+    <div style={{ position:'relative', userSelect:'none' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width:'100%', overflow:'visible' }}
+        onMouseLeave={() => setTooltip(null)}>
+        {/* Grid concéntrico */}
+        {gridLevels.map(lvl => (
+          <polygon key={lvl}
+            points={areas.map((_,i) => { const p = pt(lvl,i); return `${p.x},${p.y}` }).join(' ')}
+            fill="none" stroke="#E5E7EB" strokeWidth={lvl===1?1.2:0.75}
+            strokeDasharray={lvl<1?'3,3':''} />
+        ))}
+        {/* Etiquetas de grid */}
+        {gridLevels.map(lvl => (
+          <text key={lvl} x={cx+5} y={cy - R*lvl + 3.5} fontSize={7.5} fill="#9CA3AF">
+            {gridVal(lvl)}
+          </text>
+        ))}
+        {/* Ejes */}
+        {areas.map((_,i) => {
+          const end = pt(1,i)
+          const lp  = pt(1.18,i)
+          const anchor = lp.x < cx-5 ? 'end' : lp.x > cx+5 ? 'start' : 'middle'
+          return (
+            <g key={i}>
+              <line x1={cx} y1={cy} x2={end.x} y2={end.y} stroke="#D1D5DB" strokeWidth={0.75} />
+              <text x={lp.x} y={lp.y+3} fontSize={9} fill="#374151" fontWeight="600"
+                textAnchor={anchor}>{labels[i]}</text>
+            </g>
+          )
+        })}
+        {/* Centro */}
+        <circle cx={cx} cy={cy} r={2} fill="#9CA3AF" />
+        {/* Polígonos de datos */}
+        {stats.map((s,si) => (
+          <polygon key={s.anio} points={polyPts(s)}
+            fill={bColors[si]} fillOpacity={0.12}
+            stroke={bColors[si]} strokeWidth={2} strokeLinejoin="round" />
+        ))}
+        {/* Puntos interactivos */}
+        {stats.map((s,si) =>
+          areas.map((area,i) => {
+            const v = s.avgIdx[area] || 0
+            const p = pt(norm(v), i)
+            const isHov = tooltip?.key === `${si}_${i}`
+            return (
+              <circle key={`${si}_${i}`} cx={p.x} cy={p.y} r={isHov?7:5}
+                fill={bColors[si]} stroke="white" strokeWidth={isHov?2:1.5}
+                style={{ cursor:'pointer' }}
+                onMouseEnter={e => {
+                  const svgRect = e.currentTarget.closest('svg').getBoundingClientRect()
+                  const el = e.currentTarget.getBoundingClientRect()
+                  setTooltip({
+                    key:`${si}_${i}`,
+                    label: labels[i], anio: s.anio, val: v,
+                    color: bColors[si],
+                    pctX: (el.left + el.width/2 - svgRect.left) / svgRect.width * 100,
+                    pctY: (el.top  - svgRect.top)  / svgRect.height * 100,
+                  })
+                }}
+              />
+            )
+          })
+        )}
+        {/* Leyenda */}
+        {stats.map((s,si) => (
+          <g key={si} transform={`translate(${W-110},${30+si*22})`}>
+            <rect x={0} y={-10} width={14} height={14} fill={bColors[si]} rx={3}
+              fillOpacity={0.85} />
+            <text x={20} y={2} fontSize={11} fill="#1F2937" fontWeight="700">{s.anio}</text>
+          </g>
+        ))}
+        {/* Nota escala */}
+        <text x={cx} y={H-8} fontSize={8} fill="#9CA3AF" textAnchor="middle">
+          Escala dinámica: {dataMin.toFixed(3)} – {dataMax.toFixed(3)}
+        </text>
+      </svg>
+      {/* Tooltip */}
+      {tooltip && (
+        <div style={{
+          position:'absolute',
+          left:`${Math.min(Math.max(tooltip.pctX,10),75)}%`,
+          top:`${tooltip.pctY}%`,
+          transform:'translate(-50%,-120%)',
+          background:C.navy, color:C.white, borderRadius:8,
+          padding:'8px 14px', fontSize:11, fontFamily:'Inter',
+          pointerEvents:'none', zIndex:20, whiteSpace:'nowrap',
+          boxShadow:'0 4px 20px rgba(10,31,61,0.35)', lineHeight:1.5,
+        }}>
+          <div style={{ fontSize:10, color:'rgba(255,255,255,0.55)', marginBottom:2 }}>
+            {tooltip.label} · <strong style={{ color:'white' }}>{tooltip.anio}</strong>
+          </div>
+          <div style={{ fontSize:16, fontWeight:700, color:'#6EE7B7' }}>
+            {tooltip.val.toFixed(4)}
+          </div>
+          <div style={{
+            position:'absolute', bottom:-6, left:'50%', transform:'translateX(-50%)',
+            width:0, height:0, borderLeft:'6px solid transparent',
+            borderRight:'6px solid transparent', borderTop:`6px solid ${C.navy}`,
+          }} />
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ScatterChart({ data, aniosPond }) {
   const [tooltip, setTooltip] = useState(null)
   const W=600, H=300, PAD={ top:20, right:140, bottom:50, left:52 }
@@ -1223,17 +1356,17 @@ function ClasificacionICFES({ session }) {
               <IndexChart stats={ponderadoStats} />
             </>)}
 
-            {/* Gráfica: Dispersión Índice Total vs Inglés */}
+            {/* Gráfica: Radar todas las áreas */}
             {card(<>
               <div style={{ fontSize:11, fontWeight:700, color:C.navy, letterSpacing:'0.08em',
                 textTransform:'uppercase', fontFamily:'Inter', marginBottom:4,
                 paddingBottom:10, borderBottom:`1px solid ${C.bg2}` }}>
-                Dispersión — Índice Total vs Inglés por plantel
+                Perfil por área — comparativo anual (radar)
               </div>
               <div style={{ fontSize:11, color:C.gray, fontFamily:'Inter', marginBottom:12 }}>
-                Cada punto representa un plantel en un año. Pasa el cursor para ver el detalle.
+                Cada polígono representa el promedio de un año. Pasa el cursor sobre un punto para ver el valor exacto.
               </div>
-              <ScatterChart data={ponderadoData} aniosPond={aniosPond} />
+              <RadarChart stats={ponderadoStats} />
             </>)}
 
             {/* Gráfica: Cobertura */}
