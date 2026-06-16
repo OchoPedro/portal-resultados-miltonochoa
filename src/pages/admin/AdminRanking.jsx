@@ -990,21 +990,6 @@ function ClasificacionICFES({ session }) {
               })}
             </div>
 
-            {/* Gráfica: Distribución por clasificación */}
-            {card(<>
-              <div style={{ fontSize:11, fontWeight:700, color:C.navy, letterSpacing:'0.08em',
-                textTransform:'uppercase', fontFamily:'Inter', marginBottom:16,
-                paddingBottom:10, borderBottom:`1px solid ${C.bg2}` }}>
-                Distribución por clasificación — evolución anual
-              </div>
-              {ponderadoStats.map(s => (
-                <DistBar key={s.anio} anio={s.anio} counts={s.byClass} total={s.total} />
-              ))}
-              <div style={{ borderTop:`1px dashed ${C.grayLt}`, paddingTop:14, marginTop:4 }}>
-                <DistBar anio="prom" counts={avgStats.byClass} total={avgStats.total} />
-              </div>
-            </>)}
-
             {/* Gráfica: Índices por área */}
             {card(<>
               <div style={{ fontSize:11, fontWeight:700, color:C.navy, letterSpacing:'0.08em',
