@@ -1,10 +1,11 @@
 import { useState, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
-import { C, Card, Badge } from '../../components/ui'
+import { C, Card, Badge, useMobile } from '../../components/ui'
 import { generateCredentials } from '../../lib/utils'
 import * as XLSX from 'xlsx'
 
 export default function AdminEstudiantes({ onUpdate }) {
+  const mobile = useMobile()
   const [archivos, setArchivos] = useState([]) // [{nombre, codigo, estudiantes, estado}]
   const [procesando, setProcesando] = useState(false)
   const [resultados, setResultados] = useState([]) // resumen post-carga
@@ -150,7 +151,7 @@ export default function AdminEstudiantes({ onUpdate }) {
 
         {/* Drop zone */}
         <div onClick={() => fileRef.current?.click()}
-          style={{ border:`2px dashed ${C.grayLt}`, borderRadius:12, padding:'40px 24px',
+          style={{ border:`2px dashed ${C.grayLt}`, borderRadius:12, padding: mobile ? '24px 16px' : '40px 24px',
             textAlign:'center', cursor:'pointer', marginBottom:16,
             background:C.bg, transition:'all 0.2s' }}
           onMouseEnter={e => e.currentTarget.style.borderColor = C.green}
@@ -204,7 +205,7 @@ export default function AdminEstudiantes({ onUpdate }) {
             </button>
           </div>
 
-          <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter' }}>
+          <div style={{overflowX:'auto'}}><table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter', minWidth:480 }}>
             <thead>
               <tr style={{ borderBottom:`2px solid ${C.bg2}` }}>
                 {['Archivo','Colegio','Código','Estudiantes','Estado',''].map(h=>(
@@ -241,7 +242,7 @@ export default function AdminEstudiantes({ onUpdate }) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
 
           {/* Vista previa del primer archivo válido */}
           {archivos.filter(a=>a.estado==='listo')[0] && (
@@ -252,7 +253,7 @@ export default function AdminEstudiantes({ onUpdate }) {
               </div>
               <div style={{ maxHeight:200, overflowY:'auto', border:`1px solid ${C.bg2}`,
                 borderRadius:8 }}>
-                <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter' }}>
+                <div style={{overflowX:'auto'}}><table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter', minWidth:480 }}>
                   <thead>
                     <tr style={{ background:C.bg2 }}>
                       {['Nombre','Documento','Grado','Salón','Usuario','Contraseña'].map(h=>(
@@ -284,7 +285,7 @@ export default function AdminEstudiantes({ onUpdate }) {
                       </tr>
                     )}
                   </tbody>
-                </table>
+                </table></div>
               </div>
             </div>
           )}

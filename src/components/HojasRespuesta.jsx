@@ -315,7 +315,7 @@ export default function HojasRespuesta() {
       )}
 
       {showHoja && (
-        <div style={{ border: "1px solid #DDD", borderRadius: 8, overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.08)" }}>
+        <div style={{ border: "1px solid #DDD", borderRadius: 8, overflowX: "auto", boxShadow: "0 2px 12px rgba(0,0,0,0.08)" }}>
           <div ref={printRef}>
             <HojaImprimible prueba={selectedPrueba} referencia={selectedRef}/>
           </div>

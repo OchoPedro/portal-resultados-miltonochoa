@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
-import { C } from '../../components/ui'
+import { C, useMobile } from '../../components/ui'
 import * as XLSX from 'xlsx'
 
 const GRADOS = Array.from({ length: 12 }, (_, i) => i)
@@ -659,7 +659,7 @@ function ModalEquilibrio({ referencia, onClose }) {
             </div>
 
             {/* Tabla matriz */}
-            <div style={{ borderRadius:12, overflow:'hidden', border:`1px solid ${C.grayLt}`,
+            <div style={{ borderRadius:12, overflowX:'auto', border:`1px solid ${C.grayLt}`,
               boxShadow:'0 2px 12px rgba(0,0,0,0.06)' }}>
               <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12, fontFamily:'Inter' }}>
                 <thead>
@@ -785,6 +785,7 @@ function ModalEquilibrio({ referencia, onClose }) {
 
 // ── MAIN ─────────────────────────────────────────────────────
 export default function AdminPruebas({ onUpdate }) {
+  const mobile = useMobile()
   const [pruebas, setPruebas] = useState([])
   const [tipoSelec, setTipoSelec] = useState(null)
   const [modalRef, setModalRef] = useState(null)
@@ -852,7 +853,7 @@ export default function AdminPruebas({ onUpdate }) {
         </div>
       )}
 
-      <div style={{ display:'grid', gridTemplateColumns:'220px 1fr', gap:20 }}>
+      <div style={{ display:'grid', gridTemplateColumns: mobile ? '1fr' : '220px 1fr', gap:20 }}>
         {/* Sidebar tipos */}
         <div style={{ background:C.white, borderRadius:10, padding:14,
           border:`1px solid ${C.grayLt}`, height:'fit-content' }}>
@@ -879,7 +880,7 @@ export default function AdminPruebas({ onUpdate }) {
         <div style={{ background:C.white, borderRadius:10, padding:20,
           border:`1px solid ${C.grayLt}` }}>
           {!tipoSelec ? (
-            <div style={{ textAlign:'center', padding:'40px 0', color:C.gray }}>
+            <div style={{ textAlign:'center', padding: mobile ? '20px 0' : '40px 0', color:C.gray }}>
               <div style={{ fontSize:32, marginBottom:8 }}>📋</div>
               <p style={{ fontSize:13 }}>Selecciona un tipo de prueba</p>
             </div>

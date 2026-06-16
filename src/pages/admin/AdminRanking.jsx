@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { C } from '../../components/ui'
+import { C, useMobile } from '../../components/ui'
 import ReportePlantel from './ReportePlantel'
 import ReporteAgrupado from './ReporteAgrupado'
 
@@ -89,6 +89,7 @@ const Score = ({ val }) => {
 }
 
 export default function AdminRanking() {
+  const mobile = useMobile()
   const [anio, setAnio]         = useState(2024)
   const [data, setData]         = useState([])
   const [total, setTotal]       = useState(0)
@@ -395,7 +396,7 @@ export default function AdminRanking() {
       {data.length > 0 && (
         <>
           {/* Resumen */}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16, marginBottom:24 }}>
+          <div style={{ display:'grid', gridTemplateColumns: mobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap:16, marginBottom:24 }}>
             {[
               { label:'Total colegios', value: total.toLocaleString('es-CO'), icon:'🏫' },
               { label:'1er puesto',     value: data[0]?.nombre?.slice(0,22) || '—', icon:'🥇', small:true },

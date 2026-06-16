@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { C, Card, Badge } from '../../components/ui'
+import { C, Card, Badge, useMobile } from '../../components/ui'
 
 const Input = ({label, value, onChange, placeholder, type='text', required=false}) => (
   <div style={{ marginBottom:16 }}>
@@ -38,6 +38,7 @@ const MODULOS_DISP = [
 ]
 
 const ModalAdmin = ({admin, onClose, onSave}) => {
+  const mobile = useMobile()
   const [form, setForm] = useState(admin || { nombre:'', usuario:'', password_hash:'' })
   // null = acceso total (solo para superadmin); array = módulos seleccionados
   const [modulos, setModulos] = useState(admin?.modulos || [])
@@ -97,7 +98,7 @@ const ModalAdmin = ({admin, onClose, onSave}) => {
             color:C.gray, marginBottom:10, fontFamily:'Inter' }}>
             Módulos visibles <span style={{ color:C.red }}>*</span>
           </div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+          <div style={{ display:'grid', gridTemplateColumns: mobile ? '1fr' : '1fr 1fr', gap:8 }}>
             {MODULOS_DISP.map(m => {
               const activo = modulos.includes(m.id)
               return (
@@ -142,6 +143,7 @@ const ModalAdmin = ({admin, onClose, onSave}) => {
 }
 
 export default function AdminAdmins({ session }) {
+  const mobile = useMobile()
   const [admins, setAdmins] = useState([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(null)
@@ -220,7 +222,7 @@ export default function AdminAdmins({ session }) {
         {loading ? (
           <div style={{ textAlign:'center', padding:30, color:C.gray, fontFamily:'Inter' }}>Cargando...</div>
         ) : (
-          <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter' }}>
+          <div style={{overflowX:'auto'}}><table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter', minWidth:420 }}>
             <thead>
               <tr style={{ borderBottom:`2px solid ${C.bg2}` }}>
                 {['Nombre','Usuario','Última sesión','Estado','Acciones'].map(h => (
@@ -258,7 +260,7 @@ export default function AdminAdmins({ session }) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </Card>
 

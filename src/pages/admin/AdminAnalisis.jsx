@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
-import { C, Card, Badge } from '../../components/ui'
+import { C, Card, Badge, useMobile } from '../../components/ui'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -349,7 +349,7 @@ Sé específico, práctico y orientado a la acción. Tono profesional pero cerca
       <Card>
         <SectionTitle>Generar Análisis de Prueba Interna</SectionTitle>
 
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
+        <div style={{ display:'grid', gridTemplateColumns: mobile ? '1fr' : '1fr 1fr', gap:12, marginBottom:16 }}>
           {/* Departamento */}
           <div>
             <Label>Departamento</Label>
@@ -1362,6 +1362,7 @@ Basa el análisis exclusivamente en los datos proporcionados. Tono profesional y
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export default function AdminAnalisis() {
+  const mobile = useMobile()
   const [colegios, setColegios] = useState([])
   const [pruebas, setPruebas] = useState([])
   const [modo, setModo] = useState(null)
