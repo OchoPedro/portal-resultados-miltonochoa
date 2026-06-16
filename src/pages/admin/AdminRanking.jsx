@@ -232,6 +232,19 @@ function MiniClasPill({ val }) {
     : <span style={{ color:'#D1D5DB' }}>—</span>
 }
 
+// Flecha de tendencia vs año anterior para un índice numérico
+function TrendArrow({ curr, prev }) {
+  if (curr == null || prev == null || isNaN(+curr) || isNaN(+prev)) return null
+  const diff = +curr - +prev
+  if (Math.abs(diff) < 0.0005)
+    return <span style={{ color:'#9CA3AF', fontSize:11, lineHeight:1 }} title="Sin cambio (→)">→</span>
+  if (diff > 0)
+    return <span style={{ color:'#059669', fontSize:12, fontWeight:700, lineHeight:1 }}
+      title={`+${diff.toFixed(4)} vs ${''}`}>↑</span>
+  return <span style={{ color:'#DC2626', fontSize:12, fontWeight:700, lineHeight:1 }}
+    title={`${diff.toFixed(4)} vs año anterior`}>↓</span>
+}
+
 // ─── Dual-list picker ─────────────────────────────────────────────────────────
 function DualList({ available, selected, onSelect, label, height=160 }) {
   const [search, setSearch] = useState('')
@@ -374,6 +387,7 @@ function ClasificacionICFES({ session }) {
   const [importMsg, setImportMsg] = useState(null)
   const [lastUpdate, setLastUpdate] = useState(null)
   const [consulted, setConsulted]   = useState(false)
+  const [prevYearMap, setPrevYearMap] = useState({})  // {codigo_dane: row del año anterior}
 
   // Carga departamentos y municipios cuando cambia año/periodo/grado (o modo ponderado)
   useEffect(() => {
@@ -458,6 +472,22 @@ function ClasificacionICFES({ session }) {
     )
     const { data: rows } = await q
     setData(rows || [])
+
+    // Cargar año anterior para mostrar flechas de tendencia
+    if (rows && rows.length > 0 && f.anio > 2020) {
+      const daneList = rows.map(r => r.codigo_dane).filter(Boolean)
+      const { data: prevRows } = await supabase
+        .from('clasificacion_icfes')
+        .select('codigo_dane,clasificacion,idx_matematicas,idx_cn,idx_sociales,idx_lc,idx_ingles,puntaje_global')
+        .eq('anio', f.anio - 1).eq('periodo', f.periodo).eq('grado', f.grado)
+        .in('codigo_dane', daneList)
+      const map = {}
+      ;(prevRows || []).forEach(r => { map[r.codigo_dane] = r })
+      setPrevYearMap(map)
+    } else {
+      setPrevYearMap({})
+    }
+
     setLoading(false)
   }, [])
 
@@ -904,8 +934,8 @@ function ClasificacionICFES({ session }) {
         </div>
       )}
 
-      {/* Resultados */}
-      {consulted && !loading && data.length === 0 && (
+      {/* Sin resultados (solo modo normal) */}
+      {!isPonderado && consulted && !loading && data.length === 0 && (
         <div style={{ textAlign:'center', padding:'60px 0', color:C.gray, fontFamily:'Inter' }}>
           <div style={{ fontSize:36, marginBottom:10 }}>📭</div>
           <div style={{ fontSize:15, color:C.navy }}>Sin resultados</div>
@@ -1270,13 +1300,31 @@ function ClasificacionICFES({ session }) {
                         </Td>
                         <Td style={{ textAlign:'center', color:C.gray, fontSize:11 }}>{r.num_matriculados?.toLocaleString('es-CO') || '—'}</Td>
                         <Td style={{ textAlign:'center', color:C.gray, fontSize:11 }}>{r.num_evaluados?.toLocaleString('es-CO') || '—'}</Td>
-                        <Td style={{ textAlign:'center', fontWeight:600, fontSize:11, color:C.navy }}>{idx(r.idx_matematicas)}</Td>
-                        <Td style={{ textAlign:'center', fontWeight:600, fontSize:11, color:C.navy }}>{idx(r.idx_cn)}</Td>
-                        <Td style={{ textAlign:'center', fontWeight:600, fontSize:11, color:C.navy }}>{idx(r.idx_sociales)}</Td>
-                        <Td style={{ textAlign:'center', fontWeight:600, fontSize:11, color:C.navy }}>{idx(r.idx_lc)}</Td>
-                        <Td style={{ textAlign:'center', fontWeight:600, fontSize:11, color:C.navy }}>{idx(r.idx_ingles)}</Td>
+                        {[
+                          ['idx_matematicas', r.idx_matematicas],
+                          ['idx_cn',          r.idx_cn],
+                          ['idx_sociales',    r.idx_sociales],
+                          ['idx_lc',          r.idx_lc],
+                          ['idx_ingles',      r.idx_ingles],
+                        ].map(([field, val]) => {
+                          const prev = prevYearMap[r.codigo_dane]
+                          return (
+                            <Td key={field} style={{ textAlign:'center', padding:'10px 8px' }}>
+                              <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:3 }}>
+                                <span style={{ fontWeight:600, fontSize:11, color:C.navy, fontFamily:'Inter' }}>
+                                  {val ? parseFloat(val).toFixed(4) : '—'}
+                                </span>
+                                {prev && <TrendArrow curr={val} prev={prev[field]} />}
+                              </div>
+                            </Td>
+                          )
+                        })}
                         <Td style={{ textAlign:'center', fontWeight:700, color:C.green, fontSize:12 }}>
-                          {r.puntaje_global ? parseFloat(r.puntaje_global).toFixed(4) : '—'}
+                          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:3 }}>
+                            <span>{r.puntaje_global ? parseFloat(r.puntaje_global).toFixed(4) : '—'}</span>
+                            {prevYearMap[r.codigo_dane] &&
+                              <TrendArrow curr={r.puntaje_global} prev={prevYearMap[r.codigo_dane]?.puntaje_global} />}
+                          </div>
                         </Td>
                       </tr>
                     )
