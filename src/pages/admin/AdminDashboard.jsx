@@ -15,7 +15,7 @@ const MENU_ALL = [
   { id:'estudiantes',  label:'Listado de Estudiantes', icon:'👥', desc:'Todos los estudiantes por colegio' },
   { id:'pruebas',      label:'Pruebas',             icon:'📋', desc:'Tipos y referencias' },
   { id:'resultados',   label:'Resultados',          icon:'📊', desc:'Cargar resultados de pruebas' },
-  { id:'ranking',      label:'Ranking',             icon:'🏆', desc:'Ranking Colombia · Saber 11' },
+  { id:'ranking',      label:'Plantel',             icon:'🏆', desc:'Ranking Colombia · Saber 11' },
   { id:'hojas',        label:'Hojas de Respuesta',  icon:'📝', desc:'Generar hojas por referencia' },
   { id:'analisis',     label:'Análisis IA',         icon:'🤖', desc:'Recomendaciones con Claude' },
   { id:'admins',       label:'Administradores',     icon:'👤', desc:'Usuarios admin' },
