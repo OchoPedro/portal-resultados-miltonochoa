@@ -32,7 +32,7 @@ export default function AdminEstudiantesOrganizados() {
 
     const [{ data: colegiosData }, { data: estudiantesData }] = await Promise.all([
       supabase.from('colegios').select('id, nombre, municipio, departamento_nombre'),
-      supabase.from('estudiantes').select('nombre, documento, grado, salon, colegio_id'),
+      supabase.from('estudiantes').select('nombre, codigo, grado, salon, colegio_id'),
     ])
 
     if (!estudiantesData) { setLoading(false); return }
@@ -70,7 +70,7 @@ export default function AdminEstudiantesOrganizados() {
     const q = buscar.toLowerCase()
     return (
       e.nombre?.toLowerCase().includes(q) ||
-      e.documento?.toLowerCase().includes(q) ||
+      e.codigo?.toLowerCase().includes(q) ||
       e.colegio?.nombre?.toLowerCase().includes(q) ||
       e.colegio?.municipio?.toLowerCase().includes(q) ||
       e.colegio?.departamento_nombre?.toLowerCase().includes(q)
@@ -144,7 +144,7 @@ export default function AdminEstudiantesOrganizados() {
                 <tr>
                   <Th>#</Th>
                   <Th>Nombre</Th>
-                  <Th>Documento</Th>
+                  <Th>Código</Th>
                   <Th center>Grado</Th>
                   <Th center>Salón</Th>
                 </tr>
@@ -186,7 +186,7 @@ export default function AdminEstudiantesOrganizados() {
                       <tr key={`row-${i}`} style={{ background: rowNum % 2 === 0 ? C.bg : 'transparent' }}>
                         <Td style={{ color: C.gray, fontSize: 11 }}>{rowNum}</Td>
                         <Td style={{ fontWeight: 500, color: C.navy }}>{e.nombre}</Td>
-                        <Td style={{ color: C.gray, fontSize: 12 }}>{e.documento || '—'}</Td>
+                        <Td style={{ color: C.gray, fontSize: 12 }}>{e.codigo || '—'}</Td>
                         <Td center>
                           <span style={{ background: C.navy + '12', color: C.navy,
                             padding: '2px 10px', borderRadius: 10, fontSize: 12, fontWeight: 600 }}>
