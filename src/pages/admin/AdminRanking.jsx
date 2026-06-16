@@ -200,9 +200,9 @@ function IndexChart({ stats }) {
                   <rect x={x} y={y} width={bW} height={bH}
                     fill={bColors[si % bColors.length]} rx={2} opacity={0.88} />
                   {bH > 14 && (
-                    <text x={x+bW/2} y={y+9} fontSize={7.5} fill="white"
+                    <text x={x+bW/2} y={y+9} fontSize={6.5} fill="white"
                       textAnchor="middle" fontWeight="700">
-                      {val.toFixed(2)}
+                      {val.toFixed(4)}
                     </text>
                   )}
                 </g>
@@ -1079,7 +1079,15 @@ function ClasificacionICFES({ session }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {pageRows.map((r, i) => {
+                    {(() => {
+                      // Mapa {codigo_dane → {anio → row}} para flechas de tendencia
+                      const pondMap = {}
+                      ponderadoData.forEach(row => {
+                        if (!pondMap[row.codigo_dane]) pondMap[row.codigo_dane] = {}
+                        pondMap[row.codigo_dane][row.anio] = row
+                      })
+                      return pageRows.map((r, i) => {
+                      const prevPond = pondMap[r.codigo_dane]?.[r.anio + 1] || null
                       const n = (pondPagina-1)*POND_PAG + i + 1
                       const isNewGroup = i === 0 || pageRows[i-1].codigo_dane !== r.codigo_dane
                       const bg = isNewGroup
@@ -1119,17 +1127,34 @@ function ClasificacionICFES({ session }) {
                           <Td style={{ textAlign:'center', color:C.gray, fontSize:11 }}>
                             {r.num_evaluados?.toLocaleString('es-CO') || '—'}
                           </Td>
-                          <Td style={{ textAlign:'center', fontSize:11, fontWeight:600, color:C.navy }}>{idx4(r.idx_matematicas)}</Td>
-                          <Td style={{ textAlign:'center', fontSize:11, fontWeight:600, color:C.navy }}>{idx4(r.idx_cn)}</Td>
-                          <Td style={{ textAlign:'center', fontSize:11, fontWeight:600, color:C.navy }}>{idx4(r.idx_sociales)}</Td>
-                          <Td style={{ textAlign:'center', fontSize:11, fontWeight:600, color:C.navy }}>{idx4(r.idx_lc)}</Td>
-                          <Td style={{ textAlign:'center', fontSize:11, fontWeight:600, color:C.navy }}>{idx4(r.idx_ingles)}</Td>
-                          <Td style={{ textAlign:'center', fontWeight:700, color:C.green, fontSize:12 }}>
-                            {idx4(r.puntaje_global)}
+                          {[
+                            ['idx_matematicas', r.idx_matematicas],
+                            ['idx_cn',          r.idx_cn],
+                            ['idx_sociales',    r.idx_sociales],
+                            ['idx_lc',          r.idx_lc],
+                            ['idx_ingles',      r.idx_ingles],
+                          ].map(([field, val]) => (
+                            <Td key={field} style={{ textAlign:'center', padding:'10px 8px' }}>
+                              <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:3 }}>
+                                <span style={{ fontWeight:600, fontSize:11, color:C.navy, fontFamily:'Inter' }}>
+                                  {idx4(val)}
+                                </span>
+                                {prevPond && <TrendArrow curr={val} prev={prevPond[field]} />}
+                              </div>
+                            </Td>
+                          ))}
+                          <Td style={{ textAlign:'center', padding:'10px 8px' }}>
+                            <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:3 }}>
+                              <span style={{ fontWeight:700, color:C.green, fontSize:12, fontFamily:'Inter' }}>
+                                {idx4(r.puntaje_global)}
+                              </span>
+                              {prevPond && <TrendArrow curr={r.puntaje_global} prev={prevPond.puntaje_global} />}
+                            </div>
                           </Td>
                         </tr>
                       )
-                    })}
+                    })
+                    })()}
                   </tbody>
                 </table>
               </div>
