@@ -8,7 +8,8 @@ export const C = {
   red: '#E05252', amber: '#F59E0B', blue: '#3B82F6',
 }
 
-// ── Breakpoint hook ──────────────────────────────────────────────────────────
+// ── Breakpoint hooks ─────────────────────────────────────────────────────────
+// mobile  < 768px  | tablet 768–1024px  | desktop > 1024px
 export const useMobile = () => {
   const [mobile, setMobile] = useState(() => window.innerWidth < 768)
   useEffect(() => {
@@ -17,6 +18,16 @@ export const useMobile = () => {
     return () => window.removeEventListener('resize', fn)
   }, [])
   return mobile
+}
+
+export const useTablet = () => {
+  const [tablet, setTablet] = useState(() => window.innerWidth >= 768 && window.innerWidth < 1024)
+  useEffect(() => {
+    const fn = () => setTablet(window.innerWidth >= 768 && window.innerWidth < 1024)
+    window.addEventListener('resize', fn)
+    return () => window.removeEventListener('resize', fn)
+  }, [])
+  return tablet
 }
 
 // ── Niveles estándar ICFES/Saber Colombia (escala de porcentaje 0–100) ───────
@@ -104,6 +115,7 @@ export const ScoreGauge = ({ value, max = 500 }) => {
 // ── Sidebar responsive ────────────────────────────────────────────────────────
 export const Sidebar = ({ role, session, onLogout, children }) => {
   const mobile = useMobile()
+  const tablet = useTablet()
   const [open, setOpen] = useState(false)
 
   // Cierra el menú al hacer resize a desktop
@@ -174,17 +186,18 @@ export const Sidebar = ({ role, session, onLogout, children }) => {
     )
   }
 
-  // Desktop: sidebar fija izquierda
+  // Tablet / Desktop: sidebar fija izquierda
+  const sidebarWidth = tablet ? 200 : 240
   return (
-    <div style={{ width: 240, minHeight: '100vh', background: C.navy,
+    <div style={{ width: sidebarWidth, minHeight: '100vh', background: C.navy,
       display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-      <div style={{ padding: '28px 20px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-        <div style={{ fontSize: 15, fontFamily: 'Playfair Display, serif',
+      <div style={{ padding: tablet ? '16px 14px 14px' : '28px 20px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+        <div style={{ fontSize: tablet ? 13 : 15, fontFamily: 'Playfair Display, serif',
           color: C.white, marginBottom: 2 }}>Milton Ochoa</div>
-        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', fontFamily: 'Inter',
+        <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', fontFamily: 'Inter',
           letterSpacing: '0.12em', textTransform: 'uppercase' }}>Portal de Resultados</div>
       </div>
-      <div style={{ flex: 1, padding: '12px' }}>{children}</div>
+      <div style={{ flex: 1, padding: tablet ? '8px' : '12px' }}>{children}</div>
       <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
         <div style={{ fontSize: 12, color: C.white, fontFamily: 'Inter', fontWeight: 500, marginBottom: 2 }}>
           {userName}

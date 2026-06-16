@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import {
   C, getColor, getLevel, avg,
-  Card, CardTitle, Badge, KpiCard, TabBar, ScoreGauge, Sidebar, useMobile
+  Card, CardTitle, Badge, KpiCard, TabBar, ScoreGauge, Sidebar, useMobile, useTablet
 } from '../components/ui'
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer,
@@ -11,6 +11,7 @@ import {
 
 export default function EstudianteDashboard({ session, onLogout }) {
   const mobile = useMobile()
+  const tablet = useTablet()
   const [todos, setTodos] = useState([])          // todos los resultados del estudiante
   const [selectedIdx, setSelectedIdx] = useState(0) // prueba activa
   const [compañeros, setCompañeros] = useState([])
@@ -170,7 +171,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
         </div>
       </Sidebar>
 
-      <main style={{ flex: 1, padding: mobile ? '72px 16px 24px' : '36px 40px', overflowY: 'auto', minWidth: 0 }}>
+      <main style={{ flex: 1, padding: mobile ? '72px 16px 24px' : tablet ? '24px 20px' : '36px 40px', overflowY: 'auto', minWidth: 0 }}>
         {/* Header */}
         <div style={{ marginBottom: 28 }}>
           <div style={{ fontSize: 11, color: C.green, letterSpacing: '0.15em',
@@ -191,7 +192,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
         </div>
 
         {/* KPIs */}
-        <div style={{ display: 'grid', gridTemplateColumns: mobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: 12, marginBottom: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: mobile || tablet ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: 12, marginBottom: 24 }}>
           <KpiCard label="Puntaje Global" value={r.puntaje_global} sub="Escala 0–500" color={getColor((r.puntaje_global / 500) * 100)} />
           <KpiCard label="Desempeño" value={`${r.desempeno_pct?.toFixed(1)}%`} sub="Promedio ponderado" color={getColor(r.desempeno_pct)} />
           <KpiCard label="Puesto" value={miPuesto ? `#${miPuesto}` : '—'} sub={`de ${compañeros.length} estudiantes`} color={C.navy} />

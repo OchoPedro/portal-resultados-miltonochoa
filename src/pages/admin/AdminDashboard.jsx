@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { C, useMobile } from '../../components/ui'
+import { C, useMobile, useTablet } from '../../components/ui'
 import AdminBaseDatos from './AdminBaseDatos'
 import AdminEstudiantes from './AdminEstudiantes'
 import AdminPruebas from './AdminPruebas'
@@ -23,6 +23,7 @@ const MENU_ALL = [
 
 export default function AdminDashboard({ session, onLogout }) {
   const mobile = useMobile()
+  const tablet = useTablet()
   const [menuOpen, setMenuOpen] = useState(false)
 
   // session.modulos === null → superadmin (todo acceso)
@@ -149,15 +150,15 @@ export default function AdminDashboard({ session, onLogout }) {
           )}
         </>
       ) : (
-        /* SIDEBAR desktop */
-        <div style={{ width:240, minHeight:'100vh', background:C.navy,
+        /* SIDEBAR tablet/desktop */
+        <div style={{ width: tablet ? 200 : 240, minHeight:'100vh', background:C.navy,
           display:'flex', flexDirection:'column', flexShrink:0 }}>
-          <div style={{ padding:'20px 16px 16px', borderBottom:'1px solid rgba(255,255,255,0.08)' }}>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'center', marginBottom:10 }}>
+          <div style={{ padding: tablet ? '14px 12px 12px' : '20px 16px 16px', borderBottom:'1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'center', marginBottom: tablet ? 6 : 10 }}>
               <img src="/logo-sidebar-blanco.png" alt="Milton Ochoa"
-                style={{ width:'100%', maxWidth:190, height:'auto', display:'block' }} />
+                style={{ width:'100%', maxWidth: tablet ? 160 : 190, height:'auto', display:'block' }} />
             </div>
-            <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', fontFamily:'Inter',
+            <div style={{ fontSize:9, color:'rgba(255,255,255,0.4)', fontFamily:'Inter',
               letterSpacing:'0.12em', textTransform:'uppercase', textAlign:'center' }}>Panel Administrador</div>
           </div>
           {navItems}
@@ -166,7 +167,7 @@ export default function AdminDashboard({ session, onLogout }) {
       )}
 
       {/* MAIN */}
-      <main style={{ flex:1, padding: mobile ? '72px 16px 24px' : '36px 40px', overflowY:'auto', minWidth:0 }}>
+      <main style={{ flex:1, padding: mobile ? '72px 16px 24px' : tablet ? '24px 20px' : '36px 40px', overflowY:'auto', minWidth:0 }}>
         {/* Header */}
         <div style={{ marginBottom:32 }}>
           <div style={{ fontSize:11, color:C.green, letterSpacing:'0.12em',

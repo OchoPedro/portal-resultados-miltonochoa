@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import {
   C,
-  Card, CardTitle, Badge, KpiCard, Sidebar, useMobile
+  Card, CardTitle, Badge, KpiCard, Sidebar, useMobile, useTablet
 } from '../components/ui'
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer,
@@ -582,6 +582,7 @@ function RecomendacionesClaude({ session, prueba }) {
 // ── MAIN DASHBOARD ───────────────────────────────────────────
 export default function ColegioDashboard({session, onLogout}) {
   const mobile = useMobile()
+  const tablet = useTablet()
   const [tab, setTab] = useState('carta')
   const [menuSection, setMenuSection] = useState('plantel')
   const [loading, setLoading] = useState(true)
@@ -1013,7 +1014,7 @@ export default function ColegioDashboard({session, onLogout}) {
       </div>
 
       {/* MAIN */}
-      <main style={{flex:1, padding: mobile ? '72px 16px 24px' : '36px 40px', overflowY:'auto', minWidth: 0}}>
+      <main style={{flex:1, padding: mobile ? '72px 16px 24px' : tablet ? '24px 20px' : '36px 40px', overflowY:'auto', minWidth: 0}}>
         {/* HEADER */}
         <div style={{marginBottom:28}}>
           <div style={{fontSize:11, color:C.green, letterSpacing:'0.12em',
@@ -1044,7 +1045,7 @@ export default function ColegioDashboard({session, onLogout}) {
 
         {/* KPIs — solo para herramientas */}
         {['tablero','areas','niveles','desviacion','competencias','mejora','detalle_prueba','ranking','listado_notas','notas_acumuladas'].includes(tab) && (
-        <div style={{display:'grid', gridTemplateColumns: mobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap:12, marginBottom:28}}>
+        <div style={{display:'grid', gridTemplateColumns: mobile || tablet ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap:12, marginBottom:28}}>
           <KpiCard label="Prom. Global" value={promGlobal ?? '—'} sub={`Prueba ${prueba?.codigo ?? '—'}`} color={C.navy}/>
           <KpiCard label="Estudiantes" value={students.length || '—'} sub="Evaluados" color={C.navy}/>
           <KpiCard label="Mejor puntaje" value={maxStudent?.puntaje_global ?? '—'}
