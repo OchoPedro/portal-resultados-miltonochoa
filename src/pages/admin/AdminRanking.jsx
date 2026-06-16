@@ -584,6 +584,7 @@ function ClasificacionICFES({ session }) {
   const [aniosPond,      setAniosPond]      = useState([])      // e.g. [2025,2024,2023]
   const [ponderadoData,  setPonderadoData]  = useState([])      // filas ponderadas por plantel
   const [ponderadoStats, setPonderadoStats] = useState([])      // stats por año para gráficas
+  const [prevRefData,    setPrevRefData]    = useState([])      // año anterior al más antiguo, solo para flechas
   const [pondPagina,     setPondPagina]     = useState(1)
   const POND_PAG = 20
 
@@ -606,7 +607,7 @@ function ClasificacionICFES({ session }) {
     setDeptoOpts([]); setMuniAll([]); setMuniOpts([]); setEstOpts([])
     setData([]); setConsulted(false); setLastUpdate(null)
     setTotal(0); setByClass({}); setPagina(1); setActiveF(null)
-    setPonderadoData([]); setPonderadoStats([]); setAniosPond([])
+    setPonderadoData([]); setPonderadoStats([]); setAniosPond([]); setPrevRefData([])
 
     let q = supabase.from('clasificacion_icfes').select('municipio, departamento')
     if (isPonderado) {
@@ -705,7 +706,7 @@ function ClasificacionICFES({ session }) {
   // ── Ponderado: promedia los últimos 3 años cargados ──────────────────────────
   const consultarPonderado = useCallback(async () => {
     setLoading(true); setConsulted(true); setPondPagina(1)
-    setPonderadoData([]); setPonderadoStats([])
+    setPonderadoData([]); setPonderadoStats([]); setPrevRefData([])
 
     // 1. Detectar cuáles años de ANIOS_CLAS tienen datos para este periodo/grado
     const yearChecks = await Promise.all(
@@ -793,6 +794,17 @@ function ClasificacionICFES({ session }) {
 
     setTotal(tableRows.length)
     setPonderadoData(tableRows)
+
+    // 6. Cargar año anterior al más antiguo solo para comparación de flechas (sin mostrarlo en tabla)
+    const oldestYear = last3[last3.length - 1]
+    const refYear = oldestYear - 1
+    const { data: refRows } = await applyF(
+      supabase.from('clasificacion_icfes').select(
+        'codigo_dane,anio,idx_matematicas,idx_cn,idx_sociales,idx_lc,idx_ingles,puntaje_global'
+      ).eq('anio', refYear).eq('periodo', periodo).eq('grado', grado).limit(5000)
+    )
+    setPrevRefData(refRows || [])
+
     setLoading(false)
   }, [periodo, grado, sector, clasSel, deptoSel, muniSel, estSel, codigoDane])
 
@@ -910,7 +922,7 @@ function ClasificacionICFES({ session }) {
                 if (e.target.value === 'ponderado') {
                   setIsPonderado(true)
                   setData([]); setConsulted(false); setTotal(0); setByClass({})
-                  setPonderadoData([]); setPonderadoStats([]); setAniosPond([])
+                  setPonderadoData([]); setPonderadoStats([]); setAniosPond([]); setPrevRefData([])
                 } else {
                   setIsPonderado(false)
                   setAnio(+e.target.value)
@@ -1305,8 +1317,9 @@ function ClasificacionICFES({ session }) {
                   <tbody>
                     {(() => {
                       // Mapa {codigo_dane → {anio → row}} para flechas de tendencia
+                      // Incluye prevRefData (año anterior al más antiguo) solo para comparación
                       const pondMap = {}
-                      ponderadoData.forEach(row => {
+                      ;[...ponderadoData, ...prevRefData].forEach(row => {
                         if (!pondMap[row.codigo_dane]) pondMap[row.codigo_dane] = {}
                         pondMap[row.codigo_dane][row.anio] = row
                       })
