@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { C } from '../../components/ui'
 import AdminColegios from './AdminColegios'
-import AdminEstudiantes from './AdminEstudiantes'
+import AdminEstudiantesOrganizados from './AdminEstudiantesOrganizados'
 import AdminColaboradores from './AdminColaboradores'
 
 const SUBTABS = [
@@ -38,8 +38,8 @@ export default function AdminBaseDatos({ onUpdate }) {
       </div>
 
       {/* Contenido */}
-      {sub === 'colegios'      && <AdminColegios      onUpdate={onUpdate} />}
-      {sub === 'estudiantes'   && <AdminEstudiantes   onUpdate={onUpdate} />}
+      {sub === 'colegios'      && <AdminColegios            onUpdate={onUpdate} />}
+      {sub === 'estudiantes'   && <AdminEstudiantesOrganizados />}
       {sub === 'colaboradores' && <AdminColaboradores />}
     </div>
   )

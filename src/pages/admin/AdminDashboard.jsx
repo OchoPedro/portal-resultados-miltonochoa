@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { C, useMobile } from '../../components/ui'
 import AdminBaseDatos from './AdminBaseDatos'
+import AdminEstudiantes from './AdminEstudiantes'
 import AdminPruebas from './AdminPruebas'
 import AdminResultados from './AdminResultados'
 import AdminAdmins from './AdminAdmins'
@@ -11,6 +12,7 @@ import HojasRespuesta from '../../components/HojasRespuesta'
 
 const MENU_ALL = [
   { id:'basedatos',    label:'Base de Datos',       icon:'🗄',  desc:'Colegios, Estudiantes y Colaboradores' },
+  { id:'estudiantes',  label:'Listado de Estudiantes', icon:'👥', desc:'Todos los estudiantes por colegio' },
   { id:'pruebas',      label:'Pruebas',             icon:'📋', desc:'Tipos y referencias' },
   { id:'resultados',   label:'Resultados',          icon:'📊', desc:'Cargar resultados de pruebas' },
   { id:'ranking',      label:'Ranking',             icon:'🏆', desc:'Ranking Colombia · Saber 11' },
@@ -181,6 +183,7 @@ export default function AdminDashboard({ session, onLogout }) {
 
         {/* Contenido */}
         {section==='basedatos'   && <AdminBaseDatos   onUpdate={loadStats} />}
+        {section==='estudiantes' && <AdminEstudiantes onUpdate={loadStats} />}
         {section==='pruebas'     && <AdminPruebas     onUpdate={loadStats} />}
         {section==='resultados'  && <AdminResultados  onUpdate={loadStats} />}
         {section==='ranking'     && <AdminRanking />}
