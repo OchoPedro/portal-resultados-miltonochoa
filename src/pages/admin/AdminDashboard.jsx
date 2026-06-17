@@ -8,6 +8,7 @@ import AdminResultados from './AdminResultados'
 import AdminAdmins from './AdminAdmins'
 import AdminAnalisis from './AdminAnalisis'
 import AdminRanking from './AdminRanking'
+import AdminTienda from './AdminTienda'
 import HojasRespuesta from '../../components/HojasRespuesta'
 
 const MENU_ALL = [
@@ -18,6 +19,7 @@ const MENU_ALL = [
   { id:'ranking',      label:'Plantel',             icon:'🏆', desc:'Ranking Colombia · Saber 11' },
   { id:'hojas',        label:'Hojas de Respuesta',  icon:'📝', desc:'Generar hojas por referencia' },
   { id:'analisis',     label:'Análisis IA',         icon:'🤖', desc:'Recomendaciones con Claude' },
+  { id:'tienda',       label:'Tienda Virtual',      icon:'🛒', desc:'Productos, órdenes y descuentos' },
   { id:'admins',       label:'Administradores',     icon:'👤', desc:'Usuarios admin' },
 ]
 
@@ -190,6 +192,7 @@ export default function AdminDashboard({ session, onLogout }) {
         {section==='ranking'     && <AdminRanking session={session} />}
         {section==='hojas'       && <HojasRespuesta />}
         {section==='analisis'    && <AdminAnalisis />}
+        {section==='tienda'      && <AdminTienda />}
         {section==='admins'      && <AdminAdmins      session={session}    onUpdate={loadStats} />}
       </main>
     </div>

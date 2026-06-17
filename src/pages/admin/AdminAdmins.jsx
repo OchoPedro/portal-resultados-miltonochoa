@@ -35,6 +35,7 @@ const MODULOS_DISP = [
   { id:'ranking',     label:'Ranking',             icon:'🏆' },
   { id:'hojas',       label:'Hojas de Respuesta',  icon:'📝' },
   { id:'analisis',    label:'Análisis IA',         icon:'🤖' },
+  { id:'tienda',      label:'Tienda Virtual',      icon:'🛒' },
 ]
 
 const ModalAdmin = ({admin, onClose, onSave}) => {
