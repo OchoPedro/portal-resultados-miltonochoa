@@ -631,7 +631,7 @@ export default function ColegioDashboard({session, onLogout}) {
     try {
       // Registrar última sesión del colegio (hora Colombia)
       await supabase.from('colegios').update({
-        ultima_sesion: new Date().toLocaleString('sv-SE', {timeZone:'America/Bogota'}).replace(' ','T')
+        ultima_sesion: new Date().toISOString()
       }).eq('id', session.id)
 
       // Cargar todas las pruebas activas

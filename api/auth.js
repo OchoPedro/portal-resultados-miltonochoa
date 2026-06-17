@@ -144,7 +144,7 @@ export default async function handler(req, res) {
 
     // ── Paso 2: actualizar última sesión ────────────────────────────────────
 
-    const ahora = new Date().toLocaleString('sv-SE', { timeZone: 'America/Bogota' }).replace(' ', 'T')
+    const ahora = new Date().toISOString()
     if (userResult.role === 'admin')
       await adminSupabase.from('administradores').update({ ultima_sesion: ahora }).eq('id', userResult.data.id)
     if (userResult.role === 'colegio')
