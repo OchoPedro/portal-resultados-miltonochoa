@@ -911,24 +911,49 @@ function ClasificacionICFES({ session }) {
     const avgTotal = Math.round(stats.reduce((s, st) => s + st.total, 0) / stats.length)
     setByClass(avgByClass)
 
-    // 5. Tabla: filas individuales por año (sin promediar), ordenadas por plantel → año desc
-    const tableRows = []
-    last3.forEach(a => {
-      rowsByAnio[a].forEach(r => {
-        if (r.codigo_dane) tableRows.push({ ...r })
+    // 5. Tabla: agregada por año si no hay establecimiento, o detalle por plantel
+    const isModoAgrupado = !estSel.length && !codigoDane.trim()
+    const avgF = (rows, fn) => {
+      const vals = rows.map(fn).filter(v => v != null && !isNaN(Number(v)))
+      return vals.length ? vals.reduce((s, v) => s + Number(v), 0) / vals.length : null
+    }
+    let tableRows = []
+    if (isModoAgrupado) {
+      tableRows = last3.map(a => {
+        const rows = rowsByAnio[a]
+        const byC = {}; CLAS_OPTS.forEach(c => { byC[c] = 0 })
+        rows.forEach(r => { if (r.clasificacion) byC[r.clasificacion] = (byC[r.clasificacion] || 0) + 1 })
+        return {
+          anio: a, _isAggregate: true,
+          _planteles: rows.length,
+          _clasDistrib: byC,
+          zona: muniSel.length ? muniSel.join(', ') : deptoSel.length ? deptoSel.join(', ') : 'Nacional',
+          sector: sector || 'Todos',
+          num_matriculados: rows.reduce((s, r) => s + (r.num_matriculados || 0), 0),
+          num_evaluados:    rows.reduce((s, r) => s + (r.num_evaluados || 0), 0),
+          idx_matematicas:  avgF(rows, r => r.idx_matematicas),
+          idx_cn:           avgF(rows, r => r.idx_cn),
+          idx_sociales:     avgF(rows, r => r.idx_sociales),
+          idx_lc:           avgF(rows, r => r.idx_lc),
+          idx_ingles:       avgF(rows, r => r.idx_ingles),
+          puntaje_global:   avgF(rows, r => r.puntaje_global),
+        }
+      }).sort((a, b) => b.anio - a.anio)
+    } else {
+      last3.forEach(a => {
+        rowsByAnio[a].forEach(r => { if (r.codigo_dane) tableRows.push({ ...r }) })
       })
-    })
-    tableRows.sort((a, b) => {
-      const na = (a.nombre_sede || '').toUpperCase()
-      const nb = (b.nombre_sede || '').toUpperCase()
-      if (na !== nb) return na.localeCompare(nb, 'es')
-      return b.anio - a.anio
-    })
-
+      tableRows.sort((a, b) => {
+        const na = (a.nombre_sede || '').toUpperCase()
+        const nb = (b.nombre_sede || '').toUpperCase()
+        if (na !== nb) return na.localeCompare(nb, 'es')
+        return b.anio - a.anio
+      })
+    }
     setTotal(tableRows.length)
     setPonderadoData(tableRows)
 
-    // 6. Cargar año anterior al más antiguo solo para comparación de flechas (sin mostrarlo en tabla)
+    // 6. Cargar año anterior al más antiguo para flechas de tendencia
     const oldestYear = last3[last3.length - 1]
     const refYear = oldestYear - 1
     const { data: refRows } = await applyF(
@@ -936,7 +961,20 @@ function ClasificacionICFES({ session }) {
         'codigo_dane,anio,idx_matematicas,idx_cn,idx_sociales,idx_lc,idx_ingles,puntaje_global'
       ).eq('anio', refYear).eq('periodo', periodo).eq('grado', grado).limit(5000)
     )
-    setPrevRefData(refRows || [])
+    if (isModoAgrupado) {
+      const rr = refRows || []
+      setPrevRefData([{
+        _isAggregate: true, anio: refYear,
+        idx_matematicas: avgF(rr, r => r.idx_matematicas),
+        idx_cn:          avgF(rr, r => r.idx_cn),
+        idx_sociales:    avgF(rr, r => r.idx_sociales),
+        idx_lc:          avgF(rr, r => r.idx_lc),
+        idx_ingles:      avgF(rr, r => r.idx_ingles),
+        puntaje_global:  avgF(rr, r => r.puntaje_global),
+      }])
+    } else {
+      setPrevRefData(refRows || [])
+    }
 
     setLoading(false)
   }, [periodo, grado, sector, clasSel, deptoSel, muniSel, estSel, codigoDane])
@@ -1411,124 +1449,174 @@ function ClasificacionICFES({ session }) {
               </div>
             </>)}
 
-            {/* Tabla ponderada por plantel */}
-            <div style={{ background:C.white, borderRadius:10, border:`1px solid ${C.grayLt}`,
-              overflow:'hidden', boxShadow:'0 1px 4px rgba(10,31,61,0.05)', marginBottom:16 }}>
-              <div style={{ padding:'14px 20px', borderBottom:`1px solid ${C.bg2}`,
-                fontSize:11, fontWeight:700, color:C.navy, fontFamily:'Inter',
-                letterSpacing:'0.08em', textTransform:'uppercase', display:'flex',
-                justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8 }}>
-                <span>Detalle por año · {aniosPond.join(' · ')}</span>
-                <span style={{ fontWeight:400, color:C.gray }}>
-                  {ponderadoData.length.toLocaleString('es-CO')} filas
-                  {' · '}
-                  {new Set(ponderadoData.map(r => r.codigo_dane)).size.toLocaleString('es-CO')} planteles únicos
-                </span>
-              </div>
-              <div style={{ overflowX:'auto' }}>
-                <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter' }}>
-                  <thead>
-                    <tr>
-                      <Th>#</Th>
-                      <Th style={{ textAlign:'center' }}>Año</Th>
-                      <Th>Código DANE</Th>
-                      <Th>Establecimiento</Th>
-                      <Th>Municipio</Th>
-                      <Th>Departamento</Th>
-                      <Th style={{ textAlign:'center' }}>Sector</Th>
-                      <Th style={{ textAlign:'center' }}>Clasif.</Th>
-                      <Th style={{ textAlign:'center' }}>Matr.</Th>
-                      <Th style={{ textAlign:'center' }}>Eval.</Th>
-                      <Th style={{ textAlign:'center' }}>Mat.</Th>
-                      <Th style={{ textAlign:'center' }}>C.N.</Th>
-                      <Th style={{ textAlign:'center' }}>Soc.</Th>
-                      <Th style={{ textAlign:'center' }}>L.C.</Th>
-                      <Th style={{ textAlign:'center' }}>Ing.</Th>
-                      <Th style={{ textAlign:'center' }}>Índice Total</Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(() => {
-                      // Mapa {codigo_dane → {anio → row}} para flechas de tendencia
-                      // Incluye prevRefData (año anterior al más antiguo) solo para comparación
-                      const pondMap = {}
-                      ;[...ponderadoData, ...prevRefData].forEach(row => {
-                        if (!pondMap[row.codigo_dane]) pondMap[row.codigo_dane] = {}
-                        pondMap[row.codigo_dane][row.anio] = row
-                      })
-                      return pageRows.map((r, i) => {
-                      const prevPond = pondMap[r.codigo_dane]?.[r.anio - 1] || null
-                      const n = (pondPagina-1)*POND_PAG + i + 1
-                      const isNewGroup = i === 0 || pageRows[i-1].codigo_dane !== r.codigo_dane
-                      const bg = isNewGroup
-                        ? `${C.bg}80`
-                        : i%2===0 ? `${C.bg}40` : 'transparent'
-                      return (
-                        <tr key={`${r.codigo_dane}_${r.anio}`}
-                          style={{
-                            borderBottom:`1px solid ${C.bg2}`,
-                            borderTop: isNewGroup && i > 0 ? `2px solid ${C.grayLt}` : undefined,
-                            background: bg,
-                          }}
-                          onMouseEnter={e=>e.currentTarget.style.background=`${C.green}12`}
-                          onMouseLeave={e=>e.currentTarget.style.background=bg}>
-                          <Td style={{ color:C.gray, fontSize:11, textAlign:'center' }}>{n}</Td>
-                          <Td style={{ textAlign:'center' }}>
-                            <span style={{ display:'inline-block', padding:'2px 8px',
-                              borderRadius:10, fontSize:11, fontWeight:700,
-                              background:`${C.navy}15`, color:C.navy, fontFamily:'Inter' }}>
-                              {r.anio}
-                            </span>
-                          </Td>
-                          <Td style={{ color:C.gray, fontSize:11, fontFamily:'monospace', whiteSpace:'nowrap' }}>
-                            {r.codigo_dane}
-                          </Td>
-                          <Td style={{ fontWeight:600, color:C.navy, maxWidth:200,
-                            whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-                            {r.nombre_sede}
-                          </Td>
-                          <Td style={{ color:C.gray, fontSize:11, whiteSpace:'nowrap' }}>{r.municipio}</Td>
-                          <Td style={{ color:C.gray, fontSize:11, whiteSpace:'nowrap' }}>{r.departamento}</Td>
-                          <Td style={{ textAlign:'center', fontSize:11, color:C.gray }}>{r.sector || '—'}</Td>
-                          <Td style={{ textAlign:'center' }}><ClasBadge val={r.clasificacion} /></Td>
-                          <Td style={{ textAlign:'center', color:C.gray, fontSize:11 }}>
-                            {r.num_matriculados?.toLocaleString('es-CO') || '—'}
-                          </Td>
-                          <Td style={{ textAlign:'center', color:C.gray, fontSize:11 }}>
-                            {r.num_evaluados?.toLocaleString('es-CO') || '—'}
-                          </Td>
-                          {[
-                            ['idx_matematicas', r.idx_matematicas],
-                            ['idx_cn',          r.idx_cn],
-                            ['idx_sociales',    r.idx_sociales],
-                            ['idx_lc',          r.idx_lc],
-                            ['idx_ingles',      r.idx_ingles],
-                          ].map(([field, val]) => (
-                            <Td key={field} style={{ textAlign:'center', padding:'10px 8px' }}>
-                              <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:3 }}>
-                                <span style={{ fontWeight:600, fontSize:11, color:C.navy, fontFamily:'Inter' }}>
-                                  {idx4(val)}
-                                </span>
-                                {prevPond && <TrendArrow curr={val} prev={prevPond[field]} />}
-                              </div>
-                            </Td>
+            {/* Tabla ponderada — modo agregado o detalle por plantel */}
+            {(() => {
+              const isModoAgregado = ponderadoData[0]?._isAggregate === true
+
+              // Mapa anio → row para flechas en modo agregado
+              const aggMap = {}
+              if (isModoAgregado) {
+                ;[...ponderadoData, ...prevRefData].forEach(r => { aggMap[r.anio] = r })
+              }
+
+              // Mapa {codigo_dane → {anio → row}} para flechas en modo detalle
+              const pondMap = {}
+              if (!isModoAgregado) {
+                ;[...ponderadoData, ...prevRefData].forEach(row => {
+                  if (!pondMap[row.codigo_dane]) pondMap[row.codigo_dane] = {}
+                  pondMap[row.codigo_dane][row.anio] = row
+                })
+              }
+
+              const camposIdx = [
+                ['idx_matematicas','Mat.'],
+                ['idx_cn','C.N.'],
+                ['idx_sociales','Soc.'],
+                ['idx_lc','L.C.'],
+                ['idx_ingles','Ing.'],
+              ]
+
+              return (
+                <div style={{ background:C.white, borderRadius:10, border:`1px solid ${C.grayLt}`,
+                  overflow:'hidden', boxShadow:'0 1px 4px rgba(10,31,61,0.05)', marginBottom:16 }}>
+                  <div style={{ padding:'14px 20px', borderBottom:`1px solid ${C.bg2}`,
+                    fontSize:11, fontWeight:700, color:C.navy, fontFamily:'Inter',
+                    letterSpacing:'0.08em', textTransform:'uppercase', display:'flex',
+                    justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8 }}>
+                    <span>Detalle por año · {aniosPond.join(' · ')}</span>
+                    <span style={{ fontWeight:400, color:C.gray }}>
+                      {isModoAgregado
+                        ? `${ponderadoData.length} filas · ${ponderadoData.reduce((s,r)=>s+(r._planteles||0),0).toLocaleString('es-CO')} planteles únicos`
+                        : `${ponderadoData.length.toLocaleString('es-CO')} filas · ${new Set(ponderadoData.map(r=>r.codigo_dane)).size.toLocaleString('es-CO')} planteles únicos`
+                      }
+                    </span>
+                  </div>
+                  <div style={{ overflowX:'auto' }}>
+                    <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter' }}>
+                      <thead>
+                        <tr>
+                          <Th>#</Th>
+                          <Th style={{ textAlign:'center' }}>Año</Th>
+                          {isModoAgregado ? (
+                            <>
+                              <Th>Zona</Th>
+                              <Th style={{ textAlign:'center' }}>Planteles</Th>
+                              <Th style={{ textAlign:'center' }}>Clasificaciones</Th>
+                            </>
+                          ) : (
+                            <>
+                              <Th>Código DANE</Th>
+                              <Th>Establecimiento</Th>
+                              <Th>Municipio</Th>
+                              <Th>Departamento</Th>
+                              <Th style={{ textAlign:'center' }}>Sector</Th>
+                              <Th style={{ textAlign:'center' }}>Clasif.</Th>
+                            </>
+                          )}
+                          <Th style={{ textAlign:'center' }}>Matr.</Th>
+                          <Th style={{ textAlign:'center' }}>Eval.</Th>
+                          {camposIdx.map(([,label]) => (
+                            <Th key={label} style={{ textAlign:'center' }}>{label}</Th>
                           ))}
-                          <Td style={{ textAlign:'center', padding:'10px 8px' }}>
-                            <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:3 }}>
-                              <span style={{ fontWeight:700, color:C.green, fontSize:12, fontFamily:'Inter' }}>
-                                {idx4(r.puntaje_global)}
-                              </span>
-                              {prevPond && <TrendArrow curr={r.puntaje_global} prev={prevPond.puntaje_global} />}
-                            </div>
-                          </Td>
+                          <Th style={{ textAlign:'center' }}>Índice Total</Th>
                         </tr>
-                      )
-                    })
-                    })()}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                      </thead>
+                      <tbody>
+                        {pageRows.map((r, i) => {
+                          const prevPond = isModoAgregado
+                            ? (aggMap[r.anio - 1] || null)
+                            : (pondMap[r.codigo_dane]?.[r.anio - 1] || null)
+                          const n = (pondPagina-1)*POND_PAG + i + 1
+                          const isNewGroup = !isModoAgregado && (i === 0 || pageRows[i-1].codigo_dane !== r.codigo_dane)
+                          const bg = isNewGroup ? `${C.bg}80` : i%2===0 ? `${C.bg}40` : 'transparent'
+                          return (
+                            <tr key={isModoAgregado ? r.anio : `${r.codigo_dane}_${r.anio}`}
+                              style={{
+                                borderBottom:`1px solid ${C.bg2}`,
+                                borderTop: isNewGroup && i > 0 ? `2px solid ${C.grayLt}` : undefined,
+                                background: bg,
+                              }}
+                              onMouseEnter={e=>e.currentTarget.style.background=`${C.green}12`}
+                              onMouseLeave={e=>e.currentTarget.style.background=bg}>
+                              <Td style={{ color:C.gray, fontSize:11, textAlign:'center' }}>{n}</Td>
+                              <Td style={{ textAlign:'center' }}>
+                                <span style={{ display:'inline-block', padding:'2px 8px',
+                                  borderRadius:10, fontSize:11, fontWeight:700,
+                                  background:`${C.navy}15`, color:C.navy }}>
+                                  {r.anio}
+                                </span>
+                              </Td>
+
+                              {isModoAgregado ? (
+                                <>
+                                  <Td style={{ fontWeight:600, color:C.navy }}>{r.zona}</Td>
+                                  <Td style={{ textAlign:'center', color:C.navy, fontWeight:700 }}>
+                                    {(r._planteles||0).toLocaleString('es-CO')}
+                                  </Td>
+                                  <Td style={{ textAlign:'center' }}>
+                                    <div style={{ display:'flex', gap:4, flexWrap:'wrap', justifyContent:'center' }}>
+                                      {CLAS_OPTS.filter(c=>(r._clasDistrib?.[c]||0)>0).map(c => {
+                                        const s = CLAS_COLOR[c]
+                                        return (
+                                          <span key={c} style={{ fontSize:10, padding:'1px 6px',
+                                            borderRadius:8, background:s.bg, color:s.color,
+                                            border:`1px solid ${s.border}`, fontWeight:700 }}>
+                                            {c} {r._clasDistrib[c]}
+                                          </span>
+                                        )
+                                      })}
+                                    </div>
+                                  </Td>
+                                </>
+                              ) : (
+                                <>
+                                  <Td style={{ color:C.gray, fontSize:11, fontFamily:'monospace', whiteSpace:'nowrap' }}>
+                                    {r.codigo_dane}
+                                  </Td>
+                                  <Td style={{ fontWeight:600, color:C.navy, maxWidth:200,
+                                    whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                                    {r.nombre_sede}
+                                  </Td>
+                                  <Td style={{ color:C.gray, fontSize:11, whiteSpace:'nowrap' }}>{r.municipio}</Td>
+                                  <Td style={{ color:C.gray, fontSize:11, whiteSpace:'nowrap' }}>{r.departamento}</Td>
+                                  <Td style={{ textAlign:'center', fontSize:11, color:C.gray }}>{r.sector||'—'}</Td>
+                                  <Td style={{ textAlign:'center' }}><ClasBadge val={r.clasificacion}/></Td>
+                                </>
+                              )}
+
+                              <Td style={{ textAlign:'center', color:C.gray, fontSize:11 }}>
+                                {r.num_matriculados?.toLocaleString('es-CO') || '—'}
+                              </Td>
+                              <Td style={{ textAlign:'center', color:C.gray, fontSize:11 }}>
+                                {r.num_evaluados?.toLocaleString('es-CO') || '—'}
+                              </Td>
+                              {camposIdx.map(([field]) => (
+                                <Td key={field} style={{ textAlign:'center', padding:'10px 8px' }}>
+                                  <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:3 }}>
+                                    <span style={{ fontWeight:600, fontSize:11, color:C.navy, fontFamily:'Inter' }}>
+                                      {idx4(r[field])}
+                                    </span>
+                                    {prevPond && <TrendArrow curr={r[field]} prev={prevPond[field]} />}
+                                  </div>
+                                </Td>
+                              ))}
+                              <Td style={{ textAlign:'center', padding:'10px 8px' }}>
+                                <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:3 }}>
+                                  <span style={{ fontWeight:700, color:C.green, fontSize:12, fontFamily:'Inter' }}>
+                                    {idx4(r.puntaje_global)}
+                                  </span>
+                                  {prevPond && <TrendArrow curr={r.puntaje_global} prev={prevPond.puntaje_global} />}
+                                </div>
+                              </Td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Paginación tabla ponderada */}
             {pondPags > 1 && (

@@ -40,7 +40,8 @@ const MODULOS_DISP = [
 const ModalAdmin = ({admin, onClose, onSave}) => {
   const mobile = useMobile()
   const [form, setForm] = useState(admin || { nombre:'', usuario:'', password_hash:'' })
-  // null = acceso total (solo para superadmin); array = módulos seleccionados
+  // null = acceso total (superadmin); array = módulos seleccionados
+  const [isSuperAdmin, setIsSuperAdmin] = useState(admin?.modulos === null || admin?.modulos === undefined)
   const [modulos, setModulos] = useState(admin?.modulos || [])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -53,7 +54,7 @@ const ModalAdmin = ({admin, onClose, onSave}) => {
     if (!form.nombre || !form.usuario || (!admin && !form.password_hash)) {
       setError('Todos los campos son obligatorios.'); return
     }
-    if (modulos.length === 0) {
+    if (!isSuperAdmin && modulos.length === 0) {
       setError('Selecciona al menos un módulo.'); return
     }
     setSaving(true)
@@ -63,7 +64,8 @@ const ModalAdmin = ({admin, onClose, onSave}) => {
         const { data: hashed } = await supabase.rpc('hashear_password', { p_password: form.password_hash })
         pwdField = { password_hash: hashed }
       }
-      const payload = { nombre: form.nombre, usuario: form.usuario, modulos, ...pwdField }
+      const modulosPayload = isSuperAdmin ? null : modulos
+      const payload = { nombre: form.nombre, usuario: form.usuario, modulos: modulosPayload, ...pwdField }
       const { error: err } = admin
         ? await supabase.from('administradores').update(payload).eq('id', admin.id)
         : await supabase.from('administradores').insert({ ...payload, activo: true })
@@ -96,38 +98,57 @@ const ModalAdmin = ({admin, onClose, onSave}) => {
         <div style={{ marginBottom:20 }}>
           <div style={{ fontSize:10, letterSpacing:'0.12em', textTransform:'uppercase',
             color:C.gray, marginBottom:10, fontFamily:'Inter' }}>
-            Módulos visibles <span style={{ color:C.red }}>*</span>
+            Acceso y módulos
           </div>
-          <div style={{ display:'grid', gridTemplateColumns: mobile ? '1fr' : '1fr 1fr', gap:8 }}>
-            {MODULOS_DISP.map(m => {
-              const activo = modulos.includes(m.id)
-              return (
-                <label key={m.id} style={{ display:'flex', alignItems:'center', gap:10,
-                  padding:'10px 14px', borderRadius:8, cursor:'pointer',
-                  border: `1px solid ${activo ? C.green : C.grayLt}`,
-                  background: activo ? C.green + '0E' : C.bg,
-                  transition:'all 0.15s' }}>
-                  <input type="checkbox" checked={activo} onChange={() => toggleMod(m.id)}
-                    style={{ accentColor: C.green, width:16, height:16, cursor:'pointer' }} />
-                  <span style={{ fontSize:12, fontFamily:'Inter',
-                    color: activo ? C.navy : C.gray, fontWeight: activo ? 600 : 400 }}>
-                    {m.icon} {m.label}
-                  </span>
-                </label>
-              )
-            })}
-          </div>
-          <div style={{ marginTop:8, display:'flex', justifyContent:'flex-end', gap:8 }}>
-            <button onClick={() => setModulos(MODULOS_DISP.map(m=>m.id))}
-              style={{ fontSize:11, color:C.green, background:'none', border:'none', cursor:'pointer', fontFamily:'Inter' }}>
-              Seleccionar todos
-            </button>
-            <span style={{ color:C.grayLt }}>·</span>
-            <button onClick={() => setModulos([])}
-              style={{ fontSize:11, color:C.red, background:'none', border:'none', cursor:'pointer', fontFamily:'Inter' }}>
-              Limpiar
-            </button>
-          </div>
+
+          {/* Toggle superadmin */}
+          <label style={{ display:'flex', alignItems:'center', gap:10,
+            padding:'10px 14px', borderRadius:8, cursor:'pointer', marginBottom:10,
+            border: `1px solid ${isSuperAdmin ? C.navy : C.grayLt}`,
+            background: isSuperAdmin ? `${C.navy}0E` : C.bg }}>
+            <input type="checkbox" checked={isSuperAdmin} onChange={e => setIsSuperAdmin(e.target.checked)}
+              style={{ accentColor: C.navy, width:16, height:16, cursor:'pointer' }} />
+            <span style={{ fontSize:12, fontFamily:'Inter',
+              color: isSuperAdmin ? C.navy : C.gray, fontWeight: isSuperAdmin ? 700 : 400 }}>
+              👑 Superadmin — acceso total (todos los módulos + Administradores)
+            </span>
+          </label>
+
+          {/* Módulos individuales — solo si no es superadmin */}
+          {!isSuperAdmin && (
+            <>
+              <div style={{ display:'grid', gridTemplateColumns: mobile ? '1fr' : '1fr 1fr', gap:8 }}>
+                {MODULOS_DISP.map(m => {
+                  const activo = modulos.includes(m.id)
+                  return (
+                    <label key={m.id} style={{ display:'flex', alignItems:'center', gap:10,
+                      padding:'10px 14px', borderRadius:8, cursor:'pointer',
+                      border: `1px solid ${activo ? C.green : C.grayLt}`,
+                      background: activo ? C.green + '0E' : C.bg,
+                      transition:'all 0.15s' }}>
+                      <input type="checkbox" checked={activo} onChange={() => toggleMod(m.id)}
+                        style={{ accentColor: C.green, width:16, height:16, cursor:'pointer' }} />
+                      <span style={{ fontSize:12, fontFamily:'Inter',
+                        color: activo ? C.navy : C.gray, fontWeight: activo ? 600 : 400 }}>
+                        {m.icon} {m.label}
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+              <div style={{ marginTop:8, display:'flex', justifyContent:'flex-end', gap:8 }}>
+                <button onClick={() => setModulos(MODULOS_DISP.map(m=>m.id))}
+                  style={{ fontSize:11, color:C.green, background:'none', border:'none', cursor:'pointer', fontFamily:'Inter' }}>
+                  Seleccionar todos
+                </button>
+                <span style={{ color:C.grayLt }}>·</span>
+                <button onClick={() => setModulos([])}
+                  style={{ fontSize:11, color:C.red, background:'none', border:'none', cursor:'pointer', fontFamily:'Inter' }}>
+                  Limpiar
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         {error && <div style={{ background:'#FEF2F2', border:'1px solid #FECACA',
