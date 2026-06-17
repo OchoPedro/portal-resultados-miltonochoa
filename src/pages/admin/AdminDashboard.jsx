@@ -9,6 +9,7 @@ import AdminAdmins from './AdminAdmins'
 import AdminAnalisis from './AdminAnalisis'
 import AdminRanking from './AdminRanking'
 import AdminTienda from './AdminTienda'
+import AdminActualidad from './AdminActualidad'
 import HojasRespuesta from '../../components/HojasRespuesta'
 
 const MENU_ALL = [
@@ -20,6 +21,7 @@ const MENU_ALL = [
   { id:'hojas',        label:'Hojas de Respuesta',  icon:'📝', desc:'Generar hojas por referencia' },
   { id:'analisis',     label:'Análisis IA',         icon:'🤖', desc:'Recomendaciones con Claude' },
   { id:'tienda',       label:'Tienda Virtual',      icon:'🛒', desc:'Productos, órdenes y descuentos' },
+  { id:'actualidad',   label:'Actualidad',          icon:'📰', desc:'Artículos y noticias del hero' },
   { id:'admins',       label:'Administradores',     icon:'👤', desc:'Usuarios admin' },
 ]
 
@@ -193,6 +195,7 @@ export default function AdminDashboard({ session, onLogout }) {
         {section==='hojas'       && <HojasRespuesta />}
         {section==='analisis'    && <AdminAnalisis />}
         {section==='tienda'      && <AdminTienda />}
+        {section==='actualidad'  && <AdminActualidad />}
         {section==='admins'      && <AdminAdmins      session={session}    onUpdate={loadStats} />}
       </main>
     </div>
