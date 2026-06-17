@@ -835,8 +835,8 @@ export default function ColegioDashboard({session, onLogout}) {
   })
 
   // Tablero orden
-  const tableroOrden = ['mejores','nacional','departamento','municipio','plantel']
-  const tableroLabels = {mejores:'Mejores Promedios', nacional:'Nacional', departamento:'Departamento', municipio:'Municipio', plantel:'Plantel'}
+  const tableroOrden = ['mejores','nacional','region','departamento','municipio','plantel']
+  const tableroLabels = {mejores:'Mejores Promedios', nacional:'Nacional', region:'Región', departamento:'Departamento', municipio:'Municipio', plantel:'Plantel'}
 
   const tabs = [
     {id:'tablero',         label:'Tablero de Gestión'},
