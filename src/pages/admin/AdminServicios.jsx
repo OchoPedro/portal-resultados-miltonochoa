@@ -6,8 +6,6 @@ const TABS = [
   { id: 'instituciones', label: 'Instituciones' },
   { id: 'docentes',      label: 'Docentes' },
   { id: 'estudiantes',   label: 'Estudiantes' },
-  { id: 'familias',      label: 'Familias' },
-  { id: 'consultoria',   label: 'Consultoría' },
 ]
 
 const Input = ({ label, value, onChange, placeholder, required = false }) => (
