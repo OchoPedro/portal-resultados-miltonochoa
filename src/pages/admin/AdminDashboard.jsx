@@ -10,6 +10,9 @@ import AdminAnalisis from './AdminAnalisis'
 import AdminRanking from './AdminRanking'
 import AdminTienda from './AdminTienda'
 import AdminActualidad from './AdminActualidad'
+import AdminFaq from './AdminFaq'
+import AdminServicios from './AdminServicios'
+import AdminImpacto from './AdminImpacto'
 import HojasRespuesta from '../../components/HojasRespuesta'
 
 const MENU_ALL = [
@@ -22,6 +25,9 @@ const MENU_ALL = [
   { id:'analisis',     label:'Análisis IA',         icon:'🤖', desc:'Recomendaciones con Claude' },
   { id:'tienda',       label:'Tienda Virtual',      icon:'🛒', desc:'Productos, órdenes y descuentos' },
   { id:'actualidad',   label:'Actualidad',          icon:'📰', desc:'Artículos y noticias del hero' },
+  { id:'faq',          label:'FAQ',                 icon:'❓', desc:'Preguntas frecuentes de la web' },
+  { id:'servicios',    label:'Servicios',           icon:'🧩', desc:'Portafolio de servicios por pestaña' },
+  { id:'impacto',      label:'Impacto',             icon:'⭐', desc:'Testimonios y logos institucionales' },
   { id:'admins',       label:'Administradores',     icon:'👤', desc:'Usuarios admin' },
 ]
 
@@ -196,6 +202,9 @@ export default function AdminDashboard({ session, onLogout }) {
         {section==='analisis'    && <AdminAnalisis />}
         {section==='tienda'      && <AdminTienda />}
         {section==='actualidad'  && <AdminActualidad />}
+        {section==='faq'         && <AdminFaq />}
+        {section==='servicios'   && <AdminServicios />}
+        {section==='impacto'     && <AdminImpacto />}
         {section==='admins'      && <AdminAdmins      session={session}    onUpdate={loadStats} />}
       </main>
     </div>
