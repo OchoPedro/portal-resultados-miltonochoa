@@ -136,40 +136,64 @@ const ModalTestimonio = ({ item, onClose, onSave }) => {
 const ModalLogo = ({ item, onClose, onSave }) => {
   const isNew = !item
   const [form, setForm] = useState({
-    nombre: item?.nombre || '',
-    orden: item?.orden ?? 0,
-    activo: item?.activo ?? true,
+    nombre:     item?.nombre     || '',
+    imagen_url: item?.imagen_url || '',
+    orden:      item?.orden      ?? 0,
+    activo:     item?.activo     ?? true,
   })
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
+  const [file, setFile]         = useState(null)
+  const [preview, setPreview]   = useState(item?.imagen_url || '')
+  const [uploading, setUploading] = useState(false)
+  const [saving, setSaving]     = useState(false)
+  const [error, setError]       = useState('')
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const handleFile = (e) => {
+    const f = e.target.files?.[0]
+    if (!f) return
+    if (f.size > 2 * 1024 * 1024) { setError('El archivo no debe superar 2 MB.'); return }
+    setFile(f)
+    setPreview(URL.createObjectURL(f))
+    setError('')
+  }
 
   const handleSave = async () => {
     if (!form.nombre.trim()) { setError('El nombre es obligatorio.'); return }
-    setSaving(true)
-    setError('')
+    setSaving(true); setError('')
     try {
+      let imagen_url = form.imagen_url
+
+      if (file) {
+        setUploading(true)
+        const ext  = file.name.split('.').pop()
+        const path = `logo-${Date.now()}.${ext}`
+        const { error: upErr } = await supabase.storage.from('logos').upload(path, file, { upsert: true })
+        setUploading(false)
+        if (upErr) { setError('Error subiendo imagen: ' + upErr.message); setSaving(false); return }
+        const { data: urlData } = supabase.storage.from('logos').getPublicUrl(path)
+        imagen_url = urlData.publicUrl
+      }
+
       const payload = {
-        nombre: form.nombre.trim(),
-        orden: Number(form.orden) || 0,
-        activo: form.activo,
+        nombre:     form.nombre.trim(),
+        imagen_url: imagen_url,
+        orden:      Number(form.orden) || 0,
+        activo:     form.activo,
       }
       const { error: err } = item
         ? await supabase.from('logos_institucionales').update(payload).eq('id', item.id)
         : await supabase.from('logos_institucionales').insert(payload)
       if (err) { setError(err.message); return }
-      onSave()
-      onClose()
-    } finally {
-      setSaving(false)
-    }
+      onSave(); onClose()
+    } finally { setSaving(false) }
   }
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 24 }}>
       <div style={{ background: C.white, borderRadius: 12, padding: 32,
-        width: '100%', maxWidth: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+        width: '100%', maxWidth: 480, boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+        maxHeight: '90vh', overflowY: 'auto' }}>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
           <h2 style={{ fontFamily: 'Playfair Display, serif', fontSize: 20, color: C.navy }}>
@@ -180,6 +204,35 @@ const ModalLogo = ({ item, onClose, onSave }) => {
 
         <Input label="Nombre de la institución" value={form.nombre} onChange={v => set('nombre', v)}
           placeholder="I.E. San Juan Bosco" required />
+
+        {/* Upload de logo */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: 'block', fontSize: 10, letterSpacing: '0.12em',
+            textTransform: 'uppercase', color: C.gray, marginBottom: 8, fontFamily: 'Inter' }}>
+            Logo de la institución
+          </label>
+
+          {preview && (
+            <div style={{ marginBottom: 10, padding: 12, background: '#F8FAFC',
+              borderRadius: 8, border: `1px solid ${C.grayLt}`, textAlign: 'center' }}>
+              <img src={preview} alt="Logo" style={{ maxHeight: 80, maxWidth: '100%', objectFit: 'contain' }} />
+            </div>
+          )}
+
+          <label style={{
+            display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+            padding: '10px 14px', border: `1px dashed ${C.grayLt}`, borderRadius: 6,
+            fontFamily: 'Inter', fontSize: 13, color: C.gray,
+          }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            {file ? file.name : (preview ? 'Cambiar imagen' : 'Seleccionar imagen (PNG, JPG, SVG · máx 2 MB)')}
+            <input type="file" accept="image/*" onChange={handleFile}
+              style={{ position: 'absolute', width: 0, height: 0, opacity: 0 }} />
+          </label>
+        </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <Input label="Orden" value={String(form.orden)} onChange={v => set('orden', v)} placeholder="0" />
@@ -204,7 +257,9 @@ const ModalLogo = ({ item, onClose, onSave }) => {
 
         <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
           <Btn outline color={C.gray} onClick={onClose}>Cancelar</Btn>
-          <Btn onClick={handleSave} disabled={saving}>{saving ? 'Guardando...' : 'Guardar'}</Btn>
+          <Btn onClick={handleSave} disabled={saving || uploading}>
+            {uploading ? 'Subiendo imagen...' : saving ? 'Guardando...' : 'Guardar'}
+          </Btn>
         </div>
       </div>
     </div>
@@ -435,11 +490,22 @@ export default function AdminImpacto() {
                 borderBottom: idx < logos.length - 1 ? `1px solid ${C.grayLt}` : 'none',
                 display: 'flex', alignItems: 'center', gap: 16,
               }}>
-                <div style={{ flex: 1, fontFamily: 'Inter', fontSize: 14,
-                  color: item.activo ? C.navy : C.gray, fontWeight: 500 }}>
-                  {!item.activo && <span style={{ fontSize: 10, background: '#F3F4F6', color: C.gray,
-                    borderRadius: 4, padding: '2px 6px', marginRight: 8, fontWeight: 500 }}>oculto</span>}
-                  {item.nombre}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+                  {item.imagen_url ? (
+                    <img src={item.imagen_url} alt={item.nombre}
+                      style={{ width: 48, height: 36, objectFit: 'contain', borderRadius: 4,
+                        background: '#F8FAFC', border: `1px solid ${C.grayLt}`, flexShrink: 0 }} />
+                  ) : (
+                    <div style={{ width: 48, height: 36, borderRadius: 4, background: '#F3F4F6',
+                      border: `1px dashed ${C.grayLt}`, flexShrink: 0, display: 'flex',
+                      alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🏫</div>
+                  )}
+                  <div style={{ fontFamily: 'Inter', fontSize: 14,
+                    color: item.activo ? C.navy : C.gray, fontWeight: 500 }}>
+                    {!item.activo && <span style={{ fontSize: 10, background: '#F3F4F6', color: C.gray,
+                      borderRadius: 4, padding: '2px 6px', marginRight: 8, fontWeight: 500 }}>oculto</span>}
+                    {item.nombre}
+                  </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexShrink: 0, alignItems: 'center' }}>
                   <button onClick={() => handleToggleL(item)} title={item.activo ? 'Ocultar' : 'Mostrar'}
