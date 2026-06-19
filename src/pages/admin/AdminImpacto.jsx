@@ -148,13 +148,33 @@ const ModalLogo = ({ item, onClose, onSave }) => {
   const [error, setError]       = useState('')
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
-  const handleFile = (e) => {
+  const compressImage = (f) => new Promise((resolve) => {
+    const img = new Image()
+    const url = URL.createObjectURL(f)
+    img.onload = () => {
+      const MAX = 600
+      let w = img.width, h = img.height
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX }
+        else        { w = Math.round(w * MAX / h); h = MAX }
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = w; canvas.height = h
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+      URL.revokeObjectURL(url)
+      canvas.toBlob(resolve, 'image/webp', 0.82)
+    }
+    img.src = url
+  })
+
+  const handleFile = async (e) => {
     const f = e.target.files?.[0]
     if (!f) return
-    if (f.size > 2 * 1024 * 1024) { setError('El archivo no debe superar 2 MB.'); return }
-    setFile(f)
-    setPreview(URL.createObjectURL(f))
     setError('')
+    const compressed = await compressImage(f)
+    const named = new File([compressed], f.name.replace(/\.[^.]+$/, '.webp'), { type: 'image/webp' })
+    setFile(named)
+    setPreview(URL.createObjectURL(named))
   }
 
   const handleSave = async () => {
@@ -228,7 +248,7 @@ const ModalLogo = ({ item, onClose, onSave }) => {
               <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/>
               <line x1="12" y1="3" x2="12" y2="15"/>
             </svg>
-            {file ? file.name : (preview ? 'Cambiar imagen' : 'Seleccionar imagen (PNG, JPG, SVG · máx 2 MB)')}
+            {file ? file.name : (preview ? 'Cambiar imagen' : 'Seleccionar imagen (PNG, JPG, SVG, WebP)')}
             <input type="file" accept="image/*" onChange={handleFile}
               style={{ position: 'absolute', width: 0, height: 0, opacity: 0 }} />
           </label>
