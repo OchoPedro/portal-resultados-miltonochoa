@@ -13,6 +13,7 @@ import AdminActualidad from './AdminActualidad'
 import AdminFaq from './AdminFaq'
 import AdminServicios from './AdminServicios'
 import AdminImpacto from './AdminImpacto'
+import AdminPQRSF from './AdminPQRSF'
 import HojasRespuesta from '../../components/HojasRespuesta'
 
 const MENU_ALL = [
@@ -28,6 +29,7 @@ const MENU_ALL = [
   { id:'faq',          label:'FAQ',                 icon:'❓', desc:'Preguntas frecuentes de la web' },
   { id:'servicios',    label:'Servicios',           icon:'🧩', desc:'Portafolio de servicios por pestaña' },
   { id:'impacto',      label:'Impacto',             icon:'⭐', desc:'Testimonios y logos institucionales' },
+  { id:'pqrsf',        label:'PQRSF',               icon:'📩', desc:'Solicitudes, quejas, reclamos y sugerencias' },
   { id:'admins',       label:'Administradores',     icon:'👤', desc:'Usuarios admin' },
 ]
 
@@ -205,6 +207,7 @@ export default function AdminDashboard({ session, onLogout }) {
         {section==='faq'         && <AdminFaq />}
         {section==='servicios'   && <AdminServicios />}
         {section==='impacto'     && <AdminImpacto />}
+        {section==='pqrsf'       && <AdminPQRSF />}
         {section==='admins'      && <AdminAdmins      session={session}    onUpdate={loadStats} />}
       </main>
     </div>
