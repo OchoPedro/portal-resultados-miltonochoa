@@ -157,7 +157,8 @@ export default async function handler(req, res) {
     if (userResult.role === 'admin') {
       const adminEmail = userResult.data.email
 
-      if (adminEmail) {
+      if (adminEmail && process.env.RESEND_API_KEY) {
+        try {
         // Generar OTP de 6 dígitos
         const otp = Math.floor(100000 + Math.random() * 900000).toString()
         const adminId = userResult.data.id
@@ -220,8 +221,12 @@ export default async function handler(req, res) {
         })
 
         return res.status(200).json({ challenge: true, adminId })
+        } catch (otpErr) {
+          console.error('[auth] OTP send failed, skipping 2FA:', otpErr.message)
+          // Si el email falla, continúa con login normal
+        }
       }
-      // Admin sin email: saltar 2FA y emitir JWT directamente (con nota)
+      // Admin sin email o RESEND_API_KEY no configurado: saltar 2FA
     }
 
     // ── Paso 3: actualizar última sesión ────────────────────────────────────
