@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { SignJWT } from 'jose'
 import bcrypt from 'bcryptjs'
+import { createHash } from 'crypto'
 import { Resend } from 'resend'
 import { signUserJWT } from './_jwt.js'
 
@@ -18,6 +19,23 @@ const PLAINTEXT_ERROR = 'Contraseña requiere actualización. Contacte al admini
 const isPlaintextHash = (stored) => stored && !stored.startsWith('$2')
 
 export const config = { maxDuration: 30 }
+
+// Verifica si el dispositivo ya fue validado con 2FA previamente
+async function isTrustedDevice(req, adminId) {
+  const cookieHeader = req.headers['cookie'] || ''
+  const match = cookieHeader.match(/mo_trusted_device=([^;]+)/)
+  if (!match) return false
+  const tokenHash = createHash('sha256').update(match[1]).digest('hex')
+  const { data } = await adminSupabase
+    .from('trusted_devices')
+    .select('id')
+    .eq('admin_id', adminId)
+    .eq('token_hash', tokenHash)
+    .gt('expires_at', new Date().toISOString())
+    .limit(1)
+    .single()
+  return !!data
+}
 
 // Admin client — solo existe en el servidor, nunca llega al navegador
 const adminSupabase = createClient(
@@ -157,7 +175,7 @@ export default async function handler(req, res) {
     if (userResult.role === 'admin') {
       const adminEmail = userResult.data.email
 
-      if (adminEmail && process.env.RESEND_API_KEY) {
+      if (adminEmail && process.env.RESEND_API_KEY && !(await isTrustedDevice(req, userResult.data.id))) {
         try {
         // Generar OTP de 6 dígitos
         const otp = Math.floor(100000 + Math.random() * 900000).toString()

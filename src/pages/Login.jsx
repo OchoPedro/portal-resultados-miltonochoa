@@ -55,6 +55,7 @@ export default function Login({ onLogin }) {
       const res = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ usuario: u.trim(), password: p, portal }),
       })
 
@@ -162,6 +163,7 @@ export default function Login({ onLogin }) {
       const res = await fetch('/api/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ adminId: otpAdminId, code: otpCode.trim() }),
       })
       const data = await res.json()

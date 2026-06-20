@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { createHash, randomBytes } from 'crypto'
 import { signUserJWT } from './_jwt.js'
 
 export const config = { maxDuration: 30 }
@@ -16,12 +17,15 @@ const isAllowed = (o) =>
   ALLOWED_ORIGINS.includes(o) ||
   /^https:\/\/portal-resultados-miltonochoa-[a-z0-9-]+\.vercel\.app$/.test(o)
 
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
+
 export default async function handler(req, res) {
   const origin = req.headers['origin'] || ''
   const allowed = isAllowed(origin)
   res.setHeader('Access-Control-Allow-Origin', allowed ? origin : ALLOWED_ORIGINS[0])
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Access-Control-Allow-Credentials', 'true')
   res.setHeader('Vary', 'Origin')
 
   if (req.method === 'OPTIONS') return res.status(204).end()
@@ -49,10 +53,7 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Código incorrecto o expirado.' })
 
     // Marcar OTP como usado
-    await adminSupabase
-      .from('admin_otp')
-      .update({ used: true })
-      .eq('id', otp.id)
+    await adminSupabase.from('admin_otp').update({ used: true }).eq('id', otp.id)
 
     // Obtener datos del admin
     const { data: admin } = await adminSupabase
@@ -64,6 +65,22 @@ export default async function handler(req, res) {
 
     if (!admin)
       return res.status(401).json({ error: 'Administrador no encontrado.' })
+
+    // Generar token de dispositivo confiable (30 días)
+    const rawToken = randomBytes(32).toString('hex')
+    const tokenHash = createHash('sha256').update(rawToken).digest('hex')
+    const expiresAt = new Date(Date.now() + THIRTY_DAYS_MS).toISOString()
+
+    await adminSupabase.from('trusted_devices').insert({
+      admin_id: adminId,
+      token_hash: tokenHash,
+      expires_at: expiresAt,
+    })
+
+    // Cookie httpOnly con el token crudo (el hash vive en BD)
+    res.setHeader('Set-Cookie',
+      `mo_trusted_device=${rawToken}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${30 * 24 * 60 * 60}`
+    )
 
     const userResult = { role: 'admin', data: admin }
     const token = await signUserJWT(userResult)
