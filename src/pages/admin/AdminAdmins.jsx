@@ -187,6 +187,13 @@ export default function AdminAdmins({ session }) {
     loadAdmins()
   }
 
+  const handleDelete = async (a) => {
+    if (a.id === session.id) { alert('No puedes eliminar tu propio usuario.'); return }
+    if (!window.confirm(`¿Eliminar permanentemente al administrador "${a.nombre}"? Esta acción no se puede deshacer.`)) return
+    await supabase.from('administradores').delete().eq('id', a.id)
+    loadAdmins()
+  }
+
   const handleChangePwd = async () => {
     if (!changePwd.newPwd) return
     setChangePwd(p => ({...p, saving:true}))
@@ -273,10 +280,15 @@ export default function AdminAdmins({ session }) {
                     <div style={{ display:'flex', gap:6 }}>
                       <Btn onClick={() => setModal(a)} small outline color={C.navy}>Editar</Btn>
                       {a.id !== session.id && (
-                        <Btn onClick={() => handleToggle(a)} small outline
-                          color={a.activo?C.red:C.green}>
-                          {a.activo?'Desactivar':'Activar'}
-                        </Btn>
+                        <>
+                          <Btn onClick={() => handleToggle(a)} small outline
+                            color={a.activo?C.red:C.green}>
+                            {a.activo?'Desactivar':'Activar'}
+                          </Btn>
+                          <Btn onClick={() => handleDelete(a)} small outline color={C.red}>
+                            Eliminar
+                          </Btn>
+                        </>
                       )}
                     </div>
                   </td>
