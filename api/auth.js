@@ -1,6 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
 import { SignJWT } from 'jose'
 import bcrypt from 'bcryptjs'
+import { Resend } from 'resend'
+import { signUserJWT } from './_jwt.js'
+
+const resend = new Resend(process.env.RESEND_API_KEY)
 
 const checkPassword = async (stored, entered) => {
   if (!stored || !entered) return false
@@ -76,8 +80,6 @@ export default async function handler(req, res) {
   if (!usuario || !password)
     return res.status(400).json({ error: 'Faltan credenciales' })
 
-  const jwtSecret = new TextEncoder().encode(process.env.SUPABASE_JWT_SECRET)
-
   try {
     // ── Paso 1: validar credenciales ────────────────────────────────────────
 
@@ -97,7 +99,7 @@ export default async function handler(req, res) {
     if (!userResult) {
       const { data: admin } = await adminSupabase
         .from('administradores')
-        .select('id, nombre, usuario, password_hash, activo, modulos')
+        .select('id, nombre, usuario, password_hash, activo, modulos, email')
         .eq('usuario', usuario.trim()).eq('activo', true).single()
       if (admin) {
         if (isPlaintextHash(admin.password_hash))
@@ -150,7 +152,79 @@ export default async function handler(req, res) {
     if (portal !== 'admin' && userResult.role === 'admin')
       return res.status(403).json({ error: 'Acceso no autorizado' })
 
-    // ── Paso 2: actualizar última sesión ────────────────────────────────────
+    // ── Paso 2: 2FA para administradores ───────────────────────────────────
+
+    if (userResult.role === 'admin') {
+      const adminEmail = userResult.data.email
+
+      if (adminEmail) {
+        // Generar OTP de 6 dígitos
+        const otp = Math.floor(100000 + Math.random() * 900000).toString()
+        const adminId = userResult.data.id
+
+        // Borrar OTPs anteriores e insertar uno nuevo
+        await adminSupabase.from('admin_otp').delete().eq('admin_id', adminId)
+        await adminSupabase.from('admin_otp').insert({
+          admin_id: adminId,
+          code: otp,
+          expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+          used: false,
+        })
+
+        // Enviar OTP por email
+        const from = process.env.RESEND_FROM || 'onboarding@resend.dev'
+        await resend.emails.send({
+          from: `Milton Ochoa <${from}>`,
+          to: adminEmail,
+          subject: 'Código de acceso — Panel Administrativo',
+          html: `
+            <!DOCTYPE html>
+            <html lang="es">
+            <head><meta charset="UTF-8"></head>
+            <body style="margin:0;padding:0;background:#f4f6f8;font-family:Inter,Arial,sans-serif;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8;padding:40px 0;">
+                <tr><td align="center">
+                  <table width="480" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:4px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+                    <tr>
+                      <td style="background:#0A1F3D;padding:32px 40px;text-align:center;">
+                        <div style="color:#fff;font-size:20px;font-weight:700;">Milton Ochoa</div>
+                        <div style="color:rgba(255,255,255,0.55);font-size:11px;letter-spacing:0.12em;text-transform:uppercase;margin-top:4px;">Panel Administrativo</div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding:40px;">
+                        <p style="margin:0 0 8px;font-size:15px;color:#1a2940;font-weight:600;">Verificación de identidad</p>
+                        <p style="margin:0 0 28px;font-size:14px;color:#4a5568;line-height:1.6;">
+                          Se detectó un intento de acceso al panel administrativo con el usuario <strong>${userResult.data.usuario}</strong>. Usa este código para completar el inicio de sesión:
+                        </p>
+                        <div style="background:#0A1F3D;border-radius:4px;padding:28px;text-align:center;margin-bottom:28px;">
+                          <div style="font-size:42px;font-weight:700;letter-spacing:0.3em;color:#fff;font-family:monospace;">${otp}</div>
+                          <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:8px;">Válido por 10 minutos</div>
+                        </div>
+                        <p style="margin:0;font-size:13px;color:#718096;line-height:1.6;">
+                          Si no intentaste acceder al panel, ignora este mensaje o contacta al administrador del sistema.
+                        </p>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="background:#f7fafc;padding:20px 40px;border-top:1px solid #e2e8f0;">
+                        <p style="margin:0;font-size:11px;color:#a0aec0;text-align:center;">© ${new Date().getFullYear()} Milton Ochoa · AAMO Colombia</p>
+                      </td>
+                    </tr>
+                  </table>
+                </td></tr>
+              </table>
+            </body>
+            </html>
+          `,
+        })
+
+        return res.status(200).json({ challenge: true, adminId })
+      }
+      // Admin sin email: saltar 2FA y emitir JWT directamente (con nota)
+    }
+
+    // ── Paso 3: actualizar última sesión ────────────────────────────────────
 
     const ahora = new Date().toISOString()
     if (userResult.role === 'admin')
@@ -160,23 +234,19 @@ export default async function handler(req, res) {
     if (userResult.role === 'estudiante')
       await adminSupabase.from('estudiantes').update({ ultima_sesion: ahora }).eq('id', userResult.data.id)
 
-    // ── Paso 3: emitir JWT firmado con el secreto de Supabase ───────────────
+    // ── Paso 4: emitir JWT firmado con el secreto de Supabase ───────────────
     // Las políticas RLS leen estos claims para autorizar cada query
 
-    const token = await new SignJWT({
-      aud:        'authenticated',
-      sub:        userResult.data.id,
-      role:       'authenticated',
-      app_role:   userResult.role,
-      colegio_id: userResult.role === 'colegio'    ? userResult.data.id : null,
-      admin_id:   userResult.role === 'admin'      ? userResult.data.id : null,
-      est_id:     userResult.role === 'estudiante' ? userResult.data.id : null,
-    })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setIssuer('https://bmspwsbhsjkamjywvvde.supabase.co/auth/v1')
-      .setIssuedAt()
-      .setExpirationTime('8h')
-      .sign(jwtSecret)
+    const token = await signUserJWT(userResult)
+
+    // ── Paso 5: audit log (no bloqueante) ───────────────────────────────────
+    adminSupabase.from('sesiones_log').insert({
+      usuario: userResult.data.usuario,
+      rol: userResult.role,
+      ip,
+      user_agent: req.headers['user-agent'] || '',
+      accion: 'login',
+    }).catch(() => {})
 
     return res.status(200).json({ token, user: userResult })
   } catch (e) {
