@@ -30,9 +30,9 @@ export default async function handler(req, res) {
   if (!allowed) return res.status(403).json({ error: 'Forbidden' })
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { usuario, nombre } = req.body || {}
-  if (!usuario || !nombre)
-    return res.status(400).json({ error: 'Faltan datos: usuario y nombre son requeridos.' })
+  const { usuario } = req.body || {}
+  if (!usuario)
+    return res.status(400).json({ error: 'Ingresa tu usuario.' })
 
   try {
     let email = null
@@ -43,7 +43,6 @@ export default async function handler(req, res) {
       .from('administradores')
       .select('id, email')
       .filter('usuario', 'ilike', usuario.trim())
-      .filter('nombre', 'ilike', nombre.trim())
       .eq('activo', true)
       .single()
 
@@ -60,7 +59,6 @@ export default async function handler(req, res) {
         .from('colegios')
         .select('id, contacto_email')
         .filter('usuario', 'ilike', usuario.trim())
-        .filter('nombre', 'ilike', nombre.trim())
         .eq('activo', true)
         .single()
 
@@ -71,7 +69,7 @@ export default async function handler(req, res) {
     }
 
     if (!email) {
-      return res.status(404).json({ error: 'No encontramos una cuenta con esos datos.' })
+      return res.status(404).json({ error: 'No encontramos una cuenta con ese usuario.' })
     }
 
     // Generar código de 6 dígitos

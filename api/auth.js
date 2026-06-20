@@ -20,28 +20,32 @@ const isPlaintextHash = (stored) => stored && !stored.startsWith('$2')
 
 export const config = { maxDuration: 30 }
 
-// Verifica si el dispositivo ya fue validado con 2FA previamente
-async function isTrustedDevice(req, adminId) {
-  const cookieHeader = req.headers['cookie'] || ''
-  const match = cookieHeader.match(/mo_trusted_device=([^;]+)/)
-  if (!match) return false
-  const tokenHash = createHash('sha256').update(match[1]).digest('hex')
-  const { data } = await adminSupabase
-    .from('trusted_devices')
-    .select('id')
-    .eq('admin_id', adminId)
-    .eq('token_hash', tokenHash)
-    .gt('expires_at', new Date().toISOString())
-    .limit(1)
-    .single()
-  return !!data
-}
-
 // Admin client — solo existe en el servidor, nunca llega al navegador
 const adminSupabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
+
+// Verifica si el dispositivo ya fue validado con 2FA previamente
+async function isTrustedDevice(req, adminId) {
+  try {
+    const cookieHeader = req.headers['cookie'] || ''
+    const match = cookieHeader.match(/mo_trusted_device=([^;]+)/)
+    if (!match) return false
+    const tokenHash = createHash('sha256').update(match[1]).digest('hex')
+    const { data } = await adminSupabase
+      .from('trusted_devices')
+      .select('id')
+      .eq('admin_id', adminId)
+      .eq('token_hash', tokenHash)
+      .gt('expires_at', new Date().toISOString())
+      .limit(1)
+      .single()
+    return !!data
+  } catch {
+    return false
+  }
+}
 
 // Rate limiting persistente en Supabase — sobrevive cold starts de Vercel
 async function _srvBlocked(ip) {

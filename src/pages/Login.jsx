@@ -112,7 +112,7 @@ export default function Login({ onLogin }) {
       const res = await fetch('/api/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ usuario: fpUsuario.trim(), nombre: fpNombre.trim() }),
+        body: JSON.stringify({ usuario: fpUsuario.trim() }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Error al enviar el código.'); return }
@@ -367,12 +367,6 @@ export default function Login({ onLogin }) {
                   <input type="text" value={fpUsuario} onChange={e => setFpUsuario(e.target.value)}
                     placeholder="Ingresa tu usuario" required style={inputStyle} />
                 </div>
-                <div style={{ marginBottom: 24 }}>
-                  <label style={labelStyle}>Nombre completo / Nombre del colegio</label>
-                  <input type="text" value={fpNombre} onChange={e => setFpNombre(e.target.value)}
-                    placeholder="Tal como está registrado" required style={inputStyle} />
-                </div>
-
                 {error && (
                   <div style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)',
                     padding: '10px 14px', marginBottom: 16,
