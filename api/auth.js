@@ -21,21 +21,29 @@ const adminSupabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
-// Rate limiting en memoria del proceso servidor (no se puede bypassear recargando)
-// TODO: Move rate limiting to persistent store (Upstash Redis or Supabase table).
-// In-memory _serverAttempts resets on every Vercel cold start.
-const _serverAttempts = {}
-function _srvBlocked(ip) {
-  const r = _serverAttempts[ip]
-  if (!r) return false
-  if (r.until > Date.now()) return true
-  delete _serverAttempts[ip]; return false
+// Rate limiting persistente en Supabase — sobrevive cold starts de Vercel
+async function _srvBlocked(ip) {
+  const { data } = await adminSupabase
+    .from('login_attempts')
+    .select('bloqueado_hasta')
+    .eq('ip', ip)
+    .single()
+  if (!data || !data.bloqueado_hasta) return false
+  if (new Date(data.bloqueado_hasta) > new Date()) return true
+  await adminSupabase.from('login_attempts').update({ intentos: 0, bloqueado_hasta: null }).eq('ip', ip)
+  return false
 }
-function _srvFail(ip) {
-  if (!_serverAttempts[ip]) _serverAttempts[ip] = { n: 0, until: 0 }
-  _serverAttempts[ip].n++
-  if (_serverAttempts[ip].n >= 10)
-    _serverAttempts[ip] = { n: 0, until: Date.now() + 15 * 60 * 1000 }
+async function _srvFail(ip) {
+  const { data } = await adminSupabase
+    .from('login_attempts')
+    .select('intentos')
+    .eq('ip', ip)
+    .single()
+  const intentos = (data?.intentos || 0) + 1
+  const bloqueado_hasta = intentos >= 10
+    ? new Date(Date.now() + 15 * 60 * 1000).toISOString()
+    : null
+  await adminSupabase.from('login_attempts').upsert({ ip, intentos: bloqueado_hasta ? 0 : intentos, bloqueado_hasta })
 }
 
 const ALLOWED_ORIGINS = [
@@ -61,7 +69,7 @@ export default async function handler(req, res) {
   // Rate limiting por IP del servidor
   const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim()
     || req.socket?.remoteAddress || 'unknown'
-  if (_srvBlocked(ip))
+  if (await _srvBlocked(ip))
     return res.status(429).json({ error: 'Demasiados intentos. Espera 15 minutos.' })
 
   const { usuario, password, portal } = req.body || {}
@@ -132,7 +140,7 @@ export default async function handler(req, res) {
     }
 
     if (!userResult) {
-      _srvFail(ip)
+      await _srvFail(ip)
       return res.status(401).json({ error: 'Credenciales incorrectas' })
     }
 
