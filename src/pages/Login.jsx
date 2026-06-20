@@ -120,11 +120,13 @@ export default function Login({ onLogin }) {
 
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <img
-            src="/logo-sidebar-blanco.png"
-            alt="Milton Ochoa"
-            style={{ maxWidth: 200, width: '100%', marginBottom: 14 }}
-          />
+          <a href="https://miltonochoa-web.vercel.app" style={{ display:'inline-block' }}>
+            <img
+              src="/logo-sidebar-blanco.png"
+              alt="Milton Ochoa"
+              style={{ maxWidth: 200, width: '100%', marginBottom: 14, cursor:'pointer' }}
+            />
+          </a>
           <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontFamily: 'Inter, sans-serif',
             letterSpacing: '0.15em', textTransform: 'uppercase' }}>
             {isAdminPortal ? 'Panel Administrativo' : 'Portal de Resultados'}
