@@ -77,13 +77,14 @@ export default async function handler(req, res) {
       expires_at: expiresAt,
     })
 
-    // Cookie httpOnly con el token crudo (el hash vive en BD)
-    res.setHeader('Set-Cookie',
-      `mo_trusted_device=${rawToken}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${30 * 24 * 60 * 60}`
-    )
-
     const userResult = { role: 'admin', data: admin }
     const token = await signUserJWT(userResult)
+
+    // Emitir ambas cookies httpOnly en una sola cabecera
+    res.setHeader('Set-Cookie', [
+      `mo_session=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=28800`,
+      `mo_trusted_device=${rawToken}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${30 * 24 * 60 * 60}`,
+    ])
 
     return res.status(200).json({ token, user: userResult })
   } catch (e) {

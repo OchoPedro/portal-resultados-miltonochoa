@@ -83,6 +83,7 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', allowed ? origin : ALLOWED_ORIGINS[0])
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Access-Control-Allow-Credentials', 'true')
   res.setHeader('Vary', 'Origin')
 
   if (req.method === 'OPTIONS') return res.status(204).end()
@@ -274,6 +275,10 @@ export default async function handler(req, res) {
       accion: 'login',
     }).then(null, () => {})
 
+    // Cookie httpOnly: el JWT vive en el servidor, invisible para JS
+    res.setHeader('Set-Cookie',
+      `mo_session=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=28800`
+    )
     return res.status(200).json({ token, user: userResult })
   } catch (e) {
     console.error('[auth] error:', e.message)

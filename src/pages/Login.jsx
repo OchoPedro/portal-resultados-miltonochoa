@@ -75,7 +75,6 @@ export default function Login({ onLogin }) {
       }
 
       const { token, user } = data
-      sessionStorage.setItem('mo_token', token)
       setSupabaseToken(token)
       onLogin(user)
     } catch {
@@ -169,7 +168,6 @@ export default function Login({ onLogin }) {
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Código incorrecto o expirado.'); return }
       const { token, user } = data
-      sessionStorage.setItem('mo_token', token)
       setSupabaseToken(token)
       onLogin(user)
     } catch {

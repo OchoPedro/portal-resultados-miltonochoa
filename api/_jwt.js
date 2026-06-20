@@ -1,10 +1,16 @@
-import { SignJWT } from 'jose'
+import { SignJWT, jwtVerify } from 'jose'
 
 /**
  * Emite un JWT firmado con el secreto de Supabase.
  * @param {object} userResult  { role: 'admin'|'colegio'|'estudiante', data: {...} }
  * @returns {Promise<string>}  JWT string
  */
+export async function verifyJWT(token) {
+  const secret = new TextEncoder().encode(process.env.SUPABASE_JWT_SECRET)
+  const { payload } = await jwtVerify(token, secret)
+  return payload
+}
+
 export async function signUserJWT(userResult) {
   const jwtSecret = new TextEncoder().encode(process.env.SUPABASE_JWT_SECRET)
 
