@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { verifyJWT } from './_jwt.js'
 
 export const config = { maxDuration: 60 }
 
@@ -6,6 +7,14 @@ const adminSupabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
+
+const ALLOWED_ORIGINS = [
+  'https://portal-resultados-miltonochoa.vercel.app',
+  'https://resultados.aamocolombia.com',
+]
+const isAllowed = (o) =>
+  ALLOWED_ORIGINS.includes(o) ||
+  /^https:\/\/portal-resultados-miltonochoa-[a-z0-9-]+\.vercel\.app$/.test(o)
 
 const ICFES_BASE = 'https://resultados.icfes.edu.co/resultados-saber2016-web/pages/publicacionResultados/agregados/saber11/clasificacionPlanteles.jsf'
 
@@ -83,13 +92,26 @@ function parseResultTable(html) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
+  const origin = req.headers['origin'] || ''
+  const allowed = isAllowed(origin)
+  res.setHeader('Access-Control-Allow-Origin', allowed ? origin : ALLOWED_ORIGINS[0])
+  res.setHeader('Access-Control-Allow-Credentials', 'true')
+  res.setHeader('Vary', 'Origin')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
   if (req.method === 'OPTIONS') return res.status(200).end()
 
   // GET: query stored data from Supabase
   if (req.method === 'GET') {
+    const authHeader = req.headers['authorization'] || ''
+    const token = authHeader.replace('Bearer ', '')
+    if (!token) return res.status(401).json({ error: 'No autorizado' })
+    try {
+      await verifyJWT(token)
+    } catch {
+      return res.status(401).json({ error: 'Token inválido o expirado' })
+    }
+
     const { anio, periodo, grado, municipio, sector, clasificacion, search } = req.query
 
     let q = adminSupabase

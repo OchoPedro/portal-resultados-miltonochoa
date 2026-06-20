@@ -19,6 +19,29 @@ const isAllowed = (o) =>
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
 
+async function _otpBlocked(adminId) {
+  try {
+    const { data } = await adminSupabase
+      .from('login_attempts')
+      .select('bloqueado_hasta')
+      .eq('ip', `otp:${adminId}`)
+      .single()
+    if (!data?.bloqueado_hasta) return false
+    if (new Date(data.bloqueado_hasta) > new Date()) return true
+    await adminSupabase.from('login_attempts').update({ intentos: 0, bloqueado_hasta: null }).eq('ip', `otp:${adminId}`)
+    return false
+  } catch { return false }
+}
+
+async function _otpFail(adminId) {
+  try {
+    const { data } = await adminSupabase.from('login_attempts').select('intentos').eq('ip', `otp:${adminId}`).single()
+    const intentos = (data?.intentos || 0) + 1
+    const bloqueado_hasta = intentos >= 5 ? new Date(Date.now() + 10 * 60 * 1000).toISOString() : null
+    await adminSupabase.from('login_attempts').upsert({ ip: `otp:${adminId}`, intentos: bloqueado_hasta ? 0 : intentos, bloqueado_hasta })
+  } catch {}
+}
+
 export default async function handler(req, res) {
   const origin = req.headers['origin'] || ''
   const allowed = isAllowed(origin)
@@ -37,6 +60,9 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Faltan datos requeridos.' })
 
   try {
+    if (await _otpBlocked(adminId))
+      return res.status(429).json({ error: 'Demasiados intentos. Espera 10 minutos.' })
+
     // Buscar OTP válido
     const { data: otp, error } = await adminSupabase
       .from('admin_otp')
@@ -49,8 +75,12 @@ export default async function handler(req, res) {
       .limit(1)
       .single()
 
-    if (error || !otp)
+    if (error || !otp) {
+      await _otpFail(adminId)
       return res.status(401).json({ error: 'Código incorrecto o expirado.' })
+    }
+
+    adminSupabase.from('login_attempts').delete().eq('ip', `otp:${adminId}`).then(null, () => {})
 
     // Marcar OTP como usado
     await adminSupabase.from('admin_otp').update({ used: true }).eq('id', otp.id)

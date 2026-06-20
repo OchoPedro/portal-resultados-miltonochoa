@@ -97,6 +97,8 @@ export default async function handler(req, res) {
     return res.status(429).json({ error: 'Demasiados intentos. Espera 15 minutos.' })
 
   const { usuario, password, portal } = req.body || {}
+  if (password && password.length > 128)
+    return res.status(400).json({ error: 'Contraseña inválida' })
   if (!usuario || !password)
     return res.status(400).json({ error: 'Faltan credenciales' })
 
@@ -244,8 +246,8 @@ export default async function handler(req, res) {
 
         return res.status(200).json({ challenge: true, adminId })
         } catch (otpErr) {
-          console.error('[auth] OTP send failed, skipping 2FA:', otpErr.message)
-          // Si el email falla, continúa con login normal
+          console.error('[auth] OTP send failed:', otpErr.message)
+          return res.status(503).json({ error: 'No se pudo enviar el código de verificación. Intenta de nuevo.' })
         }
       }
       // Admin sin email o RESEND_API_KEY no configurado: saltar 2FA

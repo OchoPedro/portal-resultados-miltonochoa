@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import bcrypt from 'bcryptjs'
+import { createHash } from 'crypto'
 
 export const config = { maxDuration: 30 }
 
@@ -37,11 +38,12 @@ export default async function handler(req, res) {
 
   try {
     // Buscar reset válido
+    const tokenHash = createHash('sha256').update(codigo.trim()).digest('hex')
     const { data: reset, error } = await adminSupabase
       .from('password_resets')
-      .select('*')
+      .select('usuario, tabla, expires_at, used')
       .eq('usuario', usuario.trim().toLowerCase())
-      .eq('token', codigo.trim())
+      .eq('token', tokenHash)
       .eq('used', false)
       .gt('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false })
@@ -50,6 +52,9 @@ export default async function handler(req, res) {
 
     if (error || !reset)
       return res.status(400).json({ error: 'Código inválido o expirado.' })
+
+    if (!['administradores', 'colegios'].includes(reset.tabla))
+      return res.status(400).json({ error: 'Solicitud inválida' })
 
     // Hashear nueva contraseña
     const password_hash = await bcrypt.hash(nueva_password, 12)

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { createHash } from 'crypto'
 
 export const config = { maxDuration: 30 }
 
@@ -6,6 +7,23 @@ const adminSupabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
+
+async function _fpBlocked(ip) {
+  try {
+    const { data } = await adminSupabase.from('login_attempts').select('intentos, bloqueado_hasta').eq('ip', `fp:${ip}`).single()
+    if (!data) return false
+    if (data.bloqueado_hasta && new Date(data.bloqueado_hasta) > new Date()) return true
+    return false
+  } catch { return false }
+}
+async function _fpFail(ip) {
+  try {
+    const { data } = await adminSupabase.from('login_attempts').select('intentos').eq('ip', `fp:${ip}`).single()
+    const intentos = (data?.intentos || 0) + 1
+    const bloqueado_hasta = intentos >= 5 ? new Date(Date.now() + 60 * 60 * 1000).toISOString() : null
+    await adminSupabase.from('login_attempts').upsert({ ip: `fp:${ip}`, intentos: bloqueado_hasta ? 0 : intentos, bloqueado_hasta })
+  } catch {}
+}
 
 const ALLOWED_ORIGINS = [
   'https://portal-resultados-miltonochoa.vercel.app',
@@ -26,6 +44,10 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).end()
   if (!allowed) return res.status(403).json({ error: 'Forbidden' })
   if (req.method !== 'POST') return res.status(405).end()
+
+  const fpIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket?.remoteAddress || 'unknown'
+  if (await _fpBlocked(fpIp))
+    return res.status(429).json({ error: 'Demasiadas solicitudes. Espera una hora.' })
 
   const { usuario } = req.body || {}
   if (!usuario)
@@ -71,12 +93,13 @@ export default async function handler(req, res) {
 
     // Generar código de 6 dígitos
     const codigo = Math.floor(100000 + Math.random() * 900000).toString()
+    const codigoHash = createHash('sha256').update(codigo).digest('hex')
 
     // Insertar en password_resets
     await adminSupabase.from('password_resets').insert({
       usuario: usuario.trim().toLowerCase(),
       tabla,
-      token: codigo,
+      token: codigoHash,
       expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
       used: false,
     })
@@ -149,6 +172,7 @@ export default async function handler(req, res) {
 
     // Ofuscar email: pe***@gmail.com
     const hint = email.replace(/(.{2}).*(@.*)/, '$1***$2')
+    await _fpFail(fpIp)
     return res.status(200).json({ ok: true, hint })
   } catch (e) {
     console.error('[forgot-password] error:', e.message)
