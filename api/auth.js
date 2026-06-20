@@ -2,10 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { SignJWT } from 'jose'
 import bcrypt from 'bcryptjs'
 import { createHash } from 'crypto'
-import { Resend } from 'resend'
 import { signUserJWT } from './_jwt.js'
-
-const resend = new Resend(process.env.RESEND_API_KEY)
 
 const checkPassword = async (stored, entered) => {
   if (!stored || !entered) return false
@@ -181,6 +178,8 @@ export default async function handler(req, res) {
 
       if (adminEmail && process.env.RESEND_API_KEY && !(await isTrustedDevice(req, userResult.data.id))) {
         try {
+        const { Resend } = await import('resend')
+        const resend = new Resend(process.env.RESEND_API_KEY)
         // Generar OTP de 6 dígitos
         const otp = Math.floor(100000 + Math.random() * 900000).toString()
         const adminId = userResult.data.id

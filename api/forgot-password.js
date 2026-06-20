@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js'
-import { Resend } from 'resend'
 
 export const config = { maxDuration: 30 }
 
@@ -7,8 +6,6 @@ const adminSupabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
-
-const resend = new Resend(process.env.RESEND_API_KEY)
 
 const ALLOWED_ORIGINS = [
   'https://portal-resultados-miltonochoa.vercel.app',
@@ -85,6 +82,8 @@ export default async function handler(req, res) {
     })
 
     // Enviar email con Resend
+    const { Resend } = await import('resend')
+    const resend = new Resend(process.env.RESEND_API_KEY)
     const from = process.env.RESEND_FROM || 'onboarding@resend.dev'
     await resend.emails.send({
       from: `Milton Ochoa <${from}>`,
