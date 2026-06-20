@@ -277,6 +277,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ token, user: userResult })
   } catch (e) {
     console.error('[auth] error:', e.message)
-    return res.status(500).json({ error: 'Error interno' })
+    return res.status(500).json({ error: 'Error interno', _debug: e.message })
   }
 }
