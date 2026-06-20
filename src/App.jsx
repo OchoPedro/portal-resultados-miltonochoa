@@ -30,7 +30,7 @@ export default function App() {
   const handleLogout = async () => {
     await fetch('/api/logout', { method: 'POST', credentials: 'include' }).catch(() => {})
     clearSupabaseToken()
-    window.location.href = 'https://miltonochoa-web.vercel.app'
+    window.location.href = 'https://aamocolombia.com'
   }
 
   if (loading) return (

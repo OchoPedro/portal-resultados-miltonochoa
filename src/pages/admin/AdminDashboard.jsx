@@ -167,7 +167,7 @@ export default function AdminDashboard({ session, onLogout }) {
           display:'flex', flexDirection:'column', flexShrink:0 }}>
           <div style={{ padding: tablet ? '14px 12px 12px' : '20px 16px 16px', borderBottom:'1px solid rgba(255,255,255,0.08)' }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'center', marginBottom: tablet ? 6 : 10 }}>
-              <a href="https://miltonochoa-web.vercel.app" style={{ display:'block' }}>
+              <a href="https://aamocolombia.com" style={{ display:'block' }}>
                 <img src="/logo-sidebar-blanco.png" alt="Milton Ochoa"
                   style={{ width:'100%', maxWidth: tablet ? 160 : 190, height:'auto', display:'block', cursor:'pointer' }} />
               </a>

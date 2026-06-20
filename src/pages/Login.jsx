@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { setSupabaseToken } from '../lib/supabase'
 import { C } from '../components/ui'
 
-const REDIRECT_HOME = 'https://miltonochoa-web.vercel.app'
+const REDIRECT_HOME = 'https://aamocolombia.com'
 const BG_URL = 'https://images.unsplash.com/photo-1509062522246-3755977927d7?w=1400&q=70&fit=crop'
 
 export default function Login({ onLogin }) {
@@ -263,7 +263,7 @@ export default function Login({ onLogin }) {
 
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <a href="https://miltonochoa-web.vercel.app" style={{ display: 'inline-block' }}>
+          <a href="https://aamocolombia.com" style={{ display: 'inline-block' }}>
             <img
               src="/logo-sidebar-blanco.png"
               alt="Milton Ochoa"
