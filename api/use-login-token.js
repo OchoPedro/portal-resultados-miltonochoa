@@ -8,9 +8,9 @@ const adminSupabase = createClient(
 )
 
 export default async function handler(req, res) {
-  if (req.method !== 'GET') return res.status(405).end()
+  if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).end()
 
-  const token = req.query.t
+  const token = req.method === 'POST' ? req.body?.t : req.query.t
   if (!token) return res.redirect(302, '/?error=token_missing')
 
   try {
