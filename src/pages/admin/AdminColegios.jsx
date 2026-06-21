@@ -69,15 +69,18 @@ const generarUsuario = async (departamento, municipio) => {
   return `${prefijo}${String(siguiente).padStart(4,'0')}`
 }
 
+const CHARS_CLAVE = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+const randomSuffix = () => Array.from({length:3}, () => CHARS_CLAVE[Math.floor(Math.random()*CHARS_CLAVE.length)]).join('')
+const generarClave = (usuario) => `${usuario}-${randomSuffix()}`
+
 // ── MODAL COLEGIO ─────────────────────────────────────────────
 const ModalColegio = ({ colegio, onClose, onSave }) => {
   const [form, setForm] = useState({
     nombre:'', departamento_nombre:'', municipio:'', direccion:'', barrio:'',
     calendario:'', naturaleza:'', jornada:'',
     contactos:[{nombre:'', cargo:'', telefono:'', email:''}],
-    usuario:'', password_hash:'',
+    usuario:'',
     ...(colegio || {}),
-    password_hash: '',  // nunca prellenar con el hash bcrypt del DB
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -87,7 +90,7 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
   const set = (key, val) => setForm(f => ({...f, [key]:val}))
 
   const handleDeptoChange = (dep) => {
-    setForm(f => ({...f, departamento_nombre:dep, municipio:'', usuario:'', password_hash:''}))
+    setForm(f => ({...f, departamento_nombre:dep, municipio:'', usuario:''}))
   }
 
   const handleMuniChange = async (mun) => {
@@ -95,7 +98,7 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
     if (!colegio && mun && form.departamento_nombre) {
       setGenerando(true)
       const user = await generarUsuario(form.departamento_nombre, mun)
-      setForm(f => ({...f, municipio:mun, usuario:user, password_hash:user}))
+      setForm(f => ({...f, municipio:mun, usuario:user}))
       setGenerando(false)
     }
   }
@@ -118,7 +121,6 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
     if (!c?.telefono) return 'Teléfono del contacto principal es obligatorio.'
     if (!c?.email) return 'Correo del contacto principal es obligatorio.'
     if (!form.usuario) return 'Usuario es obligatorio.'
-    if (!colegio && !form.password_hash) return 'Contraseña es obligatoria.'
     return null
   }
 
@@ -127,10 +129,11 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
     if (err) { setError(err); return }
     setSaving(true)
     try {
-      let hashedPassword
-      if (form.password_hash) {
-        const { data: hashed } = await supabase.rpc('hashear_password', { p_password: form.password_hash })
-        hashedPassword = hashed
+      let clavePayload = {}
+      if (!colegio) {
+        const clavePlain = generarClave(form.usuario)
+        const { data: hashed } = await supabase.rpc('hashear_password', { p_password: clavePlain })
+        clavePayload = { password_plain: clavePlain, password_hash: hashed }
       }
       const payload = {
         nombre: form.nombre,
@@ -147,7 +150,7 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
         contacto_telefono: form.contactos?.[0]?.telefono,
         contacto_email: form.contactos?.[0]?.email,
         usuario: form.usuario,
-        ...(hashedPassword ? { password_hash: hashedPassword } : {}),
+        ...clavePayload,
         ...(!colegio ? { activo: false } : {}),
       }
       const { error: err } = colegio
@@ -230,16 +233,11 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
         <SectionTitle>Credenciales de Acceso</SectionTitle>
         <div style={{ background:'#FFF9EB', border:'1px solid #FDE68A', borderRadius:8,
           padding:'10px 14px', marginBottom:14, fontFamily:'Inter', fontSize:12, color:'#92400E' }}>
-          💡 Las credenciales se generan automáticamente al seleccionar departamento y municipio.
+          💡 El usuario se genera al seleccionar municipio. La clave se genera automáticamente en formato <strong>USUARIO-XXX</strong> y solo puede ser reseteada por el administrador.
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:12 }}>
           <Input label="Usuario (generado automáticamente)" value={generando?'Generando...':form.usuario}
             onChange={v=>set('usuario',v)} placeholder="Se genera al seleccionar municipio" required/>
-          <Input label={colegio ? 'Nueva contraseña (dejar en blanco para no cambiar)' : 'Contraseña inicial'}
-            value={form.password_hash}
-            onChange={v=>set('password_hash',v)}
-            placeholder={colegio ? 'Dejar en blanco para mantener la actual' : 'Contraseña inicial'}
-            required={!colegio}/>
         </div>
 
         {error && (
@@ -671,8 +669,8 @@ const ModalImportarColegios = ({ onClose, onSave }) => {
     for (const row of preview) {
       if (!row.nombre || !row.departamento_nombre || !row.municipio) { omitidos++; continue }
       const usuario = await generarUsuario(row.departamento_nombre, row.municipio)
-      const pwdRaw  = usuario.toLowerCase() + '*Mo2026'
-      const { data: hashed } = await supabase.rpc('hashear_password', { p_password: pwdRaw })
+      const clavePlain = generarClave(usuario)
+      const { data: hashed } = await supabase.rpc('hashear_password', { p_password: clavePlain })
       const { error } = await supabase.from('colegios').insert({
         nombre:              row.nombre,
         departamento_nombre: row.departamento_nombre,
@@ -693,6 +691,7 @@ const ModalImportarColegios = ({ onClose, onSave }) => {
           email:    row.contacto_email    || '',
         }],
         usuario,
+        password_plain: clavePlain,
         password_hash: hashed,
         activo: false,
       })
@@ -1262,9 +1261,8 @@ export default function AdminColegios({ onUpdate }) {
   const [modalReset, setModalReset]     = useState(null) // { colegio, nuevaClave }
   const [reseteando, setReseteando]     = useState(false)
 
-  const handleResetClave = async (colegio) => {
-    const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
-    const nueva = Array.from({length: 10}, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+  const handleResetClave = (colegio) => {
+    const nueva = generarClave(colegio.usuario)
     setModalReset({ colegio, nuevaClave: nueva, guardada: false })
   }
 
@@ -1272,8 +1270,12 @@ export default function AdminColegios({ onUpdate }) {
     if (!modalReset) return
     setReseteando(true)
     const { data: hashed } = await supabase.rpc('hashear_password', { p_password: modalReset.nuevaClave })
-    await supabase.from('colegios').update({ password_hash: hashed }).eq('id', modalReset.colegio.id)
+    await supabase.from('colegios').update({
+      password_plain: modalReset.nuevaClave,
+      password_hash: hashed,
+    }).eq('id', modalReset.colegio.id)
     setModalReset(r => ({ ...r, guardada: true }))
+    await loadColegios()
     setReseteando(false)
   }
 
@@ -1452,14 +1454,25 @@ export default function AdminColegios({ onUpdate }) {
                         <span style={{ fontFamily:'monospace', fontSize:12, color:C.text,
                           background:C.bg, border:`1px solid ${C.grayLt}`,
                           borderRadius:4, padding:'2px 8px', letterSpacing:'0.04em' }}>
-                          {'••••••••'}
+                          {copiado === c.id + '_show' ? c.password_plain || '—' : '••••••••'}
                         </span>
+                        <button
+                          title={copiado === c.id + '_show' ? 'Ocultar' : 'Ver clave'}
+                          onClick={() => setCopiado(copiado === c.id + '_show' ? null : c.id + '_show')}
+                          style={{ background:'none', border:'none', cursor:'pointer', fontSize:13, padding:2, color:C.gray }}>
+                          {copiado === c.id + '_show' ? '🙈' : '👁'}
+                        </button>
+                        <button
+                          title="Copiar clave"
+                          onClick={() => { navigator.clipboard.writeText(c.password_plain || ''); setCopiado(c.id + '_copy'); setTimeout(()=>setCopiado(null),1500) }}
+                          style={{ background:'none', border:'none', cursor:'pointer', fontSize:13, padding:2,
+                            color: copiado === c.id + '_copy' ? C.green : C.gray }}>
+                          {copiado === c.id + '_copy' ? '✓' : '⧉'}
+                        </button>
                         <button
                           title="Resetear clave"
                           onClick={() => handleResetClave(c)}
-                          style={{ background:'none', border:'none',
-                            cursor:'pointer', fontSize:14, padding:2,
-                            color: C.navy, opacity:0.8 }}>
+                          style={{ background:'none', border:'none', cursor:'pointer', fontSize:13, padding:2, color:C.navy }}>
                           🔑
                         </button>
                       </div>
