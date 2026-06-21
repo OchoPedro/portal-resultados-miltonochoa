@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import bcrypt from 'bcryptjs'
+import { SignJWT } from 'jose'
 
 const adminSupabase = createClient(
   process.env.SUPABASE_URL,
@@ -25,15 +26,24 @@ async function getIntentos(ip) {
 
 async function registrarFallo(ip, intentosActuales) {
   const nuevos = intentosActuales + 1
-  // Al llegar al límite, bloquear indefinidamente (solo se libera con reset de contraseña)
   const bloqueado_hasta = nuevos >= MAX_INTENTOS
-    ? new Date(Date.now() + 10 * 365 * 24 * 60 * 60 * 1000).toISOString() // ~10 años
+    ? new Date(Date.now() + 10 * 365 * 24 * 60 * 60 * 1000).toISOString()
     : null
   await adminSupabase.from('login_attempts').upsert({ ip, intentos: nuevos, bloqueado_hasta })
 }
 
 async function limpiarIntentos(ip) {
   await adminSupabase.from('login_attempts').upsert({ ip, intentos: 0, bloqueado_hasta: null })
+}
+
+// Token de un solo uso — válido 60 segundos, solo para colegio/estudiante
+async function generarLoginToken(userId, role) {
+  const secret = new TextEncoder().encode(process.env.SUPABASE_JWT_SECRET)
+  return new SignJWT({ sub: userId, role, aud: 'login-redirect' })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime('60s')
+    .sign(secret)
 }
 
 export default async function handler(req, res) {
@@ -58,12 +68,16 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: false, blocked: true })
   }
 
-  // Verificar credenciales en colegios, administradores y estudiantes
-  const tablas = ['colegios', 'administradores', 'estudiantes']
-  for (const tabla of tablas) {
+  // Buscar en colegios y estudiantes (no admins — ellos tienen 2FA)
+  const tablas = [
+    { nombre: 'colegios',    role: 'colegio'     },
+    { nombre: 'estudiantes', role: 'estudiante'  },
+  ]
+
+  for (const { nombre, role } of tablas) {
     const { data } = await adminSupabase
-      .from(tabla)
-      .select('password_hash')
+      .from(nombre)
+      .select('id, password_hash')
       .eq('usuario', usuario.trim())
       .eq('activo', true)
       .limit(1)
@@ -73,7 +87,8 @@ export default async function handler(req, res) {
       const match = await bcrypt.compare(password, data.password_hash)
       if (match) {
         await limpiarIntentos(ip)
-        return res.status(200).json({ ok: true })
+        const loginToken = await generarLoginToken(String(data.id), role)
+        return res.status(200).json({ ok: true, loginToken })
       }
     }
   }
