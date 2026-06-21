@@ -1259,6 +1259,23 @@ export default function AdminColegios({ onUpdate }) {
   const [copiado, setCopiado]           = useState(null)
   const [tendencias, setTendencias]     = useState({})
   const [modalBorrar, setModalBorrar]   = useState(null)
+  const [modalReset, setModalReset]     = useState(null) // { colegio, nuevaClave }
+  const [reseteando, setReseteando]     = useState(false)
+
+  const handleResetClave = async (colegio) => {
+    const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
+    const nueva = Array.from({length: 10}, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+    setModalReset({ colegio, nuevaClave: nueva, guardada: false })
+  }
+
+  const confirmarReset = async () => {
+    if (!modalReset) return
+    setReseteando(true)
+    const { data: hashed } = await supabase.rpc('hashear_password', { p_password: modalReset.nuevaClave })
+    await supabase.from('colegios').update({ password_hash: hashed }).eq('id', modalReset.colegio.id)
+    setModalReset(r => ({ ...r, guardada: true }))
+    setReseteando(false)
+  }
 
   useEffect(() => { setPagina(1) }, [fNombre, fDepto, fMuni, fUser])
   useEffect(() => { loadColegios() }, [pagina, fNombre, fDepto, fMuni, fUser])
@@ -1438,10 +1455,12 @@ export default function AdminColegios({ onUpdate }) {
                           {'••••••••'}
                         </span>
                         <button
-                          title="Clave oculta por seguridad" disabled style={{ background:'none', border:'none',
-                            cursor:'not-allowed', fontSize:14, padding:2,
-                            color: C.gray, opacity:0.4 }}>
-                          ⧉
+                          title="Resetear clave"
+                          onClick={() => handleResetClave(c)}
+                          style={{ background:'none', border:'none',
+                            cursor:'pointer', fontSize:14, padding:2,
+                            color: C.navy, opacity:0.8 }}>
+                          🔑
                         </button>
                       </div>
                     </td>
@@ -1530,6 +1549,68 @@ export default function AdminColegios({ onUpdate }) {
           onClose={()=>setModalBorrar(null)}
           onDone={()=>{ loadColegios(); onUpdate() }}
         />
+      )}
+
+      {modalReset && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)',
+          display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999 }}>
+          <div style={{ background:C.white, borderRadius:12, padding:32, width:420,
+            boxShadow:'0 20px 60px rgba(0,0,0,0.3)', fontFamily:'Inter' }}>
+            <h3 style={{ fontFamily:'Playfair Display, serif', fontSize:20, color:C.navy, marginBottom:8 }}>
+              Resetear clave
+            </h3>
+            <p style={{ fontSize:13, color:C.gray, marginBottom:20 }}>
+              <strong style={{ color:C.text }}>{modalReset.colegio.nombre}</strong>
+              <br/>Usuario: <code style={{ background:C.bg, padding:'1px 6px', borderRadius:4 }}>{modalReset.colegio.usuario}</code>
+            </p>
+
+            {!modalReset.guardada ? (
+              <>
+                <div style={{ background:'#FFF9EB', border:'1px solid #FDE68A', borderRadius:8,
+                  padding:'10px 14px', marginBottom:20, fontSize:12, color:'#92400E' }}>
+                  ⚠️ La clave original no puede recuperarse (está encriptada). Esta acción genera una nueva clave y reemplaza la anterior.
+                </div>
+                <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
+                  <button onClick={()=>setModalReset(null)}
+                    style={{ padding:'9px 18px', background:'transparent', border:`1px solid ${C.grayLt}`,
+                      borderRadius:6, fontSize:13, cursor:'pointer', color:C.gray }}>
+                    Cancelar
+                  </button>
+                  <button onClick={confirmarReset} disabled={reseteando}
+                    style={{ padding:'9px 18px', background:C.navy, color:C.white, border:'none',
+                      borderRadius:6, fontSize:13, fontWeight:600, cursor:'pointer' }}>
+                    {reseteando ? 'Generando...' : 'Generar nueva clave'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p style={{ fontSize:12, color:C.gray, marginBottom:8 }}>Nueva clave generada. Cópiala ahora — no volverá a mostrarse:</p>
+                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:24 }}>
+                  <code style={{ flex:1, background:C.bg, border:`1px solid ${C.grayLt}`,
+                    borderRadius:6, padding:'10px 14px', fontSize:16, fontWeight:700,
+                    color:C.navy, letterSpacing:'0.08em' }}>
+                    {modalReset.nuevaClave}
+                  </code>
+                  <button
+                    onClick={()=>{ navigator.clipboard.writeText(modalReset.nuevaClave) }}
+                    title="Copiar"
+                    style={{ padding:'10px 14px', background:C.green, color:C.white, border:'none',
+                      borderRadius:6, fontSize:14, cursor:'pointer' }}>
+                    ⧉
+                  </button>
+                </div>
+                <div style={{ display:'flex', justifyContent:'flex-end' }}>
+                  <button onClick={()=>setModalReset(null)}
+                    style={{ padding:'9px 18px', background:C.navy, color:C.white, border:'none',
+                      borderRadius:6, fontSize:13, fontWeight:600, cursor:'pointer' }}>
+                    Listo
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )
