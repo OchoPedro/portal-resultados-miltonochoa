@@ -1836,7 +1836,7 @@ export default function AdminRanking({ session }) {
   const [subTab, setSubTab] = useState('ranking')
 
   // ── RANKING state ──────────────────────────────────────────────────────────
-  const [anio, setAnio]         = useState(2024)
+  const [anio, setAnio]         = useState(ANIOS[0])
   const [data, setData]         = useState([])
   const [total, setTotal]       = useState(0)
   const [loading, setLoading]   = useState(false)
