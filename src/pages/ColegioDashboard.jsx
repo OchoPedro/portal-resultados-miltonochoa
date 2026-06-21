@@ -643,10 +643,10 @@ export default function ColegioDashboard({session, onLogout}) {
       if (!pruebasData?.length) { setLoading(false); return }
 
       // Seleccionar la más reciente por defecto
+      // setSelectedPrueba dispara el useEffect que llama loadForPrueba — no llamar dos veces
       const primera = pruebasData[0]
       setSelectedPrueba(primera)
       setPrueba(primera)
-      await loadForPrueba(primera)
 
       // Notas Acumuladas — promedios por prueba para línea de tiempo
       const { data: todosRes } = await supabase

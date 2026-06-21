@@ -74,9 +74,11 @@ export default function Login({ onLogin }) {
         return
       }
 
-      const { token, user } = data
-      setSupabaseToken(token)
-      onLogin(user)
+      // Token viaja solo en cookie httpOnly — obtenerlo vía /api/me
+      const me = await fetch('/api/me', { credentials: 'include' })
+      const meData = me.ok ? await me.json() : null
+      if (meData?.token) setSupabaseToken(meData.token)
+      onLogin(data.user)
     } catch {
       setError('Error de conexión. Intenta de nuevo.')
     } finally {
@@ -167,9 +169,11 @@ export default function Login({ onLogin }) {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Código incorrecto o expirado.'); return }
-      const { token, user } = data
-      setSupabaseToken(token)
-      onLogin(user)
+      // Token viaja solo en cookie httpOnly — obtenerlo vía /api/me
+      const me = await fetch('/api/me', { credentials: 'include' })
+      const meData = me.ok ? await me.json() : null
+      if (meData?.token) setSupabaseToken(meData.token)
+      onLogin(data.user)
     } catch {
       setError('Error de conexión. Intenta de nuevo.')
     } finally {

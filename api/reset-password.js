@@ -23,6 +23,7 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', allowed ? origin : ALLOWED_ORIGINS[0])
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Access-Control-Allow-Credentials', 'true')
   res.setHeader('Vary', 'Origin')
 
   if (req.method === 'OPTIONS') return res.status(204).end()
@@ -41,7 +42,7 @@ export default async function handler(req, res) {
     const tokenHash = createHash('sha256').update(codigo.trim()).digest('hex')
     const { data: reset, error } = await adminSupabase
       .from('password_resets')
-      .select('usuario, tabla, expires_at, used')
+      .select('id, usuario, tabla, expires_at, used')
       .eq('usuario', usuario.trim().toLowerCase())
       .eq('token', tokenHash)
       .eq('used', false)

@@ -281,7 +281,7 @@ export default async function handler(req, res) {
     res.setHeader('Set-Cookie',
       `mo_session=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=28800`
     )
-    return res.status(200).json({ token, user: userResult })
+    return res.status(200).json({ user: userResult })
   } catch (e) {
     console.error('[auth] error:', e.message)
     return res.status(500).json({ error: 'Error interno' })

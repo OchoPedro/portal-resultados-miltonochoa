@@ -116,7 +116,7 @@ export default async function handler(req, res) {
       `mo_trusted_device=${rawToken}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${30 * 24 * 60 * 60}`,
     ])
 
-    return res.status(200).json({ token, user: userResult })
+    return res.status(200).json({ user: userResult })
   } catch (e) {
     console.error('[verify-otp] error:', e.message)
     return res.status(500).json({ error: 'Error interno' })

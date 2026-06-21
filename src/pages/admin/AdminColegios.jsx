@@ -75,7 +75,7 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
     nombre:'', departamento_nombre:'', municipio:'', direccion:'', barrio:'',
     calendario:'', naturaleza:'', jornada:'',
     contactos:[{nombre:'', cargo:'', telefono:'', email:''}],
-    usuario:'', password_hash:'', password_plain:'',
+    usuario:'', password_hash:'',
     ...(colegio || {}),
     password_hash: '',  // nunca prellenar con el hash bcrypt del DB
   })
@@ -95,7 +95,7 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
     if (!colegio && mun && form.departamento_nombre) {
       setGenerando(true)
       const user = await generarUsuario(form.departamento_nombre, mun)
-      setForm(f => ({...f, municipio:mun, usuario:user, password_hash:user, password_plain:user}))
+      setForm(f => ({...f, municipio:mun, usuario:user, password_hash:user}))
       setGenerando(false)
     }
   }
@@ -147,7 +147,7 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
         contacto_telefono: form.contactos?.[0]?.telefono,
         contacto_email: form.contactos?.[0]?.email,
         usuario: form.usuario,
-        ...(hashedPassword ? { password_hash: hashedPassword, password_plain: form.password_hash } : {}),
+        ...(hashedPassword ? { password_hash: hashedPassword } : {}),
         ...(!colegio ? { activo: false } : {}),
       }
       const { error: err } = colegio
@@ -694,7 +694,6 @@ const ModalImportarColegios = ({ onClose, onSave }) => {
         }],
         usuario,
         password_hash: hashed,
-        password_plain: usuario,
         activo: false,
       })
       if (error) omitidos++; else creados++
@@ -1436,13 +1435,13 @@ export default function AdminColegios({ onUpdate }) {
                         <span style={{ fontFamily:'monospace', fontSize:12, color:C.text,
                           background:C.bg, border:`1px solid ${C.grayLt}`,
                           borderRadius:4, padding:'2px 8px', letterSpacing:'0.04em' }}>
-                          {c.password_plain || c.usuario || '—'}
+                          {'••••••••'}
                         </span>
-                        <button onClick={()=>handleCopiar(c.id, c.password_plain||c.usuario||'')}
-                          title="Copiar clave" style={{ background:'none', border:'none',
-                            cursor:'pointer', fontSize:14, padding:2,
-                            color: copiado===c.id ? C.green : C.gray }}>
-                          {copiado===c.id ? '✓' : '⧉'}
+                        <button
+                          title="Clave oculta por seguridad" disabled style={{ background:'none', border:'none',
+                            cursor:'not-allowed', fontSize:14, padding:2,
+                            color: C.gray, opacity:0.4 }}>
+                          ⧉
                         </button>
                       </div>
                     </td>

@@ -39,6 +39,7 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', allowed ? origin : ALLOWED_ORIGINS[0])
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Access-Control-Allow-Credentials', 'true')
   res.setHeader('Vary', 'Origin')
 
   if (req.method === 'OPTIONS') return res.status(204).end()
@@ -172,7 +173,6 @@ export default async function handler(req, res) {
 
     // Ofuscar email: pe***@gmail.com
     const hint = email.replace(/(.{2}).*(@.*)/, '$1***$2')
-    await _fpFail(fpIp)
     return res.status(200).json({ ok: true, hint })
   } catch (e) {
     console.error('[forgot-password] error:', e.message)
