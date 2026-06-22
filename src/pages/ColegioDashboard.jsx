@@ -585,6 +585,7 @@ export default function ColegioDashboard({session, onLogout}) {
   const tablet = useTablet()
   const [tab, setTab] = useState('carta')
   const [menuSection, setMenuSection] = useState('plantel')
+  const [subGroup, setSubGroup] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [prueba, setPrueba] = useState(null)
@@ -839,16 +840,20 @@ export default function ColegioDashboard({session, onLogout}) {
   const tableroLabels = {mejores:'Mejores Promedios', nacional:'Nacional', region:'Región', departamento:'Departamento', municipio:'Municipio', plantel:'Plantel'}
 
   const tabs = [
-    {id:'tablero',         label:'Tablero de Gestión'},
-    {id:'areas',           label:'Análisis por Áreas'},
-    {id:'niveles',         label:'% por Nivel'},
-    {id:'desviacion',      label:'Desviación'},
-    {id:'competencias',    label:'Competencias'},
-    {id:'mejora',          label:'Oportunidades'},
-    {id:'detalle_prueba',  label:'Detalle Prueba'},
-    {id:'ranking',         label:'Ranking'},
-    {id:'listado_notas',   label:'Listado de Notas'},
-    {id:'notas_acumuladas',label:'Notas Acumuladas'},
+    {id:'tablero',          label:'Tablero de Gestión'},
+    {id:'niveles',          label:'% Estudiantes por Nivel de Desempeño'},
+    {id:'desviacion',       label:'Desviación Competencias'},
+    {id:'comp_comparativo', label:'Comparativo Competencias'},
+    {id:'competencias',     label:'Notas Estudiantes por Competencias'},
+    {id:'mejora',           label:'Oportunidad de Mejoramiento'},
+    {id:'comp_desviacion',  label:'Desviación Componentes'},
+    {id:'comp_comp2',       label:'Comparativo Componentes'},
+    {id:'comp_notas',       label:'Notas Estudiantes por Componentes'},
+    {id:'comp_mejora',      label:'Oportunidad de Mejoramiento (Componentes)'},
+    {id:'listado_notas',    label:'Listado de Notas'},
+    {id:'detalle_prueba',   label:'Detalle de Prueba'},
+    {id:'consolidado',      label:'Consolidado de Respuestas'},
+    {id:'equilibrio',       label:'Equilibrio de la Prueba'},
   ]
 
   if (loading) return (
@@ -938,19 +943,38 @@ export default function ColegioDashboard({session, onLogout}) {
             },
             {
               id: 'herramientas', label: 'Herramientas', icon: '🛠️',
-              items: [
-                {id:'tablero',         label:'Tablero de Gestión'},
-                {id:'areas',           label:'Análisis por Áreas'},
-                {id:'niveles',         label:'% por Nivel'},
-                {id:'desviacion',      label:'Desviación'},
-                {id:'competencias',    label:'Competencias'},
-                {id:'mejora',          label:'Oportunidades'},
-                {id:'detalle_prueba',  label:'Detalle Prueba'},
-                {id:'ranking',         label:'Ranking'},
-                {id:'listado_notas',   label:'Listado de Notas'},
-                {id:'notas_acumuladas',label:'Notas Acumuladas'},
-              ],
               filters: true,
+              items: [
+                {id:'tablero',       label:'Tablero de Gestión'},
+                {id:'niveles',       label:'% Estudiantes por Nivel de Desempeño'},
+                {
+                  id:'grp_comp', label:'Competencias', isGroup: true,
+                  children: [
+                    {id:'desviacion',       label:'Desviación Competencias'},
+                    {id:'comp_comparativo', label:'Comparativo Competencias', soon:true},
+                    {id:'competencias',     label:'Notas Estudiantes por Competencias'},
+                    {id:'mejora',           label:'Oportunidad de Mejoramiento'},
+                  ]
+                },
+                {
+                  id:'grp_compon', label:'Componentes', isGroup: true,
+                  children: [
+                    {id:'comp_desviacion', label:'Desviación Componentes',            soon:true},
+                    {id:'comp_comp2',      label:'Comparativo Componentes',           soon:true},
+                    {id:'comp_notas',      label:'Notas Estudiantes por Componentes', soon:true},
+                    {id:'comp_mejora',     label:'Oportunidad de Mejoramiento',       soon:true},
+                  ]
+                },
+                {id:'listado_notas', label:'Listado de Notas'},
+                {
+                  id:'grp_detalle', label:'Detalle de Prueba', isGroup: true,
+                  children: [
+                    {id:'detalle_prueba', label:'Detalle de Prueba'},
+                    {id:'consolidado',    label:'Consolidado de Respuestas', soon:true},
+                    {id:'equilibrio',     label:'Equilibrio de la Prueba',   soon:true},
+                  ]
+                },
+              ],
             },
             {
               id: 'consultoria', label: 'Consultoría', icon: '💡',
@@ -1020,7 +1044,39 @@ export default function ColegioDashboard({session, onLogout}) {
                       <div style={{height:1, background:'rgba(255,255,255,0.08)', margin:'8px 0 12px'}}/>
                     </div>
                   )}
-                  {section.items.map(item => (
+                  {section.items.map(item => item.isGroup ? (
+                    <div key={item.id}>
+                      <button onClick={() => setSubGroup(subGroup === item.id ? null : item.id)} style={{
+                        width:'100%', textAlign:'left', padding:'6px 12px', borderRadius:6,
+                        border:'none', cursor:'pointer', marginBottom:1, fontFamily:'Inter', fontSize:11,
+                        background:'transparent', color:'rgba(255,255,255,0.65)',
+                        display:'flex', alignItems:'center', justifyContent:'space-between',
+                        transition:'all 0.2s',
+                      }}>
+                        <span style={{fontWeight:600, letterSpacing:'0.04em', textTransform:'uppercase', fontSize:10}}>{item.label}</span>
+                        <span style={{fontSize:9, opacity:0.5}}>{subGroup===item.id ? '▲' : '▼'}</span>
+                      </button>
+                      {subGroup === item.id && (
+                        <div style={{paddingLeft:8}}>
+                          {item.children.map(child => (
+                            <button key={child.id} onClick={() => { if (!child.soon) { setTab(child.id); setMenuOpen(false) } }} style={{
+                              width:'100%', textAlign:'left', padding:'6px 12px', borderRadius:6,
+                              border:'none', cursor: child.soon ? 'default' : 'pointer', marginBottom:1,
+                              fontFamily:'Inter', fontSize:11,
+                              background: tab===child.id ? 'rgba(255,255,255,0.1)' : 'transparent',
+                              color: child.soon ? 'rgba(255,255,255,0.25)' : tab===child.id ? C.white : 'rgba(255,255,255,0.5)',
+                              borderLeft: tab===child.id ? `3px solid ${C.green}` : '3px solid transparent',
+                              transition:'all 0.2s',
+                              display:'flex', alignItems:'center', justifyContent:'space-between',
+                            }}>
+                              <span>{child.label}</span>
+                              {child.soon && <span style={{fontSize:8, color:'rgba(255,255,255,0.25)', fontStyle:'italic'}}>pronto</span>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
                     <button key={item.id} onClick={() => { setTab(item.id); setMenuOpen(false) }} style={{
                       width:'100%', textAlign:'left', padding:'7px 12px', borderRadius:6,
                       border:'none', cursor:'pointer', marginBottom:1, fontFamily:'Inter', fontSize:11,
@@ -1080,19 +1136,38 @@ export default function ColegioDashboard({session, onLogout}) {
             },
             {
               id: 'herramientas', label: 'Herramientas', icon: '🛠️',
-              items: [
-                {id:'tablero',         label:'Tablero de Gestión'},
-                {id:'areas',           label:'Análisis por Áreas'},
-                {id:'niveles',         label:'% por Nivel'},
-                {id:'desviacion',      label:'Desviación'},
-                {id:'competencias',    label:'Competencias'},
-                {id:'mejora',          label:'Oportunidades'},
-                {id:'detalle_prueba',  label:'Detalle Prueba'},
-                {id:'ranking',         label:'Ranking'},
-                {id:'listado_notas',   label:'Listado de Notas'},
-                {id:'notas_acumuladas',label:'Notas Acumuladas'},
-              ],
               filters: true,
+              items: [
+                {id:'tablero',       label:'Tablero de Gestión'},
+                {id:'niveles',       label:'% Estudiantes por Nivel de Desempeño'},
+                {
+                  id:'grp_comp', label:'Competencias', isGroup: true,
+                  children: [
+                    {id:'desviacion',       label:'Desviación Competencias'},
+                    {id:'comp_comparativo', label:'Comparativo Competencias', soon:true},
+                    {id:'competencias',     label:'Notas Estudiantes por Competencias'},
+                    {id:'mejora',           label:'Oportunidad de Mejoramiento'},
+                  ]
+                },
+                {
+                  id:'grp_compon', label:'Componentes', isGroup: true,
+                  children: [
+                    {id:'comp_desviacion', label:'Desviación Componentes',            soon:true},
+                    {id:'comp_comp2',      label:'Comparativo Componentes',           soon:true},
+                    {id:'comp_notas',      label:'Notas Estudiantes por Componentes', soon:true},
+                    {id:'comp_mejora',     label:'Oportunidad de Mejoramiento',       soon:true},
+                  ]
+                },
+                {id:'listado_notas', label:'Listado de Notas'},
+                {
+                  id:'grp_detalle', label:'Detalle de Prueba', isGroup: true,
+                  children: [
+                    {id:'detalle_prueba', label:'Detalle de Prueba'},
+                    {id:'consolidado',    label:'Consolidado de Respuestas', soon:true},
+                    {id:'equilibrio',     label:'Equilibrio de la Prueba',   soon:true},
+                  ]
+                },
+              ],
             },
             {
               id: 'consultoria', label: 'Consultoría', icon: '💡',
@@ -1162,7 +1237,39 @@ export default function ColegioDashboard({session, onLogout}) {
                       <div style={{height:1, background:'rgba(255,255,255,0.08)', margin:'8px 0 12px'}}/>
                     </div>
                   )}
-                  {section.items.map(item => (
+                  {section.items.map(item => item.isGroup ? (
+                    <div key={item.id}>
+                      <button onClick={() => setSubGroup(subGroup === item.id ? null : item.id)} style={{
+                        width:'100%', textAlign:'left', padding:'6px 12px', borderRadius:6,
+                        border:'none', cursor:'pointer', marginBottom:1, fontFamily:'Inter', fontSize:11,
+                        background:'transparent', color:'rgba(255,255,255,0.65)',
+                        display:'flex', alignItems:'center', justifyContent:'space-between',
+                        transition:'all 0.2s',
+                      }}>
+                        <span style={{fontWeight:600, letterSpacing:'0.04em', textTransform:'uppercase', fontSize:10}}>{item.label}</span>
+                        <span style={{fontSize:9, opacity:0.5}}>{subGroup===item.id ? '▲' : '▼'}</span>
+                      </button>
+                      {subGroup === item.id && (
+                        <div style={{paddingLeft:8}}>
+                          {item.children.map(child => (
+                            <button key={child.id} onClick={() => { if (!child.soon) { setTab(child.id); setMenuOpen(false) } }} style={{
+                              width:'100%', textAlign:'left', padding:'6px 12px', borderRadius:6,
+                              border:'none', cursor: child.soon ? 'default' : 'pointer', marginBottom:1,
+                              fontFamily:'Inter', fontSize:11,
+                              background: tab===child.id ? 'rgba(255,255,255,0.1)' : 'transparent',
+                              color: child.soon ? 'rgba(255,255,255,0.25)' : tab===child.id ? C.white : 'rgba(255,255,255,0.5)',
+                              borderLeft: tab===child.id ? `3px solid ${C.green}` : '3px solid transparent',
+                              transition:'all 0.2s',
+                              display:'flex', alignItems:'center', justifyContent:'space-between',
+                            }}>
+                              <span>{child.label}</span>
+                              {child.soon && <span style={{fontSize:8, color:'rgba(255,255,255,0.25)', fontStyle:'italic'}}>pronto</span>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
                     <button key={item.id} onClick={() => { setTab(item.id); setMenuOpen(false) }} style={{
                       width:'100%', textAlign:'left', padding:'7px 12px', borderRadius:6,
                       border:'none', cursor:'pointer', marginBottom:1, fontFamily:'Inter', fontSize:11,
@@ -1209,7 +1316,7 @@ export default function ColegioDashboard({session, onLogout}) {
               timeZone:'America/Bogota'
             })}
           </div>
-          {['tablero','areas','niveles','desviacion','competencias','mejora','detalle_prueba','ranking','listado_notas','notas_acumuladas'].includes(tab) && (
+          {['tablero','niveles','desviacion','comp_comparativo','competencias','mejora','comp_desviacion','comp_comp2','comp_notas','comp_mejora','listado_notas','detalle_prueba','consolidado','equilibrio'].includes(tab) && (
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:12}}>
               <div>
                 <h1 style={{fontSize:26, fontFamily:'Playfair Display, serif', color:C.navy, marginBottom:4}}>
@@ -1224,7 +1331,7 @@ export default function ColegioDashboard({session, onLogout}) {
         </div>
 
         {/* KPIs — solo para herramientas */}
-        {['tablero','areas','niveles','desviacion','competencias','mejora','detalle_prueba','ranking','listado_notas','notas_acumuladas'].includes(tab) && (
+        {['tablero','niveles','desviacion','comp_comparativo','competencias','mejora','comp_desviacion','comp_comp2','comp_notas','comp_mejora','listado_notas','detalle_prueba','consolidado','equilibrio'].includes(tab) && (
         <div style={{display:'grid', gridTemplateColumns: mobile || tablet ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap:12, marginBottom:28}}>
           <KpiCard label="Prom. Global" value={promGlobal ?? '—'} sub={`Prueba ${prueba?.codigo ?? '—'}`} color={C.navy}/>
           <KpiCard label="Estudiantes" value={students.length || '—'} sub="Evaluados" color={C.navy}/>
@@ -1234,7 +1341,7 @@ export default function ColegioDashboard({session, onLogout}) {
         </div>
         )}
 
-        {['tablero','areas','niveles','desviacion','competencias','mejora','detalle_prueba','ranking','listado_notas','notas_acumuladas'].includes(tab) && (
+        {['tablero','niveles','desviacion','comp_comparativo','competencias','mejora','comp_desviacion','comp_comp2','comp_notas','comp_mejora','listado_notas','detalle_prueba','consolidado','equilibrio'].includes(tab) && (
           <TabBar tabs={tabs} active={tab} onChange={setTab}/>
         )}
 
@@ -1834,6 +1941,19 @@ export default function ColegioDashboard({session, onLogout}) {
               </>
             )}
           </div>
+        )}
+
+        {/* ══ PRÓXIMAMENTE ══════════════════════════════════════ */}
+        {['comp_comparativo','comp_desviacion','comp_comp2','comp_notas','comp_mejora','consolidado','equilibrio'].includes(tab) && (
+          <Card>
+            <div style={{textAlign:'center', padding:60, display:'flex', flexDirection:'column', alignItems:'center', gap:16}}>
+              <div style={{fontSize:48}}>🚧</div>
+              <div style={{fontFamily:'Playfair Display, serif', fontSize:20, color:C.navy}}>Próximamente</div>
+              <div style={{fontFamily:'Inter', fontSize:13, color:C.gray, maxWidth:360}}>
+                Este módulo está en construcción. Estará disponible muy pronto.
+              </div>
+            </div>
+          </Card>
         )}
 
         {/* ══ CARTA DE BIENVENIDA ══════════════════════════════ */}
