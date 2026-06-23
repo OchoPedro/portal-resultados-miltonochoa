@@ -2523,8 +2523,8 @@ export default function ColegioDashboard({session, onLogout}) {
 
           // Límites: de 0 a N (de 5 en 5) tal que nac_prom_min + limite <= 100
           const compRows = compGestion.filter(r => r.materia === asigActual)
-          const minNacProm = compRows.length > 0 ? Math.min(...compRows.map(r => r.nac_prom || 0)) : 0
-          const maxLimite = Math.floor((100 - minNacProm) / 5) * 5
+          const maxNacProm = compRows.length > 0 ? Math.max(...compRows.map(r => r.nac_prom || 0)) : 0
+          const maxLimite = Math.floor((100 - maxNacProm) / 5) * 5
           const limites = []
           for (let v = 0; v <= maxLimite; v += 5) limites.push(v)
           const limiteActual = Math.min(mejoraLimite, maxLimite)
