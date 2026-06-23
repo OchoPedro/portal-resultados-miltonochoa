@@ -956,6 +956,31 @@ export default function ColegioDashboard({session, onLogout}) {
     })},
   ].map(({asig, akey, vals}) => ({ asig, akey, ...calcBoxStats(vals) }))
 
+  // Desviación por área
+  const desvAreaData = [
+    {area:'Matemáticas',          akey:'mat', vals: students.map(s => {
+      if (s.mat_cuantitativo == null || s.mat_especifico == null) return null
+      return (s.mat_cuantitativo + s.mat_especifico) / 2
+    })},
+    {area:'Ciencias Naturales',   akey:'cn',  vals: students.map(s => {
+      if ([s.cn_quimica,s.cn_fisica,s.cn_biologia,s.cn_cts].some(x=>x==null)) return null
+      return (s.cn_quimica + s.cn_fisica + s.cn_biologia + s.cn_cts) / 4
+    })},
+    {area:'Soc. y Ciudadanas',    akey:'soc', vals: students.map(s => {
+      if (s.sociales == null || s.ciudadanas == null) return null
+      return (s.sociales + s.ciudadanas) / 2
+    })},
+    {area:'Lectura Crítica',      akey:'lc',  vals: students.map(s => s.lectura_critica)},
+    {area:'Inglés',               akey:'ing', vals: students.map(s => s.ingles)},
+    {area:'Definitiva',           akey:'_',   vals: students.map(s => {
+      const gen=s.mat_cuantitativo, nogen=s.mat_especifico
+      const q=s.cn_quimica, f=s.cn_fisica, b=s.cn_biologia, cts=s.cn_cts
+      const soc=s.sociales, ciu=s.ciudadanas, lc=s.lectura_critica, ing=s.ingles
+      if ([gen,nogen,q,f,b,cts,soc,ciu,lc,ing].some(x=>x==null)) return null
+      return (((gen+nogen)/2)*3 + ((q+f+b+cts)/4)*3 + ((soc+ciu)/2)*3 + lc*3 + ing) / 13
+    })},
+  ].map(({area, akey, vals}) => ({ area, akey, ...calcBoxStats(vals) }))
+
   // Desviación por materia
   const desvData = areaData.map(a => {
     const vals = students.map(s => {
@@ -996,6 +1021,7 @@ export default function ColegioDashboard({session, onLogout}) {
     {id:'tablero',          label:'Tablero de Gestión'},
     {id:'niveles',          label:'% Estudiantes por Nivel de Desempeño'},
     {id:'desv_materias',    label:'Desviación por Asignatura'},
+    {id:'desv_area',        label:'Desviación por Área'},
     {id:'desviacion',       label:'Desviación Competencias'},
     {id:'comp_comparativo', label:'Comparativo Competencias'},
     {id:'competencias',     label:'Notas Estudiantes por Competencias'},
@@ -1105,6 +1131,7 @@ export default function ColegioDashboard({session, onLogout}) {
                   children: [
                     {id:'niveles',       label:'% Estudiantes por Nivel de Desempeño'},
                     {id:'desv_materias', label:'Desviación por Asignatura'},
+                    {id:'desv_area',     label:'Desviación por Área'},
                   ]
                 },
                 {
@@ -1304,6 +1331,7 @@ export default function ColegioDashboard({session, onLogout}) {
                   children: [
                     {id:'niveles',       label:'% Estudiantes por Nivel de Desempeño'},
                     {id:'desv_materias', label:'Desviación por Asignatura'},
+                    {id:'desv_area',     label:'Desviación por Área'},
                   ]
                 },
                 {
@@ -1482,7 +1510,7 @@ export default function ColegioDashboard({session, onLogout}) {
               timeZone:'America/Bogota'
             })}
           </div>
-          {['tablero','niveles','desv_materias','desviacion','comp_comparativo','competencias','mejora','comp_desviacion','comp_comp2','comp_notas','comp_mejora','listado_notas','detalle_prueba','consolidado','equilibrio'].includes(tab) && (
+          {['tablero','niveles','desv_materias','desv_area','desviacion','comp_comparativo','competencias','mejora','comp_desviacion','comp_comp2','comp_notas','comp_mejora','listado_notas','detalle_prueba','consolidado','equilibrio'].includes(tab) && (
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:12}}>
               <div>
                 <h1 style={{fontSize:26, fontFamily:'Playfair Display, serif', color:C.navy, marginBottom:4}}>
@@ -1951,6 +1979,154 @@ export default function ColegioDashboard({session, onLogout}) {
                           <Badge color={semaforoColor(d.mean, d.akey)}>
                             {Math.round(d.mean)}
                           </Badge>
+                        </td>
+                        <td style={{padding:'10px 12px', textAlign:'center', fontSize:13, color:C.gray}}>
+                          {Math.round(d.std)}
+                        </td>
+                        <td style={{padding:'10px 12px', textAlign:'center', fontSize:13, color:C.gray}}>
+                          {Math.round(d.min)}
+                        </td>
+                        <td style={{padding:'10px 12px', textAlign:'center', fontSize:13, color:C.gray}}>
+                          {Math.round(d.max)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* ══ DESVIACIÓN POR ÁREA ══════════════════════════════ */}
+        {tab==='desv_area' && (
+          students.length === 0 ? <EmptyState/> :
+          <div style={{display:'grid', gap:16}}>
+            <Card>
+              <CardTitle sub="Distribución de puntajes por área">
+                Desviación por Área
+              </CardTitle>
+              <div style={{width:'100%', overflowX:'auto', position:'relative'}}
+                onMouseLeave={()=>setBoxHover(null)}>
+                <svg viewBox="0 0 720 300" style={{width:'100%', minWidth:480, display:'block'}}>
+                  {[0,25,50,75,100].map(v => {
+                    const y = 30 + 210 * (1 - v/110)
+                    return <g key={v}>
+                      <line x1={50} x2={710} y1={y} y2={y} stroke="#f0f0f0" strokeWidth={1}/>
+                      <text x={44} y={y+4} textAnchor="end" fontSize={9} fill="#94a3b8">{v}</text>
+                    </g>
+                  })}
+                  {desvAreaData.map((d, i) => {
+                    const cols  = desvAreaData.length
+                    const slotW = 660 / cols
+                    const cx    = 50 + slotW * i + slotW / 2
+                    const bw    = slotW * 0.55
+                    const toY   = v => 30 + 210 * (1 - v / 110)
+                    const yMin  = toY(d.min), yQ1 = toY(d.q1), yMed = toY(d.median)
+                    const yQ3   = toY(d.q3),  yMax = toY(d.max)
+                    const col   = semaforoColor(d.mean, d.akey)
+                    const hot   = boxHover?.i === i && boxHover?.ctx === 'area'
+                    const strokeC = hot ? C.navy : '#64748b'
+                    const boxFill = hot ? semaforoBg(d.mean, d.akey) : 'white'
+                    return (
+                      <g key={i} style={{cursor:'pointer'}}
+                        onMouseEnter={e => setBoxHover({d, i, ctx:'area', x:e.clientX, y:e.clientY})}
+                        onMouseMove={e  => setBoxHover(h => h ? {...h, x:e.clientX, y:e.clientY} : h)}>
+                        <rect x={cx-slotW/2} y={10} width={slotW} height={250} fill="transparent"/>
+                        <line x1={cx} y1={yMin} x2={cx} y2={yMax} stroke={strokeC} strokeWidth={hot?2:1.5}/>
+                        <line x1={cx-bw/4} y1={yMin} x2={cx+bw/4} y2={yMin} stroke={strokeC} strokeWidth={hot?2:1.5}/>
+                        <line x1={cx-bw/4} y1={yMax} x2={cx+bw/4} y2={yMax} stroke={strokeC} strokeWidth={hot?2:1.5}/>
+                        <rect x={cx-13} y={yMax-17} width={26} height={14} rx={3}
+                          fill={hot ? C.navy : 'white'} stroke={hot ? C.navy : '#e2e8f0'} strokeWidth={1}/>
+                        <text x={cx} y={yMax-6} textAnchor="middle" fontSize={8}
+                          fill={hot ? 'white' : '#334155'} fontWeight="600">{Math.round(d.max)}</text>
+                        <rect x={cx-bw/2} y={yQ3} width={bw} height={Math.max(yQ1-yQ3,2)}
+                          fill={boxFill} stroke={strokeC} strokeWidth={hot?2:1.5} rx={3}/>
+                        <line x1={cx-bw/2} y1={yMed} x2={cx+bw/2} y2={yMed}
+                          stroke={col} strokeWidth={hot?3.5:2.5}/>
+                        <circle cx={cx} cy={toY(d.mean)} r={hot?4.5:3} fill={col} stroke="white" strokeWidth={1}/>
+                        <text x={cx} y={258} textAnchor="end" fontSize={9}
+                          fill={hot ? C.navy : '#64748b'} fontWeight={hot?600:400}
+                          transform={`rotate(-35,${cx},258)`}>{d.area}</text>
+                      </g>
+                    )
+                  })}
+                </svg>
+                {boxHover?.ctx === 'area' && (
+                  <div style={{
+                    position:'fixed', top: boxHover.y - 10,
+                    left: boxHover.x > window.innerWidth - 220 ? boxHover.x - 188 : boxHover.x + 18,
+                    background:C.white, border:`1px solid ${C.grayLt}`,
+                    borderRadius:10, padding:'12px 16px', fontFamily:'Inter', fontSize:12,
+                    boxShadow:'0 8px 24px rgba(10,31,61,0.15)', zIndex:9999,
+                    pointerEvents:'none', minWidth:170,
+                  }}>
+                    <div style={{fontWeight:700, color:C.navy, marginBottom:8, fontSize:13}}>
+                      {boxHover.d.area}
+                    </div>
+                    {[
+                      {label:'Máximo',   val: boxHover.d.max,    color:C.gray},
+                      {label:'Q3 (75%)', val: boxHover.d.q3,     color:C.gray},
+                      {label:'Mediana',  val: boxHover.d.median, color: semaforoColor(boxHover.d.median, boxHover.d.akey), bold:true},
+                      {label:'Promedio', val: boxHover.d.mean,   color: semaforoColor(boxHover.d.mean,   boxHover.d.akey), bold:true},
+                      {label:'Q1 (25%)', val: boxHover.d.q1,     color:C.gray},
+                      {label:'Mínimo',   val: boxHover.d.min,    color:C.gray},
+                    ].map(({label, val, color, bold}) => (
+                      <div key={label} style={{display:'flex', justifyContent:'space-between',
+                        gap:16, marginBottom:4, color}}>
+                        <span style={{color:C.gray}}>{label}</span>
+                        <span style={{fontWeight: bold?700:500}}>{Math.round(val)}</span>
+                      </div>
+                    ))}
+                    <div style={{borderTop:`1px solid ${C.bg2}`, marginTop:6, paddingTop:6,
+                      display:'flex', justifyContent:'space-between', color:C.gray}}>
+                      <span>Desviación</span>
+                      <span style={{fontWeight:500}}>{Math.round(boxHover.d.std)}</span>
+                    </div>
+                    <div style={{display:'flex', justifyContent:'space-between', color:C.gray, marginTop:4}}>
+                      <span>Estudiantes</span>
+                      <span style={{fontWeight:500}}>{boxHover.d.n}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div style={{display:'flex', gap:16, marginTop:8, flexWrap:'wrap', fontSize:10,
+                fontFamily:'Inter', color:C.gray}}>
+                <span style={{display:'flex', alignItems:'center', gap:4}}>
+                  <span style={{display:'inline-block', width:20, height:2, background:'#64748b'}}/>Min – Máx
+                </span>
+                <span style={{display:'flex', alignItems:'center', gap:4}}>
+                  <span style={{display:'inline-block', width:16, height:10, border:'1.5px solid #64748b', borderRadius:2}}/>Q1 – Q3
+                </span>
+                <span style={{display:'flex', alignItems:'center', gap:4}}>
+                  <span style={{display:'inline-block', width:16, height:2.5, background:C.green}}/>Mediana
+                </span>
+                <span style={{display:'flex', alignItems:'center', gap:4}}>
+                  <span style={{display:'inline-block', width:6, height:6, borderRadius:'50%', background:C.green}}/>Promedio
+                </span>
+              </div>
+            </Card>
+            <Card>
+              <CardTitle sub="Estadísticas por área">Tabla de Estadísticas</CardTitle>
+              <div style={{overflowX:'auto'}}>
+                <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter'}}>
+                  <thead>
+                    <tr style={{borderBottom:`2px solid ${C.bg2}`}}>
+                      {['Área','Promedio','Desviación','Mín.','Máx.'].map((h,i) => (
+                        <th key={h} style={{textAlign:i===0?'left':'center', padding:'8px 12px',
+                          fontSize:10, color:C.gray, fontWeight:600, textTransform:'uppercase',
+                          letterSpacing:'0.05em'}}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {desvAreaData.map((d,i) => (
+                      <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`,
+                        background:i%2===0?`${C.bg}80`:'transparent'}}>
+                        <td style={{padding:'10px 12px', fontSize:13, color:C.text,
+                          fontWeight:d.area==='Definitiva'?700:500}}>{d.area}</td>
+                        <td style={{padding:'10px 12px', textAlign:'center'}}>
+                          <Badge color={semaforoColor(d.mean, d.akey)}>{Math.round(d.mean)}</Badge>
                         </td>
                         <td style={{padding:'10px 12px', textAlign:'center', fontSize:13, color:C.gray}}>
                           {Math.round(d.std)}
