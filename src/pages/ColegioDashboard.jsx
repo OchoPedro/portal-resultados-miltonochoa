@@ -726,6 +726,8 @@ export default function ColegioDashboard({session, onLogout}) {
   const [compNGestion, setCompNGestion] = useState([])
   const [mejoraLimite, setMejoraLimite] = useState(0)
   const [mejoraAsig, setMejoraAsig] = useState('Todas')
+  const [mejoraArea, setMejoraArea] = useState('Todas')
+  const [mejoraSort, setMejoraSort] = useState({col:'pctDebajo', dir:'desc'})
   const [compNAsigFilter, setCompNAsigFilter] = useState('Todas')
   const [oportunidades, setOportunidades] = useState([])
   const [detallePreguntas, setDetallePreguntas] = useState([])
@@ -763,7 +765,7 @@ export default function ColegioDashboard({session, onLogout}) {
 
       // Cargar todas las pruebas activas
       const { data: pruebasData } = await supabase
-        .from('pruebas').select('id, codigo, nombre, fecha, grado, tipo, activa, created_at').eq('activa', true)
+        .from('pruebas').select('id, codigo, nombre, fecha, grado, tipo, activa, created_at, estructura_excel').eq('activa', true)
         .order('created_at', {ascending: false})
       setAllPruebas(pruebasData || [])
 
@@ -2518,10 +2520,27 @@ export default function ColegioDashboard({session, onLogout}) {
 
         {/* ══ OPORTUNIDADES ════════════════════════════════════ */}
         {tab==='mejora' && (() => {
-          const asignaturas = ['Todas', ...new Set(compGestion.map(r => r.materia))]
-          const asigActual = mejoraAsig === 'Todas' ? (asignaturas[1] || 'Todas') : mejoraAsig
+          // Mapeo materia → área desde el Excel de la prueba
+          const matAreaMap = {}
+          const rawRows = selectedPrueba?.estructura_excel?.raw || []
+          rawRows.slice(2).forEach(f => {
+            const area = (f[3] || '').toString().trim()
+            const mat  = (f[4] || '').toString().trim()
+            if (area && mat) matAreaMap[mat] = area
+          })
 
-          // Límites: de 0 a N (de 5 en 5) tal que nac_prom_min + limite <= 100
+          const areas = ['Todas', ...new Set(Object.values(matAreaMap))]
+          const todasAsigs = [...new Set(compGestion.map(r => r.materia))]
+          const asigsFiltradas = mejoraArea === 'Todas'
+            ? todasAsigs
+            : todasAsigs.filter(m => matAreaMap[m] === mejoraArea)
+          const asignaturas = ['Todas', ...asigsFiltradas]
+          // Si el área cambió y la asignatura actual no aplica, resetear
+          const asigActual = (mejoraAsig === 'Todas' || !asigsFiltradas.includes(mejoraAsig))
+            ? (asigsFiltradas[0] || 'Todas')
+            : mejoraAsig
+
+          // Límites dinámicos según la asignatura seleccionada
           const compRows = compGestion.filter(r => r.materia === asigActual)
           const maxNacProm = compRows.length > 0 ? Math.max(...compRows.map(r => r.nac_prom || 0)) : 0
           const maxLimite = Math.floor((100 - maxNacProm) / 5) * 5
@@ -2529,8 +2548,8 @@ export default function ColegioDashboard({session, onLogout}) {
           for (let v = 0; v <= maxLimite; v += 5) limites.push(v)
           const limiteActual = Math.min(mejoraLimite, maxLimite)
 
-          // Una fila por competencia con nac_prom del RPC
-          const filas = compGestion
+          // Filas base
+          const filasBase = compGestion
             .filter(r => r.materia === asigActual)
             .map(r => {
               const umbral = (r.nac_prom || 0) + limiteActual
@@ -2542,13 +2561,26 @@ export default function ColegioDashboard({session, onLogout}) {
               const pctDebajo = total > 0 ? Math.round((debajo / total) * 100) : 0
               return { competencia: r.competencia, nacProm: r.nac_prom || 0, umbral, total, encima, debajo, pctEncima, pctDebajo }
             })
-            .sort((a, b) => b.pctDebajo - a.pctDebajo)
+
+          // Ordenamiento por columna
+          const filas = [...filasBase].sort((a, b) => {
+            const v = mejoraSort.col
+            const av = typeof a[v] === 'string' ? a[v].localeCompare(b[v]) : a[v] - b[v]
+            return mejoraSort.dir === 'asc' ? av : -av
+          })
+
+          const handleSort = col => setMejoraSort(s =>
+            s.col === col ? {col, dir: s.dir === 'asc' ? 'desc' : 'asc'} : {col, dir: 'desc'}
+          )
+          const arrow = col => mejoraSort.col === col ? (mejoraSort.dir === 'asc' ? ' ▲' : ' ▼') : ' ⇅'
 
           const selStyle = {padding:'6px 10px', border:`1px solid ${C.grayLt}`, borderRadius:6,
             fontFamily:'Inter', fontSize:12, color:C.text, background:C.white, outline:'none', cursor:'pointer'}
-          const thSt = {padding:'8px 12px', textAlign:'left', background:'#1E3A5F', color:'white',
-            fontSize:11, fontWeight:700, whiteSpace:'nowrap', borderBottom:'1px solid rgba(255,255,255,0.15)'}
-          const thNum = {...thSt, textAlign:'center'}
+          const thBase = {padding:'8px 12px', background:'#1E3A5F', color:'white', fontSize:11,
+            fontWeight:700, whiteSpace:'nowrap', borderBottom:'1px solid rgba(255,255,255,0.15)',
+            cursor:'pointer', userSelect:'none'}
+          const thSt  = {...thBase, textAlign:'left'}
+          const thNum = {...thBase, textAlign:'center'}
 
           return students.length === 0 ? <EmptyState/> : (
             <Card>
@@ -2557,11 +2589,18 @@ export default function ColegioDashboard({session, onLogout}) {
                 <CardTitle sub={`${filas.length} competencias · Umbral = Prom. Nacional + Límite`}>
                   Oportunidad de Mejoramiento
                 </CardTitle>
-                <div style={{display:'flex', alignItems:'center', gap:16, flexWrap:'wrap'}}>
+                <div style={{display:'flex', alignItems:'center', gap:12, flexWrap:'wrap'}}>
+                  <div style={{display:'flex', alignItems:'center', gap:8}}>
+                    <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Área:</span>
+                    <select value={mejoraArea} onChange={e => { setMejoraArea(e.target.value); setMejoraAsig('Todas') }} style={selStyle}>
+                      {areas.map(a => <option key={a} value={a}>{a}</option>)}
+                    </select>
+                  </div>
                   <div style={{display:'flex', alignItems:'center', gap:8}}>
                     <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Asignatura:</span>
-                    <select value={mejoraAsig} onChange={e => setMejoraAsig(e.target.value)} style={selStyle}>
-                      {asignaturas.map(a => <option key={a} value={a}>{a}</option>)}
+                    <select value={mejoraAsig === 'Todas' || !asigsFiltradas.includes(mejoraAsig) ? asigActual : mejoraAsig}
+                      onChange={e => setMejoraAsig(e.target.value)} style={selStyle}>
+                      {asigsFiltradas.map(a => <option key={a} value={a}>{a}</option>)}
                     </select>
                   </div>
                   <div style={{display:'flex', alignItems:'center', gap:8}}>
@@ -2575,11 +2614,10 @@ export default function ColegioDashboard({session, onLogout}) {
 
               {asigActual === 'Todas' || filas.length === 0 ? (
                 <div style={{textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter', fontSize:13}}>
-                  {asigActual === 'Todas' ? 'Selecciona una asignatura para ver el reporte.' : 'Sin datos para los filtros seleccionados.'}
+                  Sin datos para los filtros seleccionados.
                 </div>
               ) : (
                 <>
-                  {/* Leyenda */}
                   <div style={{display:'flex', gap:20, marginBottom:14, flexWrap:'wrap'}}>
                     <div style={{display:'flex', alignItems:'center', gap:6, fontFamily:'Inter', fontSize:11, color:C.gray}}>
                       <span style={{width:12, height:12, borderRadius:2, background:C.red, display:'inline-block'}}/>
@@ -2589,24 +2627,39 @@ export default function ColegioDashboard({session, onLogout}) {
                       <span style={{width:12, height:12, borderRadius:2, background:C.green, display:'inline-block'}}/>
                       Por encima del umbral
                     </div>
+                    <div style={{fontFamily:'Inter', fontSize:11, color:C.gray, marginLeft:'auto'}}>
+                      Clic en encabezado para ordenar
+                    </div>
                   </div>
                   <div style={{overflowX:'auto'}}>
                     <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter', fontSize:12}}>
                       <thead>
                         <tr>
-                          <th style={thSt}>Competencia</th>
-                          <th style={thNum}>Prom. Nacional</th>
-                          <th style={thNum}>Umbral</th>
-                          <th style={thNum}>Estudiantes</th>
-                          <th style={thNum}>% Por debajo</th>
-                          <th style={thNum}>% Por encima</th>
-                          <th style={{...thSt, minWidth:140}}>Distribución</th>
+                          <th style={thSt} onClick={() => handleSort('competencia')}>
+                            Competencia{arrow('competencia')}
+                          </th>
+                          <th style={thNum} onClick={() => handleSort('nacProm')}>
+                            Prom. Nacional{arrow('nacProm')}
+                          </th>
+                          <th style={thNum} onClick={() => handleSort('umbral')}>
+                            Umbral{arrow('umbral')}
+                          </th>
+                          <th style={thNum} onClick={() => handleSort('total')}>
+                            Estudiantes{arrow('total')}
+                          </th>
+                          <th style={thNum} onClick={() => handleSort('pctDebajo')}>
+                            % Por debajo{arrow('pctDebajo')}
+                          </th>
+                          <th style={thNum} onClick={() => handleSort('pctEncima')}>
+                            % Por encima{arrow('pctEncima')}
+                          </th>
+                          <th style={{...thSt, minWidth:140, cursor:'default'}}>Distribución</th>
                         </tr>
                       </thead>
                       <tbody>
                         {filas.map((f, i) => (
                           <tr key={i} style={{background: i%2===0 ? C.white : C.bg2, borderBottom:`1px solid ${C.bg2}`}}>
-                            <td style={{padding:'8px 12px', color:C.dark, fontWeight:500, maxWidth:260}}>
+                            <td style={{padding:'8px 12px', color:C.dark, fontWeight:500, maxWidth:280}}>
                               {f.competencia}
                             </td>
                             <td style={{padding:'8px 12px', textAlign:'center', color:C.gray}}>
@@ -2619,16 +2672,16 @@ export default function ColegioDashboard({session, onLogout}) {
                               {f.total}
                             </td>
                             <td style={{padding:'8px 12px', textAlign:'center'}}>
-                              <span style={{display:'inline-block', minWidth:52, padding:'2px 8px',
-                                borderRadius:20, background: f.pctDebajo >= 60 ? `${C.red}22` : f.pctDebajo >= 40 ? '#FEF3C722' : `${C.green}18`,
+                              <span style={{display:'inline-block', minWidth:52, padding:'2px 8px', borderRadius:20,
+                                background: f.pctDebajo >= 60 ? `${C.red}22` : f.pctDebajo >= 40 ? '#FEF3C722' : `${C.green}18`,
                                 color: f.pctDebajo >= 60 ? C.red : f.pctDebajo >= 40 ? '#D97706' : C.green,
                                 fontWeight:700}}>
                                 {f.pctDebajo}%
                               </span>
                             </td>
                             <td style={{padding:'8px 12px', textAlign:'center'}}>
-                              <span style={{display:'inline-block', minWidth:52, padding:'2px 8px',
-                                borderRadius:20, background: f.pctEncima >= 60 ? `${C.green}18` : f.pctEncima >= 40 ? '#FEF3C722' : `${C.red}22`,
+                              <span style={{display:'inline-block', minWidth:52, padding:'2px 8px', borderRadius:20,
+                                background: f.pctEncima >= 60 ? `${C.green}18` : f.pctEncima >= 40 ? '#FEF3C722' : `${C.red}22`,
                                 color: f.pctEncima >= 60 ? C.green : f.pctEncima >= 40 ? '#D97706' : C.red,
                                 fontWeight:700}}>
                                 {f.pctEncima}%
