@@ -2455,7 +2455,7 @@ export default function ColegioDashboard({session, onLogout}) {
             if (s.estudiantes) estMap[s.estudiante_id] = s.estudiantes
           })
 
-          const pruebaNombre = pruebas.find(p => p.id === pruebaId)?.nombre || '—'
+          const pruebaNombre = selectedPrueba?.nombre || selectedPrueba?.codigo || '—'
 
           const asignaturas = ['Todas', ...new Set(notasComp.map(r => r.materia))]
 
