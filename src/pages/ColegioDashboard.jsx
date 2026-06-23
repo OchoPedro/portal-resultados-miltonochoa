@@ -2833,63 +2833,121 @@ export default function ColegioDashboard({session, onLogout}) {
         )}
 
         {/* ══ LISTADO DE NOTAS ═══════════════════════════════════ */}
-        {tab==='listado_notas' && (
-          students.length === 0 ? <EmptyState/> :
-          <Card>
-            <CardTitle sub={`${students.length} estudiantes evaluados — ordenados por grado y salón`}>
-              Listado de Notas por Estudiante
-            </CardTitle>
-            <div style={{overflowX:'auto'}}>
-              <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter'}}>
-                <thead>
-                  <tr style={{background:C.navy}}>
-                    {['#','Estudiante','Gdo','Slón','Global','Def%','Mat.C','Mat.E','Quím.','Fís.','Bio.','CTS','Soc.','Ciud.','L.Crít.','Inglés'].map(h => (
-                      <th key={h} style={{padding:'8px 10px', fontSize:10, color:C.white,
-                        fontWeight:600, textAlign:'center', whiteSpace:'nowrap'}}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...students]
-                    .sort((a,b) => {
-                      const gA = a.estudiantes?.grado||'', gB = b.estudiantes?.grado||''
-                      if (gA !== gB) return gA.localeCompare(gB)
-                      const sA = a.estudiantes?.salon||'', sB = b.estudiantes?.salon||''
-                      if (sA !== sB) return sA.localeCompare(sB)
-                      return (a.estudiantes?.nombre||'').localeCompare(b.estudiantes?.nombre||'')
-                    })
-                    .map((s,i) => (
-                    <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`,
-                      background:i%2===0?`${C.bg}60`:'transparent'}}>
-                      <td style={{padding:'7px 10px', textAlign:'center', fontSize:11, color:C.grayLt}}>{i+1}</td>
-                      <td style={{padding:'7px 10px', fontSize:11, color:C.text, fontWeight:500}}>
-                        {s.estudiantes?.nombre?.split(' ').slice(0,3).join(' ')}
-                      </td>
-                      <td style={{padding:'7px 10px', textAlign:'center', fontSize:11, color:C.gray}}>{s.estudiantes?.grado}</td>
-                      <td style={{padding:'7px 10px', textAlign:'center', fontSize:11, color:C.gray}}>{s.estudiantes?.salon}</td>
-                      <td style={{padding:'7px 10px', textAlign:'center'}}>
-                        <span style={{fontSize:14, fontWeight:700, color:C.navy,
-                          fontFamily:'Playfair Display, serif'}}>{s.puntaje_global}</span>
-                      </td>
-                      <td style={{padding:'7px 10px', textAlign:'center'}}>
-                        <Badge color={semaforoColor(s.desempeno_pct)}>{s.desempeno_pct?.toFixed(1)}%</Badge>
-                      </td>
-                      {[s.mat_cuantitativo,s.mat_especifico,s.cn_quimica,s.cn_fisica,
-                        s.cn_biologia,s.cn_cts,s.sociales,s.ciudadanas,s.lectura_critica,s.ingles].map((v,j) => (
-                        <td key={j} style={{padding:'7px 10px', textAlign:'center', fontSize:11,
-                          color:semaforoColor(v||0), fontWeight:(v||0)>=65?600:400,
-                          background:semaforoBg(v||0) + '60'}}>
-                          {v?.toFixed(0)||'—'}
-                        </td>
+        {tab==='listado_notas' && (() => {
+          // Ordenar por Global desc para asignar posición
+          const ranked = [...students]
+            .sort((a,b) => (b.puntaje_global||0) - (a.puntaje_global||0))
+            .map((s,i) => ({...s, posicion: i+1}))
+
+          const pruebaCodigo = selectedPrueba?.codigo || '—'
+
+          // Colores sólidos por nota
+          const cellSt = v => {
+            if (v == null || isNaN(v)) return {background:'transparent', color:C.gray}
+            if (v >= 64) return {background:C.green,   color:'#fff', fontWeight:700}
+            if (v >= 44) return {background:'#F59E0B', color:'#fff', fontWeight:700}
+            return              {background:C.red,    color:'#fff', fontWeight:700}
+          }
+          const tdBase = {padding:'5px 7px', textAlign:'center', fontSize:11}
+          const thBase = {padding:'6px 8px', textAlign:'center', color:'#fff',
+            fontSize:10, fontWeight:700, whiteSpace:'nowrap',
+            borderRight:'1px solid rgba(255,255,255,0.15)'}
+
+          // Grupos de áreas con sus columnas
+          const AREAS = [
+            {label:'Matemáticas',         color:'#1565C0', cols:['mat_cuantitativo','mat_especifico'],        heads:['Cuantitativo','Específico']},
+            {label:'Ciencias Naturales',  color:'#2E7D32', cols:['cn_quimica','cn_fisica','cn_biologia','cn_cts'], heads:['Química','Física','Biología','CTS']},
+            {label:'Sociales y Ciudad.',  color:'#6A1B9A', cols:['sociales','ciudadanas'],                    heads:['Sociales','Ciudadanas']},
+            {label:'Lectura Crítica',     color:'#B71C1C', cols:['lectura_critica'],                          heads:['Lect. Crítica']},
+            {label:'Inglés',              color:'#E65100', cols:['ingles'],                                   heads:['Inglés']},
+          ]
+
+          return students.length === 0 ? <EmptyState/> : (
+            <Card>
+              <div style={{overflowX:'auto'}}>
+                <table style={{borderCollapse:'collapse', fontFamily:'Inter', fontSize:11, minWidth:'100%'}}>
+                  <thead>
+                    {/* Fila 1 — grupos de área */}
+                    <tr>
+                      {/* Celdas fijas — rowSpan 2 */}
+                      {[['G',1],['S',1],['#',1],['Nombre Estudiante',220],['P',1],['Prueba',1]].map(([h,w],i) => (
+                        <th key={i} rowSpan={2} style={{...thBase, background:C.navy,
+                          minWidth: w>1 ? w : undefined, textAlign: w>1 ? 'left' : 'center',
+                          borderBottom:'1px solid rgba(255,255,255,0.2)'}}>
+                          {h}
+                        </th>
+                      ))}
+                      {/* Grupos de área */}
+                      {AREAS.map(a => (
+                        <th key={a.label} colSpan={a.cols.length}
+                          style={{...thBase, background:a.color, textAlign:'center',
+                            borderBottom:'1px solid rgba(255,255,255,0.2)'}}>
+                          {a.label}
+                        </th>
+                      ))}
+                      {/* Def / Global / Detalle — rowSpan 2 */}
+                      {[['Def%',1],['Global',1],['Detalle',1]].map(([h],i) => (
+                        <th key={i} rowSpan={2} style={{...thBase, background:C.navy,
+                          borderBottom:'1px solid rgba(255,255,255,0.2)'}}>
+                          {h}
+                        </th>
                       ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <LeyendaNiveles/>
-          </Card>
-        )}
+                    {/* Fila 2 — sub-columnas de cada área */}
+                    <tr>
+                      {AREAS.map(a => a.heads.map(h => (
+                        <th key={`${a.label}-${h}`}
+                          style={{...thBase, background:a.color, fontSize:9,
+                            borderTop:'1px solid rgba(255,255,255,0.2)'}}>
+                          {h}
+                        </th>
+                      )))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ranked.map((s, i) => (
+                      <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`,
+                        background: i%2===0 ? C.white : C.bg2}}>
+                        <td style={{...tdBase, color:C.gray}}>{s.estudiantes?.grado}</td>
+                        <td style={{...tdBase, color:C.gray}}>{s.estudiantes?.salon}</td>
+                        <td style={{...tdBase, color:C.grayLt, fontSize:10}}>{i+1}</td>
+                        <td style={{padding:'5px 10px', color:C.dark, fontWeight:500, whiteSpace:'nowrap', maxWidth:240, overflow:'hidden', textOverflow:'ellipsis'}}>
+                          {s.estudiantes?.nombre}
+                        </td>
+                        <td style={{...tdBase, fontWeight:700, color:C.navy}}>{s.posicion}</td>
+                        <td style={{...tdBase, color:C.gray}}>{pruebaCodigo}</td>
+                        {AREAS.flatMap(a => a.cols.map(col => {
+                          const v = s[col]
+                          const val = v != null ? Math.round(v * 100) / 100 : null
+                          return (
+                            <td key={col} style={{...tdBase, ...cellSt(val)}}>
+                              {val != null ? val.toFixed(2) : '—'}
+                            </td>
+                          )
+                        }))}
+                        <td style={{...tdBase}}>
+                          <Badge color={semaforoColor(s.desempeno_pct)}>{s.desempeno_pct?.toFixed(2)}%</Badge>
+                        </td>
+                        <td style={{...tdBase, fontWeight:700, color:C.navy, fontSize:13,
+                          fontFamily:'Playfair Display, serif'}}>
+                          {s.puntaje_global}
+                        </td>
+                        <td style={{...tdBase}}>
+                          <span onClick={() => setSelectedStudent(s)}
+                            style={{cursor:'pointer', color:C.blue, fontWeight:600, fontSize:11,
+                              textDecoration:'underline'}}>
+                            Ver
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <LeyendaNiveles/>
+            </Card>
+          )
+        })()}
 
         {/* ══ NOTAS ACUMULADAS ═══════════════════════════════════ */}
         {tab==='notas_acumuladas' && (
