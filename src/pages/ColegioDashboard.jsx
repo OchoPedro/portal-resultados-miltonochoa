@@ -1649,10 +1649,10 @@ export default function ColegioDashboard({session, onLogout}) {
                     angle={-30} textAnchor="end" interval={0}/>
                   <YAxis tick={{fontSize:10, fontFamily:'Inter', fill:C.gray}} domain={[0,100]}/>
                   <Tooltip contentStyle={{fontFamily:'Inter', fontSize:12, borderRadius:8}}/>
-                  <Bar dataKey="n4" name="Nivel 4" stackId="a" fill={C.green}/>
-                  <Bar dataKey="n3" name="Nivel 3" stackId="a" fill="#F59E0B"/>
-                  <Bar dataKey="n2" name="Nivel 2" stackId="a" fill="#F97316"/>
                   <Bar dataKey="n1" name="Nivel 1" stackId="a" fill={C.red}/>
+                  <Bar dataKey="n2" name="Nivel 2" stackId="a" fill="#F97316"/>
+                  <Bar dataKey="n3" name="Nivel 3" stackId="a" fill="#F59E0B"/>
+                  <Bar dataKey="n4" name="Nivel 4" stackId="a" fill={C.green}/>
                 </BarChart>
               </ResponsiveContainer>
               <LeyendaNiveles/>
