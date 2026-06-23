@@ -7,7 +7,9 @@ import {
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
-  Cell, LabelList
+  Cell, LabelList,
+  ScatterChart, Scatter, ZAxis, ReferenceLine,
+  Line, ComposedChart, LineChart
 } from 'recharts'
 
 // ── HELPERS ──────────────────────────────────────────────────
@@ -738,6 +740,10 @@ export default function ColegioDashboard({session, onLogout}) {
   const [compMejoraArea, setCompMejoraArea] = useState('Todas')
   const [compMejoraSort, setCompMejoraSort] = useState({col:'pctDebajo', dir:'desc'})
   const [compNAsigFilter, setCompNAsigFilter] = useState('Todas')
+  const [desviacionView, setDesviacionView] = useState('bars')
+  const [mejoraView, setMejoraView] = useState('table')
+  const [compDesviacionView, setCompDesviacionView] = useState('bars')
+  const [compMejoraView, setCompMejoraView] = useState('table')
   const [notasCompSort, setNotasCompSort] = useState({col:'nombre', dir:'asc'})
   const [notasCompNSort, setNotasCompNSort] = useState({col:'nombre', dir:'asc'})
   const [rankingSort, setRankingSort] = useState({col:'_def', dir:'desc'})
@@ -1891,14 +1897,28 @@ export default function ColegioDashboard({session, onLogout}) {
                   <CardTitle sub="Promedio y desviación por competencia vs referentes geográficos">
                     Desviación por Competencias
                   </CardTitle>
-                  <div style={{display:'flex', alignItems:'center', gap:8}}>
-                    <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Asignatura:</span>
-                    <select value={compAsigFilter} onChange={e=>setCompAsigFilter(e.target.value)}
-                      style={{padding:'6px 10px', border:`1px solid ${C.grayLt}`, borderRadius:6,
-                        fontFamily:'Inter', fontSize:12, color:C.text, background:C.white,
-                        outline:'none', cursor:'pointer'}}>
-                      {asignaturas.map(a => <option key={a} value={a}>{a}</option>)}
-                    </select>
+                  <div style={{display:'flex', alignItems:'center', gap:12, flexWrap:'wrap'}}>
+                    <div style={{display:'flex', alignItems:'center', gap:8}}>
+                      <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Asignatura:</span>
+                      <select value={compAsigFilter} onChange={e=>setCompAsigFilter(e.target.value)}
+                        style={{padding:'6px 10px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+                          fontFamily:'Inter', fontSize:12, color:C.text, background:C.white,
+                          outline:'none', cursor:'pointer'}}>
+                        {asignaturas.map(a => <option key={a} value={a}>{a}</option>)}
+                      </select>
+                    </div>
+                    {compAsigFilter !== 'Todas' && (
+                      <div style={{display:'flex', gap:0, borderRadius:6, overflow:'hidden', border:'1px solid #E5E7EB'}}>
+                        {['bars','radar'].map(v => (
+                          <button key={v} onClick={() => setDesviacionView(v)}
+                            style={{padding:'5px 12px', fontSize:11, fontFamily:'Inter', cursor:'pointer', border:'none',
+                              background: desviacionView===v ? '#1E3A5F' : 'white',
+                              color: desviacionView===v ? 'white' : '#6B7280', fontWeight: desviacionView===v ? 700 : 400}}>
+                            {v==='bars' ? 'Barras' : 'Radar'}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1985,7 +2005,27 @@ export default function ColegioDashboard({session, onLogout}) {
                       </g>
                     )
                   }
-                  return (
+                  const radarData = filas.map(r => {
+                    const entry = { name: r.competencia }
+                    SCOPES.forEach(({sfx, promKey}) => { entry[sfx] = r[promKey] != null ? Math.round(r[promKey]) : 0 })
+                    return entry
+                  })
+                  return desviacionView === 'radar' ? (
+                    <div style={{marginBottom:28}}>
+                      <ResponsiveContainer width="100%" height={400}>
+                        <RadarChart data={radarData} margin={{top:16, right:40, bottom:16, left:40}}>
+                          <PolarGrid stroke={C.bg2}/>
+                          <PolarAngleAxis dataKey="name" tick={{fontSize:11, fontFamily:'Inter', fill:C.gray}}/>
+                          {SCOPES.map(({sfx, color, label:lbl}) => (
+                            <Radar key={sfx} name={lbl} dataKey={sfx} stroke={color} fill={color} fillOpacity={0.1} dot={false}/>
+                          ))}
+                          <Legend wrapperStyle={{fontFamily:'Inter', fontSize:12}}
+                            formatter={(val) => { const s = SCOPES.find(x => x.label === val); return <span style={{color: s ? s.color : C.dark}}>{val}</span> }}/>
+                          <Tooltip contentStyle={{fontFamily:'Inter', fontSize:11, borderRadius:8}}/>
+                        </RadarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
                     <div style={{marginBottom:28, overflowX:'auto'}}>
                       <div style={{minWidth:minW}}>
                         <ResponsiveContainer width="100%" height={400}>
@@ -2653,6 +2693,16 @@ export default function ColegioDashboard({session, onLogout}) {
                       {limites.map(v => <option key={v} value={v}>{v === 0 ? '0' : `+${v}`}</option>)}
                     </select>
                   </div>
+                  <div style={{display:'flex', gap:0, borderRadius:6, overflow:'hidden', border:'1px solid #E5E7EB'}}>
+                    {['table','scatter'].map(v => (
+                      <button key={v} onClick={() => setMejoraView(v)}
+                        style={{padding:'5px 12px', fontSize:11, fontFamily:'Inter', cursor:'pointer', border:'none',
+                          background: mejoraView===v ? '#1E3A5F' : 'white',
+                          color: mejoraView===v ? 'white' : '#6B7280', fontWeight: mejoraView===v ? 700 : 400}}>
+                        {v==='table' ? 'Tabla' : 'Gráfico'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -2660,7 +2710,40 @@ export default function ColegioDashboard({session, onLogout}) {
                 <div style={{textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter', fontSize:13}}>
                   Sin datos para los filtros seleccionados.
                 </div>
-              ) : (
+              ) : mejoraView === 'scatter' ? (() => {
+                const scatterData = filas.map(f => ({x: f.nacProm, y: f.pctDebajo, nombre: f.competencia || f.materia}))
+                const avgPctDebajo = filas.length > 0 ? filas.reduce((a,b) => a + b.pctDebajo, 0) / filas.length : 0
+                const ScatterTooltip = ({active, payload}) => {
+                  if (!active || !payload?.length) return null
+                  const d = payload[0]?.payload || {}
+                  return (
+                    <div style={{background:'white', border:`1px solid ${C.grayLt}`, borderRadius:8,
+                      padding:'10px 14px', fontFamily:'Inter', fontSize:11, boxShadow:'0 4px 12px rgba(0,0,0,0.12)'}}>
+                      <div style={{fontWeight:700, marginBottom:4, fontSize:12, color:C.navy}}>{d.nombre}</div>
+                      <div style={{color:C.gray}}>Prom. Nacional: <strong style={{color:C.navy}}>{d.x?.toFixed(1)}</strong></div>
+                      <div style={{color:C.gray}}>% bajo umbral: <strong style={{color:C.red}}>{d.y}%</strong></div>
+                    </div>
+                  )
+                }
+                return (
+                  <ResponsiveContainer width="100%" height={380}>
+                    <ScatterChart margin={{top:20, right:30, bottom:40, left:20}}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={C.bg2}/>
+                      <XAxis type="number" dataKey="x" domain={[0,100]} name="Promedio Nacional"
+                        label={{value:'Promedio Nacional', position:'insideBottom', offset:-10, fontFamily:'Inter', fontSize:11, fill:C.gray}}
+                        tick={{fontSize:10, fontFamily:'Inter', fill:C.gray}}/>
+                      <YAxis type="number" dataKey="y" domain={[0,100]} name="% bajo el umbral"
+                        label={{value:'% bajo el umbral', angle:-90, position:'insideLeft', offset:10, fontFamily:'Inter', fontSize:11, fill:C.gray}}
+                        tick={{fontSize:10, fontFamily:'Inter', fill:C.gray}}/>
+                      <ZAxis range={[40,200]}/>
+                      <Tooltip content={<ScatterTooltip/>}/>
+                      <ReferenceLine y={avgPctDebajo} strokeDasharray="4 2" stroke="red"
+                        label={{value:`Prom: ${Math.round(avgPctDebajo)}%`, position:'insideTopRight', fontFamily:'Inter', fontSize:10, fill:'red'}}/>
+                      <Scatter data={scatterData} fill="#2563EB" opacity={0.8}/>
+                    </ScatterChart>
+                  </ResponsiveContainer>
+                )
+              })() : (
                 <>
                   <div style={{display:'flex', gap:20, marginBottom:14, flexWrap:'wrap'}}>
                     <div style={{display:'flex', alignItems:'center', gap:6, fontFamily:'Inter', fontSize:11, color:C.gray}}>
@@ -2986,6 +3069,7 @@ export default function ColegioDashboard({session, onLogout}) {
                     {AREAS.flatMap(a => a.cols.map(([col]) => <col key={col} style={{width:52}}/>))}
                     <col style={{width:52}}/>
                     <col style={{width:48}}/>
+                    <col style={{width:42}}/>
                     <col style={{width:38}}/>
                   </colgroup>
                   <thead>
@@ -3013,6 +3097,8 @@ export default function ColegioDashboard({session, onLogout}) {
                       <th rowSpan={2} style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)', padding:'4px 2px'}}
                         onClick={() => handleSortLN('global')}>Global{arrowLN('global')}</th>
                       <th rowSpan={2} style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)',
+                        cursor:'default', padding:'4px 2px'}}>Pctil</th>
+                      <th rowSpan={2} style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)',
                         cursor:'default', padding:'4px 2px'}}>Ver</th>
                     </tr>
                     <tr>
@@ -3028,6 +3114,7 @@ export default function ColegioDashboard({session, onLogout}) {
                     {ranked.map((s, i) => {
                       const def = s._def
                       const global = Math.round(def * 5)
+                      const pct = ranked.length > 1 ? Math.round(((ranked.length - 1 - i) / (ranked.length - 1)) * 100) : 100
                       return (
                         <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`}}>
                           <td style={{...tdBase, color:C.dark, fontWeight:600, fontSize:11, padding:'4px 4px'}}>{i+1}</td>
@@ -3046,6 +3133,10 @@ export default function ColegioDashboard({session, onLogout}) {
                           <td style={{...tdBase, fontWeight:700, color:C.navy, fontSize:12,
                             fontFamily:'Playfair Display, serif'}}>
                             {global}
+                          </td>
+                          <td style={{...tdBase, fontWeight:600, fontSize:10,
+                            color: pct>=75 ? '#16A34A' : pct>=50 ? '#D97706' : '#DC2626'}}>
+                            {pct}%
                           </td>
                           <td style={{...tdBase}}>
                             <span onClick={() => setSelectedStudent(s)}
@@ -3077,7 +3168,7 @@ export default function ColegioDashboard({session, onLogout}) {
                     Notas Acumuladas por Prueba
                   </CardTitle>
                   <ResponsiveContainer width="100%" height={280}>
-                    <BarChart data={allPruebasPromedio} margin={{top:10, right:20, bottom:0, left:-20}}>
+                    <ComposedChart data={allPruebasPromedio} margin={{top:10, right:20, bottom:0, left:-20}}>
                       <CartesianGrid strokeDasharray="3 3" stroke={C.bg2}/>
                       <XAxis dataKey="label" tick={{fontSize:10, fontFamily:'Inter', fill:C.gray}}/>
                       <YAxis tick={{fontSize:10, fontFamily:'Inter', fill:C.gray}} domain={[0,110]}/>
@@ -3088,7 +3179,8 @@ export default function ColegioDashboard({session, onLogout}) {
                       <Bar dataKey="soc" name="Soc/Ciudad." fill="#8B5CF6" radius={[3,3,0,0]}/>
                       <Bar dataKey="lc"  name="Lect. Crítica" fill="#F59E0B" radius={[3,3,0,0]}/>
                       <Bar dataKey="ing" name="Inglés" fill="#EF4444" radius={[3,3,0,0]}/>
-                    </BarChart>
+                      <Line dataKey="global" name="Global" type="monotone" stroke="#1E3A5F" strokeWidth={2} dot={true}/>
+                    </ComposedChart>
                   </ResponsiveContainer>
                 </Card>
                 <Card>
@@ -3164,13 +3256,27 @@ export default function ColegioDashboard({session, onLogout}) {
                   <CardTitle sub="Promedio y desviación por componente vs referentes geográficos">
                     Desviación por Componentes
                   </CardTitle>
-                  <div style={{display:'flex', alignItems:'center', gap:8}}>
-                    <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Asignatura:</span>
-                    <select value={compNAsigFilter} onChange={e=>setCompNAsigFilter(e.target.value)}
-                      style={{padding:'6px 10px', border:`1px solid ${C.grayLt}`, borderRadius:6,
-                        fontFamily:'Inter', fontSize:12, color:C.text, background:C.white, outline:'none', cursor:'pointer'}}>
-                      {asignaturas.map(a => <option key={a} value={a}>{a}</option>)}
-                    </select>
+                  <div style={{display:'flex', alignItems:'center', gap:12, flexWrap:'wrap'}}>
+                    <div style={{display:'flex', alignItems:'center', gap:8}}>
+                      <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Asignatura:</span>
+                      <select value={compNAsigFilter} onChange={e=>setCompNAsigFilter(e.target.value)}
+                        style={{padding:'6px 10px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+                          fontFamily:'Inter', fontSize:12, color:C.text, background:C.white, outline:'none', cursor:'pointer'}}>
+                        {asignaturas.map(a => <option key={a} value={a}>{a}</option>)}
+                      </select>
+                    </div>
+                    {compNAsigFilter !== 'Todas' && (
+                      <div style={{display:'flex', gap:0, borderRadius:6, overflow:'hidden', border:'1px solid #E5E7EB'}}>
+                        {['bars','radar'].map(v => (
+                          <button key={v} onClick={() => setCompDesviacionView(v)}
+                            style={{padding:'5px 12px', fontSize:11, fontFamily:'Inter', cursor:'pointer', border:'none',
+                              background: compDesviacionView===v ? '#1E3A5F' : 'white',
+                              color: compDesviacionView===v ? 'white' : '#6B7280', fontWeight: compDesviacionView===v ? 700 : 400}}>
+                            {v==='bars' ? 'Barras' : 'Radar'}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -3205,7 +3311,27 @@ export default function ColegioDashboard({session, onLogout}) {
                     const words=(payload.value||'').split(' '), mid=Math.ceil(words.length/2)
                     return <g transform={`translate(${x},${y+4})`}><text textAnchor="middle" fontFamily="Inter" fontSize={11} fill={C.gray}><tspan x={0} dy={10}>{words.slice(0,mid).join(' ')}</tspan>{words.slice(mid).join(' ')&&<tspan x={0} dy={14}>{words.slice(mid).join(' ')}</tspan>}</text></g>
                   }
-                  return (
+                  const radarDataComp = filas.map(r => {
+                    const entry = { name: r.componente }
+                    SCOPES.forEach(({sfx, promKey}) => { entry[sfx] = r[promKey] != null ? Math.round(r[promKey]) : 0 })
+                    return entry
+                  })
+                  return compDesviacionView === 'radar' ? (
+                    <div style={{marginBottom:28}}>
+                      <ResponsiveContainer width="100%" height={400}>
+                        <RadarChart data={radarDataComp} margin={{top:16, right:40, bottom:16, left:40}}>
+                          <PolarGrid stroke={C.bg2}/>
+                          <PolarAngleAxis dataKey="name" tick={{fontSize:11, fontFamily:'Inter', fill:C.gray}}/>
+                          {SCOPES.map(({sfx, color, label:lbl}) => (
+                            <Radar key={sfx} name={lbl} dataKey={sfx} stroke={color} fill={color} fillOpacity={0.1} dot={false}/>
+                          ))}
+                          <Legend wrapperStyle={{fontFamily:'Inter', fontSize:12}}
+                            formatter={(val) => { const s = SCOPES.find(x => x.label === val); return <span style={{color: s ? s.color : C.dark}}>{val}</span> }}/>
+                          <Tooltip contentStyle={{fontFamily:'Inter', fontSize:11, borderRadius:8}}/>
+                        </RadarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
                     <div style={{marginBottom:28, overflowX:'auto'}}>
                       <div style={{minWidth:Math.max(560,filas.length*170)}}>
                         <ResponsiveContainer width="100%" height={400}>
@@ -3460,6 +3586,16 @@ export default function ColegioDashboard({session, onLogout}) {
                       {limites.map(v => <option key={v} value={v}>{v === 0 ? '0' : `+${v}`}</option>)}
                     </select>
                   </div>
+                  <div style={{display:'flex', gap:0, borderRadius:6, overflow:'hidden', border:'1px solid #E5E7EB'}}>
+                    {['table','scatter'].map(v => (
+                      <button key={v} onClick={() => setCompMejoraView(v)}
+                        style={{padding:'5px 12px', fontSize:11, fontFamily:'Inter', cursor:'pointer', border:'none',
+                          background: compMejoraView===v ? '#1E3A5F' : 'white',
+                          color: compMejoraView===v ? 'white' : '#6B7280', fontWeight: compMejoraView===v ? 700 : 400}}>
+                        {v==='table' ? 'Tabla' : 'Gráfico'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -3467,7 +3603,40 @@ export default function ColegioDashboard({session, onLogout}) {
                 <div style={{textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter', fontSize:13}}>
                   Sin datos para los filtros seleccionados.
                 </div>
-              ) : (
+              ) : compMejoraView === 'scatter' ? (() => {
+                const scatterDataComp = filas.map(f => ({x: f.nacProm, y: f.pctDebajo, nombre: f.componente || f.materia}))
+                const avgPctDebajoComp = filas.length > 0 ? filas.reduce((a,b) => a + b.pctDebajo, 0) / filas.length : 0
+                const ScatterTooltipComp = ({active, payload}) => {
+                  if (!active || !payload?.length) return null
+                  const d = payload[0]?.payload || {}
+                  return (
+                    <div style={{background:'white', border:`1px solid ${C.grayLt}`, borderRadius:8,
+                      padding:'10px 14px', fontFamily:'Inter', fontSize:11, boxShadow:'0 4px 12px rgba(0,0,0,0.12)'}}>
+                      <div style={{fontWeight:700, marginBottom:4, fontSize:12, color:C.navy}}>{d.nombre}</div>
+                      <div style={{color:C.gray}}>Prom. Nacional: <strong style={{color:C.navy}}>{d.x?.toFixed(1)}</strong></div>
+                      <div style={{color:C.gray}}>% bajo umbral: <strong style={{color:C.red}}>{d.y}%</strong></div>
+                    </div>
+                  )
+                }
+                return (
+                  <ResponsiveContainer width="100%" height={380}>
+                    <ScatterChart margin={{top:20, right:30, bottom:40, left:20}}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={C.bg2}/>
+                      <XAxis type="number" dataKey="x" domain={[0,100]} name="Promedio Nacional"
+                        label={{value:'Promedio Nacional', position:'insideBottom', offset:-10, fontFamily:'Inter', fontSize:11, fill:C.gray}}
+                        tick={{fontSize:10, fontFamily:'Inter', fill:C.gray}}/>
+                      <YAxis type="number" dataKey="y" domain={[0,100]} name="% bajo el umbral"
+                        label={{value:'% bajo el umbral', angle:-90, position:'insideLeft', offset:10, fontFamily:'Inter', fontSize:11, fill:C.gray}}
+                        tick={{fontSize:10, fontFamily:'Inter', fill:C.gray}}/>
+                      <ZAxis range={[40,200]}/>
+                      <Tooltip content={<ScatterTooltipComp/>}/>
+                      <ReferenceLine y={avgPctDebajoComp} strokeDasharray="4 2" stroke="red"
+                        label={{value:`Prom: ${Math.round(avgPctDebajoComp)}%`, position:'insideTopRight', fontFamily:'Inter', fontSize:10, fill:'red'}}/>
+                      <Scatter data={scatterDataComp} fill="#2563EB" opacity={0.8}/>
+                    </ScatterChart>
+                  </ResponsiveContainer>
+                )
+              })() : (
                 <>
                   <div style={{display:'flex', gap:20, marginBottom:14, flexWrap:'wrap'}}>
                     <div style={{display:'flex', alignItems:'center', gap:6, fontFamily:'Inter', fontSize:11, color:C.gray}}>
