@@ -738,6 +738,11 @@ export default function ColegioDashboard({session, onLogout}) {
   const [compMejoraArea, setCompMejoraArea] = useState('Todas')
   const [compMejoraSort, setCompMejoraSort] = useState({col:'pctDebajo', dir:'desc'})
   const [compNAsigFilter, setCompNAsigFilter] = useState('Todas')
+  const [notasCompSort, setNotasCompSort] = useState({col:'nombre', dir:'asc'})
+  const [notasCompNSort, setNotasCompNSort] = useState({col:'nombre', dir:'asc'})
+  const [rankingSort, setRankingSort] = useState({col:'_def', dir:'desc'})
+  const [detallePruebaSort, setDetallePruebaSort] = useState({col:'nro_pregunta', dir:'asc'})
+  const [listadoNotasSort, setListadoNotasSort] = useState({col:'_def', dir:'desc'})
   const [oportunidades, setOportunidades] = useState([])
   const [detallePreguntas, setDetallePreguntas] = useState([])
   const [allPruebasPromedio, setAllPruebasPromedio] = useState([])
@@ -2454,7 +2459,7 @@ export default function ColegioDashboard({session, onLogout}) {
 
           const asignaturas = ['Todas', ...new Set(notasComp.map(r => r.materia))]
 
-          const filas = notasComp.filter(r => {
+          const filasBase = notasComp.filter(r => {
             const est = estMap[r.estudiante_id]
             if (!est) return false
             if (selectedGrado !== 'Todos' && est.grado !== selectedGrado) return false
@@ -2462,10 +2467,21 @@ export default function ColegioDashboard({session, onLogout}) {
             if (notasCompAsig !== 'Todas' && r.materia !== notasCompAsig) return false
             return true
           })
+          const handleSortComp = col => setNotasCompSort(s => ({col, dir: s.col===col && s.dir==='asc' ? 'desc' : 'asc'}))
+          const arrowComp = col => notasCompSort.col===col ? (notasCompSort.dir==='asc' ? ' ▲' : ' ▼') : ' ⇅'
+          const filas = [...filasBase].sort((a, b) => {
+            const est_a = estMap[a.estudiante_id] || {}
+            const est_b = estMap[b.estudiante_id] || {}
+            const v = notasCompSort.col
+            const av = v==='nombre' ? (est_a.nombre||'') : v==='grado' ? (est_a.grado||0) : v==='salon' ? (est_a.salon||0) : v==='nota' ? (a.nota||0) : v==='preguntas' ? (a.preguntas||0) : v==='materia' ? (a.materia||'') : (a.competencia||'')
+            const bv = v==='nombre' ? (est_b.nombre||'') : v==='grado' ? (est_b.grado||0) : v==='salon' ? (est_b.salon||0) : v==='nota' ? (b.nota||0) : v==='preguntas' ? (b.preguntas||0) : v==='materia' ? (b.materia||'') : (b.competencia||'')
+            const cmp = typeof av==='string' ? av.localeCompare(bv) : av - bv
+            return notasCompSort.dir==='asc' ? cmp : -cmp
+          })
 
           const thSt = {padding:'8px 10px', textAlign:'left', background:'#1E3A5F',
             color:'white', fontSize:11, fontWeight:700, whiteSpace:'nowrap',
-            borderBottom:'1px solid rgba(255,255,255,0.15)'}
+            borderBottom:'1px solid rgba(255,255,255,0.15)', cursor:'pointer', userSelect:'none'}
           const thNum = {...thSt, textAlign:'center'}
 
           return students.length === 0 ? <EmptyState/> : (
@@ -2495,13 +2511,13 @@ export default function ColegioDashboard({session, onLogout}) {
                   <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter', fontSize:12}}>
                     <thead>
                       <tr>
-                        <th style={thSt}>Estudiante</th>
-                        <th style={thNum}>Grado</th>
-                        <th style={thNum}>Salón</th>
-                        <th style={thSt}>Materia</th>
-                        <th style={thSt}>Competencia</th>
-                        <th style={thNum}>Nota</th>
-                        <th style={thNum}>Preguntas</th>
+                        <th style={thSt} onClick={() => handleSortComp('nombre')}>Estudiante{arrowComp('nombre')}</th>
+                        <th style={thNum} onClick={() => handleSortComp('grado')}>Grado{arrowComp('grado')}</th>
+                        <th style={thNum} onClick={() => handleSortComp('salon')}>Salón{arrowComp('salon')}</th>
+                        <th style={thSt} onClick={() => handleSortComp('materia')}>Materia{arrowComp('materia')}</th>
+                        <th style={thSt} onClick={() => handleSortComp('competencia')}>Competencia{arrowComp('competencia')}</th>
+                        <th style={thNum} onClick={() => handleSortComp('nota')}>Nota{arrowComp('nota')}</th>
+                        <th style={thNum} onClick={() => handleSortComp('preguntas')}>Preguntas{arrowComp('preguntas')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2744,25 +2760,52 @@ export default function ColegioDashboard({session, onLogout}) {
         })()}
 
         {/* ══ RANKING ══════════════════════════════════════════ */}
-        {tab==='ranking' && (
-          students.length === 0 ? <EmptyState/> :
+        {tab==='ranking' && (() => {
+          const calcDefR = s => {
+            const mc=s.mat_cuantitativo||0, me=s.mat_especifico||0, q=s.cn_quimica||0, f=s.cn_fisica||0
+            const b=s.cn_biologia||0, cts=s.cn_cts||0, sc=s.sociales||0, ciu=s.ciudadanas||0
+            const lc=s.lectura_critica||0, ing=s.ingles||0
+            return ((mc+me)/2*3 + (q+f+b+cts)/4*3 + (sc+ciu)/2*3 + lc*3 + ing) / 13
+          }
+          const RANK_COLS = [
+            {key:'nombre', label:'Estudiante'}, {key:'puntaje_global', label:'Global'},
+            {key:'_def', label:'Def.'}, {key:'desempeno_pct', label:'Desem.%'},
+            {key:'mat_cuantitativo', label:'Mat.C'}, {key:'mat_especifico', label:'Mat.E'},
+            {key:'cn_quimica', label:'Quím.'}, {key:'cn_fisica', label:'Fís.'},
+            {key:'cn_biologia', label:'Bio.'}, {key:'cn_cts', label:'CTS'},
+            {key:'sociales', label:'Soc.'}, {key:'ciudadanas', label:'Ciud.'},
+            {key:'lectura_critica', label:'L.Crít.'}, {key:'ingles', label:'Inglés'},
+          ]
+          const handleSortR = col => setRankingSort(s => ({col, dir: s.col===col && s.dir==='asc' ? 'desc' : 'asc'}))
+          const arrowR = col => rankingSort.col===col ? (rankingSort.dir==='asc' ? ' ▲' : ' ▼') : ' ⇅'
+          const rankSorted = [...students].map(s => ({...s, _def: calcDefR(s)})).sort((a, b) => {
+            const av = rankingSort.col==='nombre' ? (a.estudiantes?.nombre||'') : (a[rankingSort.col]||0)
+            const bv = rankingSort.col==='nombre' ? (b.estudiantes?.nombre||'') : (b[rankingSort.col]||0)
+            const cmp = typeof av==='string' ? av.localeCompare(bv) : av - bv
+            return rankingSort.dir==='asc' ? cmp : -cmp
+          })
+          const thR = {textAlign:'left', padding:'8px 10px', fontSize:10, color:C.gray, fontWeight:600,
+            textTransform:'uppercase', letterSpacing:'0.04em', whiteSpace:'nowrap',
+            cursor:'pointer', userSelect:'none', background:'#1E3A5F', color:'white'}
+          return students.length === 0 ? <EmptyState/> : (
           <Card>
-            <CardTitle sub={`${students.length} estudiantes ordenados por puntaje global`}>
+            <CardTitle sub={`${students.length} estudiantes`}>
               Ranking Completo
             </CardTitle>
             <div style={{overflowX:'auto'}}>
               <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter'}}>
                 <thead>
-                  <tr style={{borderBottom:`2px solid ${C.bg2}`}}>
-                    {['#','Estudiante','Global','Def.%','Mat.C','Mat.E','Quím.','Fís.','Bio.','CTS','Soc.','Ciud.','L.Crít.','Inglés'].map(h => (
-                      <th key={h} style={{textAlign:'left', padding:'8px 10px', fontSize:10,
-                        color:C.gray, fontWeight:600, textTransform:'uppercase',
-                        letterSpacing:'0.04em', whiteSpace:'nowrap'}}>{h}</th>
+                  <tr>
+                    <th style={{...thR, minWidth:30}}>#</th>
+                    {RANK_COLS.map(c => (
+                      <th key={c.key} style={thR} onClick={() => handleSortR(c.key)}>
+                        {c.label}{arrowR(c.key)}
+                      </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {students.map((s,i) => (
+                  {rankSorted.map((s,i) => (
                     <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`,
                       background:i<3?`${C.navy}04`:i%2===0?`${C.bg}60`:'transparent'}}>
                       <td style={{padding:'8px 10px', fontSize:12, fontWeight:700,
@@ -2774,6 +2817,7 @@ export default function ColegioDashboard({session, onLogout}) {
                         <span style={{fontSize:15, fontWeight:700, color:C.navy,
                           fontFamily:'Playfair Display, serif'}}>{s.puntaje_global}</span>
                       </td>
+                      <td style={{padding:'8px 10px', fontSize:12, color:C.text}}>{s._def?.toFixed(2)||'—'}</td>
                       <td style={{padding:'8px 10px'}}>
                         <Badge color={semaforoColor(s.desempeno_pct)}>{s.desempeno_pct?.toFixed(1)}%</Badge>
                       </td>
@@ -2790,10 +2834,23 @@ export default function ColegioDashboard({session, onLogout}) {
               </table>
             </div>
           </Card>
-        )}
+          )
+        })()}
         {/* ══ DETALLE PRUEBA ════════════════════════════════════ */}
-        {tab==='detalle_prueba' && (
-          students.length === 0 ? <EmptyState/> :
+        {tab==='detalle_prueba' && (() => {
+          const handleSortDP = col => setDetallePruebaSort(s => ({col, dir: s.col===col && s.dir==='asc' ? 'desc' : 'asc'}))
+          const arrowDP = col => detallePruebaSort.col===col ? (detallePruebaSort.dir==='asc' ? ' ▲' : ' ▼') : ' ⇅'
+          const dpSorted = [...detallePreguntas].sort((a, b) => {
+            const v = detallePruebaSort.col
+            const av = v==='brecha' ? ((a.pct_colegio||0)-(a.pct_nacional||0)) : v==='materia'||v==='componente'||v==='dificultad' ? (a[v]||'') : (a[v]||0)
+            const bv = v==='brecha' ? ((b.pct_colegio||0)-(b.pct_nacional||0)) : v==='materia'||v==='componente'||v==='dificultad' ? (b[v]||'') : (b[v]||0)
+            const cmp = typeof av==='string' ? av.localeCompare(bv) : av - bv
+            return detallePruebaSort.dir==='asc' ? cmp : -cmp
+          })
+          const thDP = {padding:'8px 10px', fontSize:11, color:C.white, fontWeight:600,
+            textAlign:'center', whiteSpace:'nowrap', background:C.navy,
+            cursor:'pointer', userSelect:'none'}
+          return students.length === 0 ? <EmptyState/> : (
           <Card>
             <CardTitle sub={`${detallePreguntas.length} preguntas — ${prueba?.codigo||'—'}`}>
               Detalle de la Prueba por Pregunta
@@ -2805,14 +2862,19 @@ export default function ColegioDashboard({session, onLogout}) {
                 <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter'}}>
                   <thead>
                     <tr style={{background:C.navy}}>
-                      {['Ses.','Nro','Materia','Componente','% Colegio','% Nac.','Brecha','Nivel','Mejora'].map(h => (
-                        <th key={h} style={{padding:'8px 10px', fontSize:11, color:C.white,
-                          fontWeight:600, textAlign:'center', whiteSpace:'nowrap'}}>{h}</th>
-                      ))}
+                      <th style={thDP} onClick={() => handleSortDP('sesion')}>Ses.{arrowDP('sesion')}</th>
+                      <th style={thDP} onClick={() => handleSortDP('nro_pregunta')}>Nro{arrowDP('nro_pregunta')}</th>
+                      <th style={{...thDP, textAlign:'left'}} onClick={() => handleSortDP('materia')}>Materia{arrowDP('materia')}</th>
+                      <th style={{...thDP, textAlign:'left'}} onClick={() => handleSortDP('componente')}>Componente{arrowDP('componente')}</th>
+                      <th style={thDP} onClick={() => handleSortDP('pct_colegio')}>% Colegio{arrowDP('pct_colegio')}</th>
+                      <th style={thDP} onClick={() => handleSortDP('pct_nacional')}>% Nac.{arrowDP('pct_nacional')}</th>
+                      <th style={thDP} onClick={() => handleSortDP('brecha')}>Brecha{arrowDP('brecha')}</th>
+                      <th style={thDP} onClick={() => handleSortDP('dificultad')}>Nivel{arrowDP('dificultad')}</th>
+                      <th style={thDP}>Mejora</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {detallePreguntas.map((q,i) => {
+                    {dpSorted.map((q,i) => {
                       const brecha = (q.pct_colegio||0) - (q.pct_nacional||0)
                       return (
                         <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`,
@@ -2852,7 +2914,8 @@ export default function ColegioDashboard({session, onLogout}) {
               </div>
             )}
           </Card>
-        )}
+          )
+        })()}
 
         {/* ══ LISTADO DE NOTAS ═══════════════════════════════════ */}
         {tab==='listado_notas' && (() => {
@@ -2866,14 +2929,22 @@ export default function ColegioDashboard({session, onLogout}) {
             return ((mc+me)/2*3 + (q+f+b+cts)/4*3 + (sc+ciu)/2*3 + lc*3 + ing) / 13
           }
 
-          // Ordenar por Definitiva desc
+          const handleSortLN = col => setListadoNotasSort(s => ({col, dir: s.col===col && s.dir==='asc' ? 'desc' : 'asc'}))
+          const arrowLN = col => listadoNotasSort.col===col ? (listadoNotasSort.dir==='asc' ? ' ▲' : ' ▼') : ' ⇅'
+
           const ranked = [...students]
             .map(s => ({...s, _def: calcDef(s)}))
-            .sort((a,b) => b._def - a._def)
+            .sort((a, b) => {
+              const v = listadoNotasSort.col
+              const av = v==='nombre' ? (a.estudiantes?.nombre||'') : v==='salon' ? (a.estudiantes?.salon||0) : v==='global' ? Math.round(a._def*5) : (a[v]||0)
+              const bv = v==='nombre' ? (b.estudiantes?.nombre||'') : v==='salon' ? (b.estudiantes?.salon||0) : v==='global' ? Math.round(b._def*5) : (b[v]||0)
+              const cmp = typeof av==='string' ? av.localeCompare(bv) : av - bv
+              return listadoNotasSort.dir==='asc' ? cmp : -cmp
+            })
 
           const thBase = {padding:'6px 8px', textAlign:'center', color:'#fff', background:C.navy,
             fontSize:10, fontWeight:700, whiteSpace:'nowrap',
-            borderRight:'1px solid rgba(255,255,255,0.12)'}
+            borderRight:'1px solid rgba(255,255,255,0.12)', cursor:'pointer', userSelect:'none'}
           const tdBase = {padding:'5px 7px', textAlign:'center', fontSize:11, background:C.white}
 
           // Col de nota con color en el número según área
@@ -2900,31 +2971,30 @@ export default function ColegioDashboard({session, onLogout}) {
                 <table style={{borderCollapse:'collapse', fontFamily:'Inter', fontSize:11, minWidth:'100%'}}>
                   <thead>
                     <tr>
-                      {[['S',40],['#',32],['Nombre Estudiante',240]].map(([h,w]) => (
-                        <th key={h} rowSpan={2} style={{...thBase, minWidth:w,
-                          textAlign: w>50 ? 'left' : 'center',
-                          borderBottom:'1px solid rgba(255,255,255,0.15)'}}>
-                          {h}
-                        </th>
-                      ))}
+                      <th rowSpan={2} style={{...thBase, minWidth:40, borderBottom:'1px solid rgba(255,255,255,0.15)'}}
+                        onClick={() => handleSortLN('salon')}>S{arrowLN('salon')}</th>
+                      <th rowSpan={2} style={{...thBase, minWidth:32, borderBottom:'1px solid rgba(255,255,255,0.15)',
+                        cursor:'default'}}>#</th>
+                      <th rowSpan={2} style={{...thBase, minWidth:240, textAlign:'left', borderBottom:'1px solid rgba(255,255,255,0.15)'}}
+                        onClick={() => handleSortLN('nombre')}>Nombre Estudiante{arrowLN('nombre')}</th>
                       {AREAS.map(a => (
                         <th key={a.label} colSpan={a.cols.length}
-                          style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)'}}>
+                          style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)', cursor:'default'}}>
                           {a.label}
                         </th>
                       ))}
-                      {[['Definitiva',60],['Global',60],['Detalle',50]].map(([h,w]) => (
-                        <th key={h} rowSpan={2} style={{...thBase, minWidth:w,
-                          borderBottom:'1px solid rgba(255,255,255,0.15)'}}>
-                          {h}
-                        </th>
-                      ))}
+                      <th rowSpan={2} style={{...thBase, minWidth:60, borderBottom:'1px solid rgba(255,255,255,0.15)'}}
+                        onClick={() => handleSortLN('_def')}>Definitiva{arrowLN('_def')}</th>
+                      <th rowSpan={2} style={{...thBase, minWidth:60, borderBottom:'1px solid rgba(255,255,255,0.15)'}}
+                        onClick={() => handleSortLN('global')}>Global{arrowLN('global')}</th>
+                      <th rowSpan={2} style={{...thBase, minWidth:50, borderBottom:'1px solid rgba(255,255,255,0.15)',
+                        cursor:'default'}}>Detalle</th>
                     </tr>
                     <tr>
-                      {AREAS.flatMap(a => a.cols.map(([,h]) => (
-                        <th key={h} style={{...thBase, fontSize:9,
-                          borderTop:'1px solid rgba(255,255,255,0.15)'}}>
-                          {h}
+                      {AREAS.flatMap(a => a.cols.map(([col, h]) => (
+                        <th key={col} style={{...thBase, fontSize:9, borderTop:'1px solid rgba(255,255,255,0.15)'}}
+                          onClick={() => handleSortLN(col)}>
+                          {h}{arrowLN(col)}
                         </th>
                       )))}
                     </tr>
@@ -3197,7 +3267,7 @@ export default function ColegioDashboard({session, onLogout}) {
           const estMap = {}
           allStudents.forEach(s => { if (s.estudiantes) estMap[s.estudiante_id] = s.estudiantes })
           const asignaturas = ['Todas', ...new Set(notasCompN.map(r => r.materia))]
-          const filas = notasCompN.filter(r => {
+          const filasBaseN = notasCompN.filter(r => {
             const est = estMap[r.estudiante_id]
             if (!est) return false
             if (selectedGrado !== 'Todos' && est.grado !== selectedGrado) return false
@@ -3205,7 +3275,18 @@ export default function ColegioDashboard({session, onLogout}) {
             if (notasCompNAsig !== 'Todas' && r.materia !== notasCompNAsig) return false
             return true
           })
-          const thSt = {padding:'8px 10px',textAlign:'left',background:'#1E3A5F',color:'white',fontSize:11,fontWeight:700,whiteSpace:'nowrap',borderBottom:'1px solid rgba(255,255,255,0.15)'}
+          const handleSortCompN = col => setNotasCompNSort(s => ({col, dir: s.col===col && s.dir==='asc' ? 'desc' : 'asc'}))
+          const arrowCompN = col => notasCompNSort.col===col ? (notasCompNSort.dir==='asc' ? ' ▲' : ' ▼') : ' ⇅'
+          const filas = [...filasBaseN].sort((a, b) => {
+            const est_a = estMap[a.estudiante_id] || {}
+            const est_b = estMap[b.estudiante_id] || {}
+            const v = notasCompNSort.col
+            const av = v==='nombre' ? (est_a.nombre||'') : v==='grado' ? (est_a.grado||0) : v==='salon' ? (est_a.salon||0) : v==='nota' ? (a.nota||0) : v==='preguntas' ? (a.preguntas||0) : v==='materia' ? (a.materia||'') : (a.componente||'')
+            const bv = v==='nombre' ? (est_b.nombre||'') : v==='grado' ? (est_b.grado||0) : v==='salon' ? (est_b.salon||0) : v==='nota' ? (b.nota||0) : v==='preguntas' ? (b.preguntas||0) : v==='materia' ? (b.materia||'') : (b.componente||'')
+            const cmp = typeof av==='string' ? av.localeCompare(bv) : av - bv
+            return notasCompNSort.dir==='asc' ? cmp : -cmp
+          })
+          const thSt = {padding:'8px 10px',textAlign:'left',background:'#1E3A5F',color:'white',fontSize:11,fontWeight:700,whiteSpace:'nowrap',borderBottom:'1px solid rgba(255,255,255,0.15)',cursor:'pointer',userSelect:'none'}
           const thNum = {...thSt, textAlign:'center'}
           return students.length === 0 ? <EmptyState/> : (
             <Card>
@@ -3226,13 +3307,13 @@ export default function ColegioDashboard({session, onLogout}) {
                   <table style={{width:'100%',borderCollapse:'collapse',fontFamily:'Inter',fontSize:12}}>
                     <thead>
                       <tr>
-                        <th style={thSt}>Estudiante</th>
-                        <th style={thNum}>Grado</th>
-                        <th style={thNum}>Salón</th>
-                        <th style={thSt}>Materia</th>
-                        <th style={thSt}>Componente</th>
-                        <th style={thNum}>Nota</th>
-                        <th style={thNum}>Preguntas</th>
+                        <th style={thSt} onClick={() => handleSortCompN('nombre')}>Estudiante{arrowCompN('nombre')}</th>
+                        <th style={thNum} onClick={() => handleSortCompN('grado')}>Grado{arrowCompN('grado')}</th>
+                        <th style={thNum} onClick={() => handleSortCompN('salon')}>Salón{arrowCompN('salon')}</th>
+                        <th style={thSt} onClick={() => handleSortCompN('materia')}>Materia{arrowCompN('materia')}</th>
+                        <th style={thSt} onClick={() => handleSortCompN('componente')}>Componente{arrowCompN('componente')}</th>
+                        <th style={thNum} onClick={() => handleSortCompN('nota')}>Nota{arrowCompN('nota')}</th>
+                        <th style={thNum} onClick={() => handleSortCompN('preguntas')}>Preguntas{arrowCompN('preguntas')}</th>
                       </tr>
                     </thead>
                     <tbody>
