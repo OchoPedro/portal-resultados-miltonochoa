@@ -1429,8 +1429,8 @@ export default function ColegioDashboard({session, onLogout}) {
           )}
         </div>
 
-        {/* KPIs — solo para herramientas */}
-        {['tablero','niveles','desv_materias','desviacion','comp_comparativo','competencias','mejora','comp_desviacion','comp_comp2','comp_notas','comp_mejora','listado_notas','detalle_prueba','consolidado','equilibrio'].includes(tab) && (
+        {/* KPIs — solo en Tablero de Gestión */}
+        {tab === 'tablero' && (
         <div style={{display:'grid', gridTemplateColumns: mobile || tablet ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap:12, marginBottom:28}}>
           <KpiCard label="Prom. Global" value={promGlobal ?? '—'} sub={`Prueba ${prueba?.codigo ?? '—'}`} color={C.navy}/>
           <KpiCard label="Estudiantes" value={students.length || '—'} sub="Evaluados" color={C.navy}/>
