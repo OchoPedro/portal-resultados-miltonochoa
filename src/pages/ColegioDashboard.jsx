@@ -928,6 +928,7 @@ export default function ColegioDashboard({session, onLogout}) {
   const tabs = [
     {id:'tablero',          label:'Tablero de Gestión'},
     {id:'niveles',          label:'% Estudiantes por Nivel de Desempeño'},
+    {id:'desv_materias',    label:'Desviación por Materias'},
     {id:'desviacion',       label:'Desviación Competencias'},
     {id:'comp_comparativo', label:'Comparativo Competencias'},
     {id:'competencias',     label:'Notas Estudiantes por Competencias'},
@@ -1032,7 +1033,13 @@ export default function ColegioDashboard({session, onLogout}) {
               filters: true,
               items: [
                 {id:'tablero',       label:'Tablero de Gestión'},
-                {id:'niveles',       label:'% Estudiantes por Nivel de Desempeño'},
+                {
+                  id:'grp_materias', label:'Análisis por Materias', isGroup: true,
+                  children: [
+                    {id:'niveles',       label:'% Estudiantes por Nivel de Desempeño'},
+                    {id:'desv_materias', label:'Desviación por Materias', soon:true},
+                  ]
+                },
                 {
                   id:'grp_comp', label:'Competencias', isGroup: true,
                   children: [
@@ -1225,7 +1232,13 @@ export default function ColegioDashboard({session, onLogout}) {
               filters: true,
               items: [
                 {id:'tablero',       label:'Tablero de Gestión'},
-                {id:'niveles',       label:'% Estudiantes por Nivel de Desempeño'},
+                {
+                  id:'grp_materias', label:'Análisis por Materias', isGroup: true,
+                  children: [
+                    {id:'niveles',       label:'% Estudiantes por Nivel de Desempeño'},
+                    {id:'desv_materias', label:'Desviación por Materias', soon:true},
+                  ]
+                },
                 {
                   id:'grp_comp', label:'Competencias', isGroup: true,
                   children: [
@@ -1402,7 +1415,7 @@ export default function ColegioDashboard({session, onLogout}) {
               timeZone:'America/Bogota'
             })}
           </div>
-          {['tablero','niveles','desviacion','comp_comparativo','competencias','mejora','comp_desviacion','comp_comp2','comp_notas','comp_mejora','listado_notas','detalle_prueba','consolidado','equilibrio'].includes(tab) && (
+          {['tablero','niveles','desv_materias','desviacion','comp_comparativo','competencias','mejora','comp_desviacion','comp_comp2','comp_notas','comp_mejora','listado_notas','detalle_prueba','consolidado','equilibrio'].includes(tab) && (
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:12}}>
               <div>
                 <h1 style={{fontSize:26, fontFamily:'Playfair Display, serif', color:C.navy, marginBottom:4}}>
@@ -1417,7 +1430,7 @@ export default function ColegioDashboard({session, onLogout}) {
         </div>
 
         {/* KPIs — solo para herramientas */}
-        {['tablero','niveles','desviacion','comp_comparativo','competencias','mejora','comp_desviacion','comp_comp2','comp_notas','comp_mejora','listado_notas','detalle_prueba','consolidado','equilibrio'].includes(tab) && (
+        {['tablero','niveles','desv_materias','desviacion','comp_comparativo','competencias','mejora','comp_desviacion','comp_comp2','comp_notas','comp_mejora','listado_notas','detalle_prueba','consolidado','equilibrio'].includes(tab) && (
         <div style={{display:'grid', gridTemplateColumns: mobile || tablet ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap:12, marginBottom:28}}>
           <KpiCard label="Prom. Global" value={promGlobal ?? '—'} sub={`Prueba ${prueba?.codigo ?? '—'}`} color={C.navy}/>
           <KpiCard label="Estudiantes" value={students.length || '—'} sub="Evaluados" color={C.navy}/>
@@ -1427,7 +1440,7 @@ export default function ColegioDashboard({session, onLogout}) {
         </div>
         )}
 
-        {['tablero','niveles','desviacion','comp_comparativo','competencias','mejora','comp_desviacion','comp_comp2','comp_notas','comp_mejora','listado_notas','detalle_prueba','consolidado','equilibrio'].includes(tab) && (
+        {['tablero','niveles','desv_materias','desviacion','comp_comparativo','competencias','mejora','comp_desviacion','comp_comp2','comp_notas','comp_mejora','listado_notas','detalle_prueba','consolidado','equilibrio'].includes(tab) && (
           <TabBar tabs={tabs} active={tab} onChange={setTab}/>
         )}
 
@@ -2045,7 +2058,7 @@ export default function ColegioDashboard({session, onLogout}) {
         )}
 
         {/* ══ PRÓXIMAMENTE ══════════════════════════════════════ */}
-        {['comp_comparativo','comp_desviacion','comp_comp2','comp_notas','comp_mejora','consolidado','equilibrio'].includes(tab) && (
+        {['desv_materias','comp_comparativo','comp_desviacion','comp_comp2','comp_notas','comp_mejora','consolidado','equilibrio'].includes(tab) && (
           <Card>
             <div style={{textAlign:'center', padding:60, display:'flex', flexDirection:'column', alignItems:'center', gap:16}}>
               <div style={{fontSize:48}}>🚧</div>
