@@ -712,6 +712,11 @@ export default function ColegioDashboard({session, onLogout}) {
   const [selectedGrado, setSelectedGrado] = useState('Todos')
   const [selectedSalon, setSelectedSalon] = useState('Todos')
 
+  // Student detail modal
+  const [selectedStudent, setSelectedStudent] = useState(null)
+  const [studentDetalle, setStudentDetalle] = useState(null)
+  const [loadingDetalle, setLoadingDetalle] = useState(false)
+
   // Data states
   const [allStudents, setAllStudents] = useState([])
   const [tableroComp, setTableroComp] = useState([])
@@ -758,6 +763,23 @@ export default function ColegioDashboard({session, onLogout}) {
   useEffect(() => {
     if (selectedPrueba) loadForPrueba(selectedPrueba)
   }, [selectedPrueba])
+
+  // Load student detail when selectedStudent changes
+  useEffect(() => {
+    if (!selectedStudent || !selectedPrueba) return
+    setStudentDetalle(null)
+    setLoadingDetalle(true)
+    supabase
+      .from('resultados_estudiante')
+      .select('detalle')
+      .eq('estudiante_id', selectedStudent.estudiante_id)
+      .eq('prueba_id', selectedPrueba.id)
+      .single()
+      .then(({ data }) => {
+        setStudentDetalle(data?.detalle || [])
+        setLoadingDetalle(false)
+      })
+  }, [selectedStudent, selectedPrueba])
 
   const loadAll = async () => {
     setLoading(true)
@@ -827,7 +849,7 @@ export default function ColegioDashboard({session, onLogout}) {
       // Resultados estudiantes
       const { data: res } = await supabase
         .from('resultados_estudiante')
-        .select('*, estudiantes(nombre, salon, grado)')
+        .select('*, estudiantes(nombre, salon, grado, codigo, usuario)')
         .eq('colegio_id', cid).eq('prueba_id', pid)
         .order('puntaje_global', {ascending: false})
       setAllStudents(res || [])
@@ -3574,6 +3596,124 @@ export default function ColegioDashboard({session, onLogout}) {
         )}
 
       </main>
+
+      {/* ══ STUDENT DETAIL MODAL ════════════════════════════════ */}
+      {selectedStudent && (
+        <div
+          onClick={() => setSelectedStudent(null)}
+          style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.55)',
+            zIndex:1000, display:'flex', alignItems:'flex-start',
+            justifyContent:'center', overflowY:'auto', padding:'24px 16px'}}>
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{background:C.white, borderRadius:10, width:'100%', maxWidth:1100,
+              boxShadow:'0 8px 40px rgba(0,0,0,0.22)', fontFamily:'Inter',
+              overflow:'hidden', marginBottom:24}}>
+
+            {/* Close button */}
+            <div style={{display:'flex', justifyContent:'flex-end', padding:'10px 14px 0',
+              background:C.navy}}>
+              <button
+                onClick={() => setSelectedStudent(null)}
+                style={{background:'transparent', border:'none', color:C.white,
+                  fontSize:22, cursor:'pointer', lineHeight:1, padding:'2px 6px',
+                  borderRadius:4}}>
+                ×
+              </button>
+            </div>
+
+            {/* Header block */}
+            <div style={{background:C.navy, color:C.white, padding:'8px 18px 14px',
+              fontFamily:'Inter', fontSize:11, lineHeight:1.9}}>
+              <div>
+                <strong>Código:</strong> {session?.codigo} &nbsp;|&nbsp;
+                <strong>Nombre:</strong> {session?.nombre} &nbsp;|&nbsp;
+                <strong>Ciudad:</strong> {toTitleCase(session?.municipio)} - {toTitleCase(session?.departamento_nombre)} &nbsp;|&nbsp;
+                <strong>Fecha:</strong> {new Date().toLocaleDateString('es-CO', {day:'2-digit', month:'2-digit', year:'numeric'})}
+              </div>
+              <div>
+                <strong>Producto:</strong> {selectedPrueba?.tipo} &nbsp;|&nbsp;
+                <strong>Prueba:</strong> {selectedPrueba?.codigo}
+              </div>
+              <div>
+                <strong>Usuario:</strong> {selectedStudent.estudiantes?.usuario || '—'} &nbsp;|&nbsp;
+                <strong>Nombre:</strong> {selectedStudent.estudiantes?.nombre || '—'} &nbsp;|&nbsp;
+                <strong>Grado:</strong> {selectedStudent.estudiantes?.grado || '—'} &nbsp;|&nbsp;
+                <strong>Salón:</strong> {selectedStudent.estudiantes?.salon || '—'} &nbsp;|&nbsp;
+                <strong>Est:</strong> {selectedStudent.estudiantes?.codigo || '—'}
+              </div>
+            </div>
+
+            {/* Detail table */}
+            <div style={{padding:'16px', overflowX:'auto'}}>
+              {loadingDetalle ? (
+                <div style={{textAlign:'center', padding:40, color:C.gray, fontSize:13}}>
+                  Cargando respuestas…
+                </div>
+              ) : (() => {
+                const rawRows = selectedPrueba?.estructura_excel?.raw || []
+                const questions = rawRows.slice(2).map(f => ({
+                  sesion:      (f[0] || '').toString().trim(),
+                  nro:         (f[1] || '').toString().trim(),
+                  area:        (f[2] || '').toString().trim(),
+                  materia:     (f[3] || '').toString().trim(),
+                  competencia: (f[6] || '').toString().trim(),
+                  componente:  (f[7] || '').toString().trim(),
+                  tarea:       (f[8] || '').toString().trim(),
+                  rta:         (f[9] || '').toString().trim(),
+                }))
+
+                // Build a map from pregunta number → detalle entry
+                const detalleMap = {}
+                ;(studentDetalle || []).forEach(d => {
+                  detalleMap[String(d.pregunta)] = d
+                })
+
+                const thStyle = {padding:'7px 10px', background:C.navy, color:C.white,
+                  fontSize:11, fontWeight:600, textAlign:'center', whiteSpace:'nowrap',
+                  borderRight:'1px solid rgba(255,255,255,0.12)'}
+                const tdStyle = (bg) => ({padding:'5px 8px', fontSize:11, textAlign:'center',
+                  borderBottom:`1px solid ${C.bg2}`, background: bg || C.white})
+
+                return (
+                  <table style={{borderCollapse:'collapse', fontFamily:'Inter', fontSize:12, width:'100%', minWidth:700}}>
+                    <thead>
+                      <tr>
+                        {['Sesión','No','Área','Materia','Competencia','Componente','Tarea','Rta','Est'].map(h => (
+                          <th key={h} style={{...thStyle, textAlign: ['Competencia','Componente','Tarea','Materia','Área'].includes(h) ? 'left' : 'center'}}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {questions.map((q, i) => {
+                        const d = detalleMap[q.nro]
+                        const correcto = d?.correcto
+                        const cellBg = correcto === true ? '#DCFCE7' : correcto === false ? '#FEE2E2' : null
+                        const cellColor = correcto === true ? C.green : correcto === false ? C.red : C.dark
+                        const rowBg = i % 2 === 0 ? C.white : '#F8FAFC'
+                        return (
+                          <tr key={i}>
+                            <td style={tdStyle(rowBg)}>{q.sesion}</td>
+                            <td style={tdStyle(rowBg)}>{q.nro}</td>
+                            <td style={{...tdStyle(rowBg), textAlign:'left', whiteSpace:'nowrap'}}>{q.area}</td>
+                            <td style={{...tdStyle(rowBg), textAlign:'left', whiteSpace:'nowrap'}}>{q.materia}</td>
+                            <td style={{...tdStyle(rowBg), textAlign:'left', maxWidth:180, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{q.competencia}</td>
+                            <td style={{...tdStyle(rowBg), textAlign:'left', maxWidth:180, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{q.componente}</td>
+                            <td style={{...tdStyle(rowBg), textAlign:'left', maxWidth:180, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{q.tarea}</td>
+                            <td style={{...tdStyle(cellBg), color:cellColor, fontWeight:700}}>{q.rta || '—'}</td>
+                            <td style={{...tdStyle(cellBg), color:cellColor, fontWeight:700}}>{d?.marcada || '—'}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                )
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
