@@ -539,7 +539,7 @@ function ModalEquilibrio({ referencia, onClose }) {
   // Valores únicos de competencia, componente y dificultad
   const competencias = [...new Set(rowsFiltradas.map(r => String(r[iCompetencia] ?? '')).filter(Boolean))].sort()
   const componentes  = [...new Set(rowsFiltradas.map(r => String(r[iComponente] ?? '')).filter(Boolean))].sort()
-  const dificultades = ['Alto', 'Básico', 'Bajo', 'Superior'].filter(d =>
+  const dificultades = ['Bajo', 'Básico', 'Alto', 'Superior'].filter(d =>
     rowsFiltradas.some(r => String(r[iDificultad] ?? '') === d)
   )
 
