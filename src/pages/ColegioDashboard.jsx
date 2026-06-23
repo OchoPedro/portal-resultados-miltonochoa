@@ -2520,46 +2520,47 @@ export default function ColegioDashboard({session, onLogout}) {
 
         {/* ══ OPORTUNIDADES ════════════════════════════════════ */}
         {tab==='mejora' && (() => {
-          // Mapeo materia → área desde el Excel de la prueba
+          // Mapeo materia → área desde el Excel de la prueba (f[2]=Área, f[3]=Asignatura)
           const matAreaMap = {}
           const rawRows = selectedPrueba?.estructura_excel?.raw || []
           rawRows.slice(2).forEach(f => {
-            const area = (f[3] || '').toString().trim()
-            const mat  = (f[4] || '').toString().trim()
+            const area = (f[2] || '').toString().trim()
+            const mat  = (f[3] || '').toString().trim()
             if (area && mat) matAreaMap[mat] = area
           })
 
-          const areas = ['Todas', ...new Set(Object.values(matAreaMap))]
+          const todasAreas = [...new Set(Object.values(matAreaMap))]
+          // Área sin opción "Todas" — por defecto la primera
+          const areaActual = todasAreas.includes(mejoraArea) ? mejoraArea : (todasAreas[0] || '')
+
           const todasAsigs = [...new Set(compGestion.map(r => r.materia))]
-          const asigsFiltradas = mejoraArea === 'Todas'
-            ? todasAsigs
-            : todasAsigs.filter(m => matAreaMap[m] === mejoraArea)
-          const asignaturas = ['Todas', ...asigsFiltradas]
-          // Si el área cambió y la asignatura actual no aplica, resetear
+          const asigsFiltradas = todasAsigs.filter(m => matAreaMap[m] === areaActual)
+          // Asignatura sí tiene "Todas"
           const asigActual = (mejoraAsig === 'Todas' || !asigsFiltradas.includes(mejoraAsig))
-            ? (asigsFiltradas[0] || 'Todas')
+            ? 'Todas'
             : mejoraAsig
 
-          // Límites dinámicos según la asignatura seleccionada
-          const compRows = compGestion.filter(r => r.materia === asigActual)
-          const maxNacProm = compRows.length > 0 ? Math.max(...compRows.map(r => r.nac_prom || 0)) : 0
+          // Límites dinámicos — usa el max nac_prom entre todas las asigs del área
+          const compRowsArea = compGestion.filter(r => asigsFiltradas.includes(r.materia))
+          const maxNacProm = compRowsArea.length > 0 ? Math.max(...compRowsArea.map(r => r.nac_prom || 0)) : 0
           const maxLimite = Math.floor((100 - maxNacProm) / 5) * 5
           const limites = []
           for (let v = 0; v <= maxLimite; v += 5) limites.push(v)
           const limiteActual = Math.min(mejoraLimite, maxLimite)
 
-          // Filas base
+          // Filas: filtra por asignatura seleccionada o todas las del área
+          const materiasFicha = asigActual === 'Todas' ? asigsFiltradas : [asigActual]
           const filasBase = compGestion
-            .filter(r => r.materia === asigActual)
+            .filter(r => materiasFicha.includes(r.materia))
             .map(r => {
               const umbral = (r.nac_prom || 0) + limiteActual
-              const notasDeComp = notasComp.filter(n => n.materia === asigActual && n.competencia === r.competencia)
+              const notasDeComp = notasComp.filter(n => n.materia === r.materia && n.competencia === r.competencia)
               const total = notasDeComp.length
               const encima = notasDeComp.filter(n => n.nota > umbral).length
               const debajo = total - encima
               const pctEncima = total > 0 ? Math.round((encima / total) * 100) : 0
               const pctDebajo = total > 0 ? Math.round((debajo / total) * 100) : 0
-              return { competencia: r.competencia, nacProm: r.nac_prom || 0, umbral, total, encima, debajo, pctEncima, pctDebajo }
+              return { materia: r.materia, competencia: r.competencia, nacProm: r.nac_prom || 0, umbral, total, encima, debajo, pctEncima, pctDebajo }
             })
 
           // Ordenamiento por columna
@@ -2592,14 +2593,14 @@ export default function ColegioDashboard({session, onLogout}) {
                 <div style={{display:'flex', alignItems:'center', gap:12, flexWrap:'wrap'}}>
                   <div style={{display:'flex', alignItems:'center', gap:8}}>
                     <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Área:</span>
-                    <select value={mejoraArea} onChange={e => { setMejoraArea(e.target.value); setMejoraAsig('Todas') }} style={selStyle}>
-                      {areas.map(a => <option key={a} value={a}>{a}</option>)}
+                    <select value={areaActual} onChange={e => { setMejoraArea(e.target.value); setMejoraAsig('Todas') }} style={selStyle}>
+                      {todasAreas.map(a => <option key={a} value={a}>{a}</option>)}
                     </select>
                   </div>
                   <div style={{display:'flex', alignItems:'center', gap:8}}>
                     <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Asignatura:</span>
-                    <select value={mejoraAsig === 'Todas' || !asigsFiltradas.includes(mejoraAsig) ? asigActual : mejoraAsig}
-                      onChange={e => setMejoraAsig(e.target.value)} style={selStyle}>
+                    <select value={asigActual} onChange={e => setMejoraAsig(e.target.value)} style={selStyle}>
+                      <option value="Todas">Todas</option>
                       {asigsFiltradas.map(a => <option key={a} value={a}>{a}</option>)}
                     </select>
                   </div>
@@ -2612,7 +2613,7 @@ export default function ColegioDashboard({session, onLogout}) {
                 </div>
               </div>
 
-              {asigActual === 'Todas' || filas.length === 0 ? (
+              {filas.length === 0 ? (
                 <div style={{textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter', fontSize:13}}>
                   Sin datos para los filtros seleccionados.
                 </div>
@@ -2635,6 +2636,11 @@ export default function ColegioDashboard({session, onLogout}) {
                     <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter', fontSize:12}}>
                       <thead>
                         <tr>
+                          {asigActual === 'Todas' && (
+                            <th style={thSt} onClick={() => handleSort('materia')}>
+                              Asignatura{arrow('materia')}
+                            </th>
+                          )}
                           <th style={thSt} onClick={() => handleSort('competencia')}>
                             Competencia{arrow('competencia')}
                           </th>
@@ -2659,6 +2665,9 @@ export default function ColegioDashboard({session, onLogout}) {
                       <tbody>
                         {filas.map((f, i) => (
                           <tr key={i} style={{background: i%2===0 ? C.white : C.bg2, borderBottom:`1px solid ${C.bg2}`}}>
+                            {asigActual === 'Todas' && (
+                              <td style={{padding:'8px 12px', color:C.gray, fontSize:11}}>{f.materia}</td>
+                            )}
                             <td style={{padding:'8px 12px', color:C.dark, fontWeight:500, maxWidth:280}}>
                               {f.competencia}
                             </td>
