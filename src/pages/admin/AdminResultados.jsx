@@ -25,14 +25,15 @@ const ASIG_COLUMNA = {
   'Competencias Ciudadanas':'ciudadanas', 'Lectura Crítica':'lectura_critica', 'Inglés':'ingles',
 }
 
-function calcularResultado(respuestasEstudiante, clave, areas, asignaturas, competencias) {
-  const detalle = [], porArea = {}, porAsig = {}, porComp = {}
+function calcularResultado(respuestasEstudiante, clave, areas, asignaturas, competencias, componentes) {
+  const detalle = [], porArea = {}, porAsig = {}, porComp = {}, porCompN = {}
   for (let i = 0; i < clave.length; i++) {
     const marcada = (respuestasEstudiante[i] || 'X').toUpperCase()
     const correcta = (clave[i] || '').toUpperCase()
     const area = areas?.[i] || 'Sin área'
     const asignatura = asignaturas?.[i] || ''
     const competencia = competencias?.[i] || ''
+    const componente = componentes?.[i] || ''
     const esCorrecto = marcada === correcta && marcada !== 'X'
     if (!porArea[area]) porArea[area] = { correctas:0, total:0, peso: PESOS_AREA[area] || 1 }
     porArea[area].total++; if (esCorrecto) porArea[area].correctas++
@@ -42,6 +43,11 @@ function calcularResultado(respuestasEstudiante, clave, areas, asignaturas, comp
       const key = `${asignatura}|${competencia}`
       if (!porComp[key]) porComp[key] = { correctas:0, total:0, asignatura, competencia }
       porComp[key].total++; if (esCorrecto) porComp[key].correctas++
+    }
+    if (asignatura && componente) {
+      const key = `${asignatura}|${componente}`
+      if (!porCompN[key]) porCompN[key] = { correctas:0, total:0, asignatura, componente }
+      porCompN[key].total++; if (esCorrecto) porCompN[key].correctas++
     }
     detalle.push({ pregunta:i+1, marcada, correcta, correcto:esCorrecto, area, asignatura })
   }
@@ -57,7 +63,7 @@ function calcularResultado(respuestasEstudiante, clave, areas, asignaturas, comp
     const col = ASIG_COLUMNA[asig]
     if (col) pctAsig[col] = d.total > 0 ? Math.round((d.correctas / d.total) * 100) : 0
   }
-  return { correctas, total:clave.length, puntaje:Math.round(porcentaje * 5), porcentaje, detalle, porArea, pctAsig, porComp }
+  return { correctas, total:clave.length, puntaje:Math.round(porcentaje * 5), porcentaje, detalle, porArea, pctAsig, porComp, porCompN }
 }
 
 function parsearTXT(texto) {
@@ -198,7 +204,7 @@ Responde ÚNICAMENTE con JSON válido sin explicaciones:
 }
 
 // ── Buscar estudiantes y calcular resultados ──────────────
-async function procesarResultados(estudiantesLeidos, clave, areas, asignaturas, competencias, colegioId, pruebaId) {
+async function procesarResultados(estudiantesLeidos, clave, areas, asignaturas, competencias, colegioId, pruebaId, componentes) {
   const documentos = estudiantesLeidos.map(e => e.documento).filter(Boolean)
   const { data: estudiantesDB } = await supabase
     .from('estudiantes').select('id,nombre,usuario,grado,salon,colegio_id')
@@ -206,7 +212,7 @@ async function procesarResultados(estudiantesLeidos, clave, areas, asignaturas, 
 
   const filas = estudiantesLeidos.map(e => {
     const est = estudiantesDB?.find(db => db.usuario === e.documento)
-    const calc = calcularResultado(e.respuestas, clave, areas, asignaturas, competencias)
+    const calc = calcularResultado(e.respuestas, clave, areas, asignaturas, competencias, componentes)
     return { documento:e.documento, respuestas:e.respuestas, encontrado:!!est, estudiante:est||null,
       tieneS1:e.tieneS1, tieneS2:e.tieneS2, ...calc }
   })
@@ -329,6 +335,7 @@ export default function AdminResultados({ onUpdate }) {
       areas:        raw.slice(2).map(f => (f[2]||'').toString().trim()),
       asignaturas:  raw.slice(2).map(f => (f[3]||'').toString().trim()),
       competencias: raw.slice(2).map(f => (f[6]||'').toString().trim()),
+      componentes:  raw.slice(2).map(f => (f[7]||'').toString().trim()),
       prueba,
     }
   }
@@ -344,7 +351,7 @@ export default function AdminResultados({ onUpdate }) {
       const filasTXT = parsearTXT(await archivo.text())
       if (!filasTXT.length) { setError('El archivo no tiene líneas válidas.'); return }
       const estudiantesLeidos = filasTXT.map(f => ({ documento:f.documento, respuestas:f.respuestas, tieneS1:true, tieneS2:true }))
-      const filas = await procesarResultados(estudiantesLeidos, kd.clave, kd.areas, kd.asignaturas, kd.competencias, colegioId, pruebaId)
+      const filas = await procesarResultados(estudiantesLeidos, kd.clave, kd.areas, kd.asignaturas, kd.competencias, colegioId, pruebaId, kd.componentes)
       setPreview({ clave:kd.clave, filas, prueba:kd.prueba, via:'optico' })
     } catch(e) { setError('Error: ' + e.message) }
     finally { setProcesando(false) }
@@ -364,7 +371,7 @@ export default function AdminResultados({ onUpdate }) {
 
       setProgreso({ actual:1, total:1, msg:'📊 Agrupando y calculando resultados…' })
       const estudiantesLeidos = agruparPorEstudiante(todasLasPaginas)
-      const filas = await procesarResultados(estudiantesLeidos, kd.clave, kd.areas, kd.asignaturas, kd.competencias, colegioId, pruebaId)
+      const filas = await procesarResultados(estudiantesLeidos, kd.clave, kd.areas, kd.asignaturas, kd.competencias, colegioId, pruebaId, kd.componentes)
 
       setProgreso({ actual:1, total:1, msg:`✅ ${filas.length} estudiante(s) detectados` })
       setPreview({ clave:kd.clave, filas, prueba:kd.prueba, via:'pdf', paginasNoLeidas:todasLasPaginas.filter(p=>!p.usuario).length })
@@ -400,7 +407,7 @@ export default function AdminResultados({ onUpdate }) {
 
       setProgreso({ actual:total, total, msg:'📊 Agrupando y calculando resultados…' })
       const estudiantesLeidos = agruparPorEstudiante(todasLasPaginas)
-      const filas = await procesarResultados(estudiantesLeidos, kd.clave, kd.areas, kd.asignaturas, kd.competencias, colegioId, pruebaId)
+      const filas = await procesarResultados(estudiantesLeidos, kd.clave, kd.areas, kd.asignaturas, kd.competencias, colegioId, pruebaId, kd.componentes)
 
       setProgreso({ actual:total, total, msg:`✅ ${filas.length} estudiante(s) detectados` })
       setPreview({ clave:kd.clave, filas, prueba:kd.prueba, via:'fotos', paginasNoLeidas:todasLasPaginas.filter(p=>!p.usuario).length })
@@ -427,7 +434,7 @@ export default function AdminResultados({ onUpdate }) {
     setProcesando(true)
     try {
       const estudiantesLeidos = [{ documento:manualDoc, respuestas, tieneS1:true, tieneS2:true }]
-      const filas = await procesarResultados(estudiantesLeidos, kd.clave, kd.areas, kd.asignaturas, kd.competencias, colegioId, pruebaId)
+      const filas = await procesarResultados(estudiantesLeidos, kd.clave, kd.areas, kd.asignaturas, kd.competencias, colegioId, pruebaId, kd.componentes)
       setPreview({ clave:kd.clave, filas, prueba:kd.prueba, via:'manual' })
     } catch(e) { setError('Error: ' + e.message) }
     finally { setProcesando(false) }
@@ -467,6 +474,20 @@ export default function AdminResultados({ onUpdate }) {
           if (compRows.length) {
             await supabase.from('notas_competencia')
               .upsert(compRows, { onConflict: 'estudiante_id,prueba_id,materia,competencia' })
+          }
+          const compNRows = Object.values(f.porCompN || {})
+            .filter(c => c.asignatura && c.componente)
+            .map(c => ({
+              estudiante_id: f.estudiante.id,
+              prueba_id: pruebaId,
+              materia: c.asignatura,
+              componente: c.componente,
+              nota: c.total > 0 ? Math.round((c.correctas / c.total) * 100) : 0,
+              preguntas: c.total,
+            }))
+          if (compNRows.length) {
+            await supabase.from('notas_componente')
+              .upsert(compNRows, { onConflict: 'estudiante_id,prueba_id,materia,componente' })
           }
         }
       }

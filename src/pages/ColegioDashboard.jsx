@@ -721,6 +721,10 @@ export default function ColegioDashboard({session, onLogout}) {
   const [compAsigFilter, setCompAsigFilter] = useState('Todas')
   const [notasComp, setNotasComp] = useState([])
   const [notasCompAsig, setNotasCompAsig] = useState('Todas')
+  const [notasCompN, setNotasCompN] = useState([])
+  const [notasCompNAsig, setNotasCompNAsig] = useState('Todas')
+  const [compNGestion, setCompNGestion] = useState([])
+  const [compNAsigFilter, setCompNAsigFilter] = useState('Todas')
   const [oportunidades, setOportunidades] = useState([])
   const [detallePreguntas, setDetallePreguntas] = useState([])
   const [allPruebasPromedio, setAllPruebasPromedio] = useState([])
@@ -861,7 +865,7 @@ export default function ColegioDashboard({session, onLogout}) {
       const firstMat = cgData?.length ? cgData[0].materia : 'Todas'
       setCompAsigFilter(firstMat)
 
-      // Notas estudiantes por competencia
+      // Notas por competencia
       const { data: nc } = await supabase
         .from('notas_competencia')
         .select('estudiante_id, materia, competencia, nota, preguntas')
@@ -870,6 +874,24 @@ export default function ColegioDashboard({session, onLogout}) {
         .order('materia').order('competencia').order('nota')
       setNotasComp(nc || [])
       setNotasCompAsig('Todas')
+
+      // Notas por componente
+      const { data: ncn } = await supabase
+        .from('notas_componente')
+        .select('estudiante_id, materia, componente, nota, preguntas')
+        .in('estudiante_id', (res||[]).map(r => r.estudiante_id))
+        .eq('prueba_id', pid)
+        .order('materia').order('componente').order('nota')
+      setNotasCompN(ncn || [])
+      setNotasCompNAsig('Todas')
+
+      // Desviación componentes (comparativo geográfico)
+      const { data: cgnData } = await supabase.rpc('get_componentes_gestion', {
+        p_prueba_id: pid, p_colegio_id: cid,
+      })
+      setCompNGestion(cgnData || [])
+      const firstMatN = cgnData?.length ? cgnData[0].materia : 'Todas'
+      setCompNAsigFilter(firstMatN)
 
       // Oportunidades
       const { data: opor } = await supabase
@@ -1170,7 +1192,7 @@ export default function ColegioDashboard({session, onLogout}) {
                 {
                   id:'grp_compon', label:'Componentes', isGroup: true,
                   children: [
-                    {id:'comp_desviacion', label:'Desviación Componentes',            soon:true},
+                    {id:'comp_desviacion', label:'Desviación Componentes'},
                     {id:'comp_comp2',      label:'Comparativo Componentes',           soon:true},
                     {id:'comp_notas',      label:'Notas Estudiantes por Competencias'},
                     {id:'comp_mejora',     label:'Oportunidad de Mejoramiento',       soon:true},
@@ -1370,7 +1392,7 @@ export default function ColegioDashboard({session, onLogout}) {
                 {
                   id:'grp_compon', label:'Componentes', isGroup: true,
                   children: [
-                    {id:'comp_desviacion', label:'Desviación Componentes',            soon:true},
+                    {id:'comp_desviacion', label:'Desviación Componentes'},
                     {id:'comp_comp2',      label:'Comparativo Componentes',           soon:true},
                     {id:'comp_notas',      label:'Notas Estudiantes por Competencias'},
                     {id:'comp_mejora',     label:'Oportunidad de Mejoramiento',       soon:true},
@@ -2898,8 +2920,228 @@ export default function ColegioDashboard({session, onLogout}) {
           </div>
         )}
 
+        {/* ══ DESVIACIÓN COMPONENTES ═══════════════════════════ */}
+        {tab==='comp_desviacion' && (() => {
+          const dptoNombre   = toTitleCase(session?.departamento_nombre) || 'Dpto.'
+          const ciudadNombre = toTitleCase(session?.municipio) || 'Ciudad'
+          const asignaturas  = ['Todas', ...new Set(compNGestion.map(r => r.materia)).values()]
+          const filas        = compNAsigFilter === 'Todas' ? compNGestion : compNGestion.filter(r => r.materia === compNAsigFilter)
+          const fmtVal       = v => v != null ? Math.round(v) : '—'
+
+          const ColHeader = ({label, sub}) => (
+            <th colSpan={2} style={{padding:'8px 10px', textAlign:'center', background:'#1E3A5F',
+              color:'white', fontSize:11, fontWeight:700, borderRight:'2px solid rgba(255,255,255,0.15)',
+              borderBottom:'1px solid rgba(255,255,255,0.2)', whiteSpace:'nowrap'}}>
+              {label}{sub && <div style={{fontSize:9,fontWeight:400,opacity:0.7,marginTop:1}}>{sub}</div>}
+            </th>
+          )
+
+          return students.length === 0 ? <EmptyState/> : (
+            <div style={{display:'grid', gap:16}}>
+              <Card>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start',
+                  flexWrap:'wrap', gap:12, marginBottom:20}}>
+                  <CardTitle sub="Promedio y desviación por componente vs referentes geográficos">
+                    Desviación por Componentes
+                  </CardTitle>
+                  <div style={{display:'flex', alignItems:'center', gap:8}}>
+                    <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Asignatura:</span>
+                    <select value={compNAsigFilter} onChange={e=>setCompNAsigFilter(e.target.value)}
+                      style={{padding:'6px 10px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+                        fontFamily:'Inter', fontSize:12, color:C.text, background:C.white, outline:'none', cursor:'pointer'}}>
+                      {asignaturas.map(a => <option key={a} value={a}>{a}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {filas.length > 0 && compNAsigFilter === 'Todas' && (
+                  <div style={{display:'flex', alignItems:'center', justifyContent:'center',
+                    height:120, background:C.bg2, borderRadius:10, marginBottom:24,
+                    color:C.gray, fontFamily:'Inter', fontSize:13, gap:8}}>
+                    <span style={{fontSize:20}}>📊</span>
+                    Selecciona una asignatura para ver la gráfica de componentes
+                  </div>
+                )}
+
+                {filas.length > 0 && compNAsigFilter !== 'Todas' && (() => {
+                  const SCOPES = [
+                    {sfx:'nac',  color:C.green,   label:'Nacional',    promKey:'nac_prom',    desvKey:'nac_desv'},
+                    {sfx:'dpto', color:'#D62839',  label:dptoNombre,   promKey:'dpto_prom',   desvKey:'dpto_desv'},
+                    {sfx:'ciu',  color:'#E8A317',  label:ciudadNombre, promKey:'ciudad_prom', desvKey:'ciudad_desv'},
+                    {sfx:'pln',  color:'#1E88E5',  label:'Plantel',    promKey:'plantel_prom',desvKey:'plantel_desv'},
+                  ]
+                  const clamp = v => Math.max(0, Math.min(100, Math.round(v)))
+                  const chartData = filas.map(r => {
+                    const entry = { name: r.componente }
+                    SCOPES.forEach(({sfx, promKey, desvKey}) => {
+                      const prom = r[promKey], desv = r[desvKey]
+                      if (prom == null) { entry[`${sfx}_base`]=0; entry[`${sfx}_rng`]=0; entry[`${sfx}_lo`]=null; entry[`${sfx}_hi`]=null }
+                      else if (desv == null) { entry[`${sfx}_base`]=0; entry[`${sfx}_rng`]=clamp(prom); entry[`${sfx}_lo`]=null; entry[`${sfx}_hi`]=clamp(prom) }
+                      else { const lo=clamp(prom-desv),hi=clamp(prom+desv); entry[`${sfx}_base`]=lo; entry[`${sfx}_rng`]=hi-lo; entry[`${sfx}_lo`]=lo; entry[`${sfx}_hi`]=hi }
+                    })
+                    return entry
+                  })
+                  const XTick = ({x,y,payload}) => {
+                    const words=(payload.value||'').split(' '), mid=Math.ceil(words.length/2)
+                    return <g transform={`translate(${x},${y+4})`}><text textAnchor="middle" fontFamily="Inter" fontSize={11} fill={C.gray}><tspan x={0} dy={10}>{words.slice(0,mid).join(' ')}</tspan>{words.slice(mid).join(' ')&&<tspan x={0} dy={14}>{words.slice(mid).join(' ')}</tspan>}</text></g>
+                  }
+                  return (
+                    <div style={{marginBottom:28, overflowX:'auto'}}>
+                      <div style={{minWidth:Math.max(560,filas.length*170)}}>
+                        <ResponsiveContainer width="100%" height={400}>
+                          <BarChart data={chartData} barCategoryGap="30%" barGap={2} margin={{top:24,right:16,bottom:20,left:4}}>
+                            <CartesianGrid strokeDasharray="3 3" stroke={C.bg2} vertical={false}/>
+                            <XAxis dataKey="name" tick={<XTick/>} interval={0} height={52}/>
+                            <YAxis tick={{fontSize:10,fontFamily:'Inter',fill:C.gray}} domain={[0,100]} width={28}/>
+                            <Tooltip contentStyle={{fontFamily:'Inter',fontSize:11,borderRadius:8,border:`1px solid ${C.grayLt}`}}/>
+                            <Legend wrapperStyle={{fontFamily:'Inter',fontSize:12,paddingTop:6}}/>
+                            {SCOPES.map(({sfx,color,label:lbl}) => [
+                              <Bar key={`${sfx}_base`} dataKey={`${sfx}_base`} stackId={sfx} fill="transparent" legendType="none" isAnimationActive={false}/>,
+                              <Bar key={`${sfx}_rng`} dataKey={`${sfx}_rng`} stackId={sfx} fill={color} radius={[3,3,0,0]} name={lbl} maxBarSize={36} isAnimationActive={false}>
+                                <LabelList dataKey={`${sfx}_hi`} position="insideTop" style={{fontSize:9,fontFamily:'Inter',fill:'white',fontWeight:700}} formatter={v=>v!=null?v:''}/>
+                                <LabelList dataKey={`${sfx}_lo`} position="insideBottom" style={{fontSize:9,fontFamily:'Inter',fill:'white',fontWeight:700}} formatter={v=>v!=null?v:''}/>
+                              </Bar>
+                            ])}
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <p style={{fontFamily:'Inter',fontSize:10,color:C.gray,textAlign:'center',marginTop:4}}>
+                        Cada barra muestra el rango promedio ± desviación estándar del grupo.
+                      </p>
+                    </div>
+                  )
+                })()}
+
+                {/* Tabla */}
+                {filas.length === 0 ? (
+                  <div style={{textAlign:'center',padding:40,color:C.gray,fontFamily:'Inter',fontSize:13}}>Sin datos de componentes para esta asignatura.</div>
+                ) : (
+                  <div style={{overflowX:'auto'}}>
+                    <table style={{width:'100%',borderCollapse:'collapse',fontFamily:'Inter',fontSize:12}}>
+                      <thead>
+                        <tr>
+                          <th rowSpan={2} style={{padding:'8px 10px',textAlign:'left',background:'#1E3A5F',color:'white',fontSize:11,fontWeight:700,borderRight:'1px solid rgba(255,255,255,0.1)'}}>Materia</th>
+                          <th rowSpan={2} style={{padding:'8px 10px',textAlign:'left',background:'#1E3A5F',color:'white',fontSize:11,fontWeight:700,borderRight:'2px solid rgba(255,255,255,0.2)'}}>Componente</th>
+                          <ColHeader label="Colombia"/>
+                          <ColHeader label="Región"/>
+                          <ColHeader label={dptoNombre}/>
+                          <ColHeader label={ciudadNombre}/>
+                          <ColHeader label="Plantel" sub="(este colegio)"/>
+                        </tr>
+                        <tr>
+                          {['nac','reg','dpto','ciudad','plantel'].map(s => [
+                            <th key={`${s}p`} style={{padding:'6px 8px',textAlign:'center',background:'#263f5a',color:'rgba(255,255,255,0.85)',fontSize:10,fontWeight:600}}>Prom</th>,
+                            <th key={`${s}d`} style={{padding:'6px 8px',textAlign:'center',background:'#263f5a',color:'rgba(255,255,255,0.85)',fontSize:10,fontWeight:600,borderRight:'2px solid rgba(255,255,255,0.15)'}}>Desv</th>,
+                          ])}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filas.map((r,i) => {
+                          const promVal = r.plantel_prom
+                          return (
+                            <tr key={i} style={{background:i%2===0?C.white:C.bg2,borderBottom:`1px solid ${C.bg2}`}}>
+                              <td style={{padding:'7px 10px',color:C.dark,fontWeight:500,borderRight:`1px solid ${C.bg2}`}}>{r.materia}</td>
+                              <td style={{padding:'7px 10px',color:C.text,borderRight:`2px solid ${C.bg2}`}}>{r.componente}</td>
+                              {[
+                                [r.nac_prom,r.nac_desv],[r.reg_prom,r.reg_desv],
+                                [r.dpto_prom,r.dpto_desv],[r.ciudad_prom,r.ciudad_desv],
+                              ].map(([p,d],j) => [
+                                <td key={`p${j}`} style={{padding:'7px 8px',textAlign:'center',color:C.gray}}>{fmtVal(p)}</td>,
+                                <td key={`d${j}`} style={{padding:'7px 8px',textAlign:'center',color:C.gray,borderRight:`2px solid ${C.bg2}`}}>{fmtVal(d)}</td>,
+                              ])}
+                              <td style={{padding:'7px 8px',textAlign:'center',fontWeight:700,
+                                background:promVal!=null?semaforoBg(promVal,'_'):'transparent',
+                                color:promVal!=null?semaforoColor(promVal,'_'):C.gray}}>
+                                {fmtVal(promVal)}
+                              </td>
+                              <td style={{padding:'7px 8px',textAlign:'center',color:C.gray}}>{fmtVal(r.plantel_desv)}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </Card>
+            </div>
+          )
+        })()}
+
+        {/* ══ NOTAS ESTUDIANTES POR COMPONENTES ════════════════ */}
+        {tab==='comp_notas' && (() => {
+          const estMap = {}
+          allStudents.forEach(s => { if (s.estudiantes) estMap[s.estudiante_id] = s.estudiantes })
+          const asignaturas = ['Todas', ...new Set(notasCompN.map(r => r.materia))]
+          const filas = notasCompN.filter(r => {
+            const est = estMap[r.estudiante_id]
+            if (!est) return false
+            if (selectedGrado !== 'Todos' && est.grado !== selectedGrado) return false
+            if (selectedSalon !== 'Todos' && est.salon !== selectedSalon) return false
+            if (notasCompNAsig !== 'Todas' && r.materia !== notasCompNAsig) return false
+            return true
+          })
+          const thSt = {padding:'8px 10px',textAlign:'left',background:'#1E3A5F',color:'white',fontSize:11,fontWeight:700,whiteSpace:'nowrap',borderBottom:'1px solid rgba(255,255,255,0.15)'}
+          const thNum = {...thSt, textAlign:'center'}
+          return students.length === 0 ? <EmptyState/> : (
+            <Card>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:12,marginBottom:20}}>
+                <CardTitle sub={`${filas.length} registros`}>Notas Estudiantes por Componentes</CardTitle>
+                <div style={{display:'flex',alignItems:'center',gap:8}}>
+                  <span style={{fontSize:11,color:C.gray,fontFamily:'Inter'}}>Materia:</span>
+                  <select value={notasCompNAsig} onChange={e=>setNotasCompNAsig(e.target.value)}
+                    style={{padding:'6px 10px',border:`1px solid ${C.grayLt}`,borderRadius:6,fontFamily:'Inter',fontSize:12,color:C.text,background:C.white,outline:'none',cursor:'pointer'}}>
+                    {asignaturas.map(a=><option key={a} value={a}>{a}</option>)}
+                  </select>
+                </div>
+              </div>
+              {filas.length === 0 ? (
+                <div style={{textAlign:'center',padding:40,color:C.gray,fontFamily:'Inter',fontSize:13}}>Sin datos para los filtros seleccionados.</div>
+              ) : (
+                <div style={{overflowX:'auto'}}>
+                  <table style={{width:'100%',borderCollapse:'collapse',fontFamily:'Inter',fontSize:12}}>
+                    <thead>
+                      <tr>
+                        <th style={thSt}>Estudiante</th>
+                        <th style={thNum}>Grado</th>
+                        <th style={thNum}>Salón</th>
+                        <th style={thSt}>Materia</th>
+                        <th style={thSt}>Componente</th>
+                        <th style={thNum}>Nota</th>
+                        <th style={thNum}>Preguntas</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filas.map((r,i) => {
+                        const est = estMap[r.estudiante_id] || {}
+                        const nota = r.nota!=null ? Math.round(r.nota*100)/100 : null
+                        const bg = nota!=null ? semaforoBg(nota,'_') : C.bg2
+                        const fg = nota!=null ? semaforoColor(nota,'_') : C.gray
+                        return (
+                          <tr key={i} style={{background:i%2===0?C.white:C.bg2,borderBottom:`1px solid ${C.bg2}`}}>
+                            <td style={{padding:'7px 10px',color:C.dark,fontWeight:500}}>{est.nombre||'—'}</td>
+                            <td style={{padding:'7px 10px',textAlign:'center',color:C.gray}}>{est.grado??'—'}</td>
+                            <td style={{padding:'7px 10px',textAlign:'center',color:C.gray}}>{est.salon??'—'}</td>
+                            <td style={{padding:'7px 10px',color:C.text}}>{r.materia}</td>
+                            <td style={{padding:'7px 10px',color:C.text}}>{r.componente}</td>
+                            <td style={{padding:'7px 10px',textAlign:'center'}}>
+                              <span style={{display:'inline-block',minWidth:52,padding:'2px 8px',borderRadius:20,background:bg,color:fg,fontWeight:700,fontSize:12}}>
+                                {nota!=null?nota.toFixed(2):'—'}
+                              </span>
+                            </td>
+                            <td style={{padding:'7px 10px',textAlign:'center',color:C.gray}}>{r.preguntas??'—'}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Card>
+          )
+        })()}
+
         {/* ══ PRÓXIMAMENTE ══════════════════════════════════════ */}
-        {['comp_comparativo','comp_desviacion','comp_comp2','comp_notas','comp_mejora','consolidado','equilibrio'].includes(tab) && (
+        {['comp_comparativo','comp_comp2','comp_mejora','consolidado','equilibrio'].includes(tab) && (
           <Card>
             <div style={{textAlign:'center', padding:60, display:'flex', flexDirection:'column', alignItems:'center', gap:16}}>
               <div style={{fontSize:48}}>🚧</div>
