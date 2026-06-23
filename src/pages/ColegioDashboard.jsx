@@ -1677,7 +1677,8 @@ export default function ColegioDashboard({session, onLogout}) {
         <div style={{display:'grid', gridTemplateColumns: mobile || tablet ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap:12, marginBottom:28}}>
           <KpiCard label="Prom. Global" value={promGlobal ?? '—'} sub={`Prueba ${prueba?.codigo ?? '—'}`} color={C.navy}/>
           <KpiCard label="Estudiantes" value={students.length || '—'} sub="Evaluados" color={C.navy}/>
-          <KpiCard label="Mejor puntaje" value={maxStudent?.puntaje_global ?? '—'}
+          <KpiCard label="Mejor puntaje"
+            value={maxStudent ? (maxStudent.puntaje_irt?.global ?? maxStudent.puntaje_global ?? '—') : '—'}
             sub={maxStudent?.estudiantes?.nombre?.split(' ').slice(0,2).join(' ') || 'Sin datos'} color={C.green}/>
           <KpiCard label="Oport. mejora" value={oportunidades.length || '—'} sub="Preguntas críticas" color={C.red}/>
         </div>
@@ -3090,15 +3091,24 @@ export default function ColegioDashboard({session, onLogout}) {
             document.addEventListener('mouseup', onUp)
           }
 
-          const withDef = [...students].map(s => ({...s, _def: calcDef(s)}))
-          const byDef = [...withDef].sort((a,b) => (b._def||0) - (a._def||0))
+          // IRT disponible si al menos un estudiante tiene puntaje_irt calibrado
+          const hasIRT = students.some(s => s.puntaje_irt?.global != null)
+          const getGlobal = s => hasIRT
+            ? (s.puntaje_irt?.global ?? null)
+            : (calcDef(s) != null ? Math.round(calcDef(s) * 5) : null)
+          const getDef = s => hasIRT
+            ? (s.puntaje_irt?.global != null ? +(s.puntaje_irt.global / 5).toFixed(2) : null)
+            : calcDef(s)
+
+          const withDef = [...students].map(s => ({...s, _def: getDef(s), _global: getGlobal(s)}))
+          const byDef = [...withDef].sort((a,b) => (b._global||0) - (a._global||0))
           byDef.forEach((s, idx) => {
             s._pct = byDef.length > 1 ? Math.round(((byDef.length - 1 - idx) / (byDef.length - 1)) * 100) : 100
           })
           const ranked = [...withDef].sort((a, b) => {
               const v = listadoNotasSort.col
-              const av = v==='nombre' ? (a.estudiantes?.nombre||'') : v==='global' ? Math.round((a._def||0)*5) : (a[v]||0)
-              const bv = v==='nombre' ? (b.estudiantes?.nombre||'') : v==='global' ? Math.round((b._def||0)*5) : (b[v]||0)
+              const av = v==='nombre' ? (a.estudiantes?.nombre||'') : v==='global' ? (a._global||0) : v==='_def' ? (a._def||0) : (a[v]||0)
+              const bv = v==='nombre' ? (b.estudiantes?.nombre||'') : v==='global' ? (b._global||0) : v==='_def' ? (b._def||0) : (b[v]||0)
               const cmp = typeof av==='string' ? av.localeCompare(bv) : av - bv
               return listadoNotasSort.dir==='asc' ? cmp : -cmp
             })
@@ -3160,9 +3170,15 @@ export default function ColegioDashboard({session, onLogout}) {
                         </th>
                       ))}
                       <th rowSpan={2} style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)', padding:'4px 2px'}}
-                        onClick={() => handleSortLN('_def')}>Def.{arrowLN('_def')}</th>
+                        onClick={() => handleSortLN('_def')}>
+                        Def.{arrowLN('_def')}
+                        {hasIRT && <span style={{display:'block',fontSize:8,fontWeight:700,color:'#86efac',letterSpacing:.3}}>IRT</span>}
+                      </th>
                       <th rowSpan={2} style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)', padding:'4px 2px'}}
-                        onClick={() => handleSortLN('global')}>Global{arrowLN('global')}</th>
+                        onClick={() => handleSortLN('global')}>
+                        Global{arrowLN('global')}
+                        {hasIRT && <span style={{display:'block',fontSize:8,fontWeight:700,color:'#86efac',letterSpacing:.3}}>0–500</span>}
+                      </th>
                       <th rowSpan={2} style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)',
                         cursor:'default', padding:'4px 2px'}}>Pctil</th>
                       <th rowSpan={2} style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)',
@@ -3179,8 +3195,6 @@ export default function ColegioDashboard({session, onLogout}) {
                   </thead>
                   <tbody>
                     {ranked.map((s, i) => {
-                      const def = s._def
-                      const global = def != null ? Math.round(def * 5) : null
                       const pct = s._pct
                       return (
                         <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`}}>
@@ -3194,12 +3208,12 @@ export default function ColegioDashboard({session, onLogout}) {
                             const {style, text} = notaTd(s[col], a.area)
                             return <td key={col} style={style}>{text}</td>
                           }))}
-                          <td style={{...tdBase, color: def != null ? semaforoColor(def, '_') : C.grayLt, fontWeight:700, fontSize:10}}>
-                            {def != null ? def.toFixed(2) : '—'}
+                          <td style={{...tdBase, color: s._def != null ? semaforoColor(s._def, '_') : C.grayLt, fontWeight:700, fontSize:10}}>
+                            {s._def != null ? s._def.toFixed(2) : '—'}
                           </td>
                           <td style={{...tdBase, fontWeight:700, color:C.navy, fontSize:12,
                             fontFamily:'Playfair Display, serif'}}>
-                            {global != null ? global : '—'}
+                            {s._global != null ? s._global : '—'}
                           </td>
                           <td style={{...tdBase, fontWeight:600, fontSize:10,
                             color: pct>=75 ? '#16A34A' : pct>=50 ? '#D97706' : '#DC2626'}}>
