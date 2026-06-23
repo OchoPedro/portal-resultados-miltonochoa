@@ -2971,11 +2971,11 @@ export default function ColegioDashboard({session, onLogout}) {
                 <table style={{borderCollapse:'collapse', fontFamily:'Inter', fontSize:11, width:'100%', tableLayout:'fixed'}}>
                   <colgroup>
                     <col style={{width:28}}/>
-                    <col style={{width:'auto'}}/>
-                    {AREAS.flatMap(a => a.cols.map(([col]) => <col key={col} style={{width:46}}/>))}
+                    <col style={{width:175}}/>
+                    {AREAS.flatMap(a => a.cols.map(([col]) => <col key={col} style={{width:52}}/>))}
                     <col style={{width:52}}/>
-                    <col style={{width:44}}/>
-                    <col style={{width:40}}/>
+                    <col style={{width:48}}/>
+                    <col style={{width:38}}/>
                   </colgroup>
                   <thead>
                     <tr>
