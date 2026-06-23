@@ -1899,16 +1899,29 @@ export default function ColegioDashboard({session, onLogout}) {
                       </div>
                     )
                   }
+                  // Tick horizontal en 2 líneas para nombres largos de competencias
+                  const XTick = ({x, y, payload}) => {
+                    const words = (payload.value || '').split(' ')
+                    const mid = Math.ceil(words.length / 2)
+                    const l1 = words.slice(0, mid).join(' ')
+                    const l2 = words.slice(mid).join(' ')
+                    return (
+                      <g transform={`translate(${x},${y+4})`}>
+                        <text textAnchor="middle" fontFamily="Inter" fontSize={11} fill={C.gray}>
+                          <tspan x={0} dy={10}>{l1}</tspan>
+                          {l2 && <tspan x={0} dy={14}>{l2}</tspan>}
+                        </text>
+                      </g>
+                    )
+                  }
                   return (
                     <div style={{marginBottom:28, overflowX:'auto'}}>
                       <div style={{minWidth:minW}}>
-                        <ResponsiveContainer width="100%" height={420}>
+                        <ResponsiveContainer width="100%" height={400}>
                           <BarChart data={chartData} barCategoryGap="30%" barGap={2}
-                            margin={{top:24, right:16, bottom:100, left:4}}>
+                            margin={{top:24, right:16, bottom:20, left:4}}>
                             <CartesianGrid strokeDasharray="3 3" stroke={C.bg2} vertical={false}/>
-                            <XAxis dataKey="name"
-                              tick={{fontSize:10, fontFamily:'Inter', fill:C.gray, angle:-40, textAnchor:'end'}}
-                              interval={0} height={110}/>
+                            <XAxis dataKey="name" tick={<XTick/>} interval={0} height={52}/>
                             <YAxis tick={{fontSize:10, fontFamily:'Inter', fill:C.gray}}
                               domain={[0,100]} tickFormatter={v=>`${v}`} width={28}/>
                             <Tooltip content={<TooltipComp/>}/>
