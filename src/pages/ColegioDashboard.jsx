@@ -1194,7 +1194,7 @@ export default function ColegioDashboard({session, onLogout}) {
                   children: [
                     {id:'comp_desviacion', label:'Desviación Componentes'},
                     {id:'comp_comp2',      label:'Comparativo Componentes',           soon:true},
-                    {id:'comp_notas',      label:'Notas Estudiantes por Competencias'},
+                    {id:'comp_notas',      label:'Notas Estudiantes por Componentes'},
                     {id:'comp_mejora',     label:'Oportunidad de Mejoramiento',       soon:true},
                   ]
                 },
@@ -1394,7 +1394,7 @@ export default function ColegioDashboard({session, onLogout}) {
                   children: [
                     {id:'comp_desviacion', label:'Desviación Componentes'},
                     {id:'comp_comp2',      label:'Comparativo Componentes',           soon:true},
-                    {id:'comp_notas',      label:'Notas Estudiantes por Competencias'},
+                    {id:'comp_notas',      label:'Notas Estudiantes por Componentes'},
                     {id:'comp_mejora',     label:'Oportunidad de Mejoramiento',       soon:true},
                   ]
                 },
