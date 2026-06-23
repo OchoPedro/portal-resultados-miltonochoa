@@ -1830,45 +1830,104 @@ export default function ColegioDashboard({session, onLogout}) {
                 </div>
 
                 {filas.length > 0 && (() => {
+                  // Barras flotantes: cada barra va de (prom - desv) a (prom + desv)
+                  // Las etiquetas muestran el valor mínimo (abajo) y máximo (arriba) de la barra
                   const SCOPES = [
-                    {key:'Nacional',    color:C.green,   prom:'nac_prom'},
-                    {key:dptoNombre,    color:'#EF4444', prom:'dpto_prom'},
-                    {key:ciudadNombre,  color:'#F97316', prom:'ciudad_prom'},
-                    {key:'Plantel',     color:'#2563EB', prom:'plantel_prom'},
+                    {sfx:'nac',  color:C.green,   label:'Nacional',    promKey:'nac_prom',    desvKey:'nac_desv'},
+                    {sfx:'dpto', color:'#D62839', label:dptoNombre,   promKey:'dpto_prom',   desvKey:'dpto_desv'},
+                    {sfx:'ciu',  color:'#E8A317', label:ciudadNombre, promKey:'ciudad_prom', desvKey:'ciudad_desv'},
+                    {sfx:'pln',  color:'#1E88E5', label:'Plantel',     promKey:'plantel_prom',desvKey:'plantel_desv'},
                   ]
+                  const clamp = v => Math.max(0, Math.min(100, Math.round(v)))
                   const chartData = filas.map(r => {
-                    const entry = { name: r.competencia.length > 28 ? r.competencia.slice(0,28)+'…' : r.competencia }
-                    SCOPES.forEach(s => { entry[s.key] = r[s.prom] != null ? Math.round(r[s.prom]) : null })
+                    const entry = { name: r.competencia }
+                    SCOPES.forEach(({sfx, promKey, desvKey}) => {
+                      const prom = r[promKey]
+                      const desv = r[desvKey]
+                      if (prom == null) {
+                        entry[`${sfx}_base`] = 0; entry[`${sfx}_rng`] = 0
+                        entry[`${sfx}_lo`] = null; entry[`${sfx}_hi`] = null
+                      } else if (desv == null) {
+                        // Sin desviación: barra sólida desde 0 hasta el promedio
+                        entry[`${sfx}_base`] = 0; entry[`${sfx}_rng`] = clamp(prom)
+                        entry[`${sfx}_lo`] = null; entry[`${sfx}_hi`] = clamp(prom)
+                      } else {
+                        // Con desviación: barra flotante entre prom-desv y prom+desv
+                        const lo = clamp(prom - desv), hi = clamp(prom + desv)
+                        entry[`${sfx}_base`] = lo; entry[`${sfx}_rng`] = hi - lo
+                        entry[`${sfx}_lo`] = lo; entry[`${sfx}_hi`] = hi
+                      }
+                    })
                     return entry
                   })
-                  const minW = Math.max(560, filas.length * 140)
+                  const minW = Math.max(560, filas.length * 170)
+                  // Tooltip personalizado que muestra prom, desv, rango
+                  const TooltipComp = ({active, payload, label}) => {
+                    if (!active || !payload?.length) return null
+                    const row = filas.find(f => f.competencia === label) || {}
+                    return (
+                      <div style={{background:'white', border:`1px solid ${C.grayLt}`, borderRadius:8,
+                        padding:'10px 14px', fontFamily:'Inter', fontSize:11, boxShadow:'0 4px 12px rgba(0,0,0,0.12)'}}>
+                        <div style={{fontWeight:700, marginBottom:6, fontSize:12}}>{label}</div>
+                        {SCOPES.map(({sfx, color, label:lbl}) => {
+                          const prom = row[`${sfx === 'nac' ? 'nac' : sfx === 'dpto' ? 'dpto' : sfx === 'ciu' ? 'ciudad' : 'plantel'}_prom`]
+                          const desv = row[`${sfx === 'nac' ? 'nac' : sfx === 'dpto' ? 'dpto' : sfx === 'ciu' ? 'ciudad' : 'plantel'}_desv`]
+                          if (prom == null) return null
+                          return (
+                            <div key={sfx} style={{display:'flex', alignItems:'center', gap:6, marginBottom:3}}>
+                              <div style={{width:10, height:10, borderRadius:2, background:color, flexShrink:0}}/>
+                              <span style={{color:C.dark, fontWeight:600}}>{lbl}:</span>
+                              <span>Prom {Math.round(prom)}</span>
+                              {desv != null && <span style={{color:C.gray}}>± {Math.round(desv)} (Rango {clamp(prom-desv)}–{clamp(prom+desv)})</span>}
+                            </div>
+                          )
+                        })}
+                        <div style={{marginTop:8, color:C.gray, fontSize:10, borderTop:`1px solid ${C.bg2}`, paddingTop:6}}>
+                          Barra: promedio ± desviación estándar
+                        </div>
+                      </div>
+                    )
+                  }
                   return (
                     <div style={{marginBottom:28, overflowX:'auto'}}>
                       <div style={{minWidth:minW}}>
-                        <ResponsiveContainer width="100%" height={400}>
-                          <BarChart data={chartData} barCategoryGap="28%" barGap={3}
-                            margin={{top:20, right:16, bottom:130, left:0}}>
+                        <ResponsiveContainer width="100%" height={420}>
+                          <BarChart data={chartData} barCategoryGap="30%" barGap={2}
+                            margin={{top:24, right:16, bottom:100, left:4}}>
                             <CartesianGrid strokeDasharray="3 3" stroke={C.bg2} vertical={false}/>
                             <XAxis dataKey="name"
-                              tick={{fontSize:10, fontFamily:'Inter', fill:C.gray, angle:-45, textAnchor:'end'}}
-                              interval={0} height={140}/>
+                              tick={{fontSize:10, fontFamily:'Inter', fill:C.gray, angle:-40, textAnchor:'end'}}
+                              interval={0} height={110}/>
                             <YAxis tick={{fontSize:10, fontFamily:'Inter', fill:C.gray}}
-                              domain={[0,100]} tickFormatter={v=>`${v}%`} width={36}/>
-                            <Tooltip
-                              formatter={(val, name) => [val != null ? `${val}%` : '—', name]}
-                              contentStyle={{fontFamily:'Inter', fontSize:11, borderRadius:8,
-                                border:`1px solid ${C.grayLt}`, boxShadow:'0 4px 12px rgba(0,0,0,0.1)'}}/>
-                            <Legend wrapperStyle={{fontFamily:'Inter', fontSize:12}}/>
-                            {SCOPES.map(({key, color}) => (
-                              <Bar key={key} dataKey={key} fill={color} radius={[3,3,0,0]} maxBarSize={30}>
-                                <LabelList dataKey={key} position="top"
-                                  style={{fontSize:9, fontFamily:'Inter', fill:color, fontWeight:700}}
+                              domain={[0,100]} tickFormatter={v=>`${v}`} width={28}/>
+                            <Tooltip content={<TooltipComp/>}/>
+                            <Legend
+                              wrapperStyle={{fontFamily:'Inter', fontSize:12, paddingTop:6}}
+                              formatter={(val, entry) => {
+                                const s = SCOPES.find(x => x.label === val)
+                                return <span style={{color: s ? s.color : C.dark}}>{val}</span>
+                              }}/>
+                            {SCOPES.map(({sfx, color, label:lbl}) => [
+                              // Barra base transparente (eleva la barra visible al nivel prom-desv)
+                              <Bar key={`${sfx}_base`} dataKey={`${sfx}_base`} stackId={sfx}
+                                fill="transparent" legendType="none" isAnimationActive={false}/>,
+                              // Barra visible coloreada (altura = 2×desv o = prom cuando no hay desv)
+                              <Bar key={`${sfx}_rng`} dataKey={`${sfx}_rng`} stackId={sfx}
+                                fill={color} radius={[3,3,0,0]} name={lbl} maxBarSize={36} isAnimationActive={false}>
+                                <LabelList dataKey={`${sfx}_hi`} position="insideTop"
+                                  style={{fontSize:9, fontFamily:'Inter', fill:'white', fontWeight:700}}
+                                  formatter={v => v != null ? v : ''}/>
+                                <LabelList dataKey={`${sfx}_lo`} position="insideBottom"
+                                  style={{fontSize:9, fontFamily:'Inter', fill:'white', fontWeight:700}}
                                   formatter={v => v != null ? v : ''}/>
                               </Bar>
-                            ))}
+                            ])}
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
+                      <p style={{fontFamily:'Inter', fontSize:10, color:C.gray, textAlign:'center', marginTop:4}}>
+                        Cada barra muestra el rango promedio ± desviación estándar del grupo. Las etiquetas indican el valor mínimo y máximo del rango.
+                      </p>
                     </div>
                   )
                 })()}
