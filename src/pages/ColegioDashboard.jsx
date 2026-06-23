@@ -7,7 +7,7 @@ import {
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
-  Cell
+  Cell, LabelList
 } from 'recharts'
 
 // ── HELPERS ──────────────────────────────────────────────────
@@ -1828,6 +1828,50 @@ export default function ColegioDashboard({session, onLogout}) {
                     </select>
                   </div>
                 </div>
+
+                {filas.length > 0 && (() => {
+                  const SCOPES = [
+                    {key:'Nacional',    color:C.green,   prom:'nac_prom'},
+                    {key:dptoNombre,    color:'#EF4444', prom:'dpto_prom'},
+                    {key:ciudadNombre,  color:'#F97316', prom:'ciudad_prom'},
+                    {key:'Plantel',     color:'#2563EB', prom:'plantel_prom'},
+                  ]
+                  const chartData = filas.map(r => {
+                    const entry = { name: r.competencia.length > 28 ? r.competencia.slice(0,28)+'…' : r.competencia }
+                    SCOPES.forEach(s => { entry[s.key] = r[s.prom] != null ? Math.round(r[s.prom]) : null })
+                    return entry
+                  })
+                  const minW = Math.max(560, filas.length * 140)
+                  return (
+                    <div style={{marginBottom:28, overflowX:'auto'}}>
+                      <div style={{minWidth:minW}}>
+                        <ResponsiveContainer width="100%" height={400}>
+                          <BarChart data={chartData} barCategoryGap="28%" barGap={3}
+                            margin={{top:20, right:16, bottom:130, left:0}}>
+                            <CartesianGrid strokeDasharray="3 3" stroke={C.bg2} vertical={false}/>
+                            <XAxis dataKey="name"
+                              tick={{fontSize:10, fontFamily:'Inter', fill:C.gray, angle:-45, textAnchor:'end'}}
+                              interval={0} height={140}/>
+                            <YAxis tick={{fontSize:10, fontFamily:'Inter', fill:C.gray}}
+                              domain={[0,100]} tickFormatter={v=>`${v}%`} width={36}/>
+                            <Tooltip
+                              formatter={(val, name) => [val != null ? `${val}%` : '—', name]}
+                              contentStyle={{fontFamily:'Inter', fontSize:11, borderRadius:8,
+                                border:`1px solid ${C.grayLt}`, boxShadow:'0 4px 12px rgba(0,0,0,0.1)'}}/>
+                            <Legend wrapperStyle={{fontFamily:'Inter', fontSize:12}}/>
+                            {SCOPES.map(({key, color}) => (
+                              <Bar key={key} dataKey={key} fill={color} radius={[3,3,0,0]} maxBarSize={30}>
+                                <LabelList dataKey={key} position="top"
+                                  style={{fontSize:9, fontFamily:'Inter', fill:color, fontWeight:700}}
+                                  formatter={v => v != null ? v : ''}/>
+                              </Bar>
+                            ))}
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  )
+                })()}
 
                 {filas.length === 0 ? (
                   <div style={{textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter', fontSize:13}}>
