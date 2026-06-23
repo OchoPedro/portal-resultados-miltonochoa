@@ -49,6 +49,17 @@ const semaforoNivel = (v, area='_') => {
 const semaforoBg    = (v, area) => NIVEL_BG[semaforoNivel(v, area)]
 const semaforoColor = (v, area) => NIVEL_COLOR[semaforoNivel(v, area)]
 
+const calcBoxStats = (vals) => {
+  const v = vals.filter(x => x != null && !isNaN(x))
+  if (!v.length) return {min:0,q1:0,median:0,q3:0,max:0,mean:0,std:0,n:0}
+  const s = [...v].sort((a,b) => a-b)
+  const n = s.length
+  const q = p => { const pos=(n-1)*p; const lo=Math.floor(pos); const hi=Math.ceil(pos); return s[lo]+(s[hi]-s[lo])*(pos-lo) }
+  const mean = v.reduce((a,b)=>a+b,0)/n
+  const std  = Math.sqrt(v.reduce((a,b)=>a+Math.pow(b-mean,2),0)/n)
+  return { min:s[0], q1:q(0.25), median:q(0.5), q3:q(0.75), max:s[n-1], mean, std, n }
+}
+
 // Leyenda genérica (para tabs de competencias, desviación, etc.)
 const LeyendaNiveles = () => (
   <div style={{display:'flex', gap:8, flexWrap:'wrap', marginTop:12}}>
@@ -923,6 +934,27 @@ export default function ColegioDashboard({session, onLogout}) {
     }
   })
 
+  // Desviación por asignatura — box plot + tabla
+  const desvAsigData = [
+    {asig:'Genéricos',     akey:'mat', vals: students.map(s=>s.mat_cuantitativo)},
+    {asig:'No Genéricos',  akey:'mat', vals: students.map(s=>s.mat_especifico)},
+    {asig:'Química',       akey:'cn',  vals: students.map(s=>s.cn_quimica)},
+    {asig:'Física',        akey:'cn',  vals: students.map(s=>s.cn_fisica)},
+    {asig:'Biología',      akey:'cn',  vals: students.map(s=>s.cn_biologia)},
+    {asig:'CTS',           akey:'cn',  vals: students.map(s=>s.cn_cts)},
+    {asig:'Sociales',      akey:'soc', vals: students.map(s=>s.sociales)},
+    {asig:'Ciudadanas',    akey:'soc', vals: students.map(s=>s.ciudadanas)},
+    {asig:'Lect. Crítica', akey:'lc',  vals: students.map(s=>s.lectura_critica)},
+    {asig:'Inglés',        akey:'ing', vals: students.map(s=>s.ingles)},
+    {asig:'Definitiva',    akey:'_',   vals: students.map(s => {
+      const gen=s.mat_cuantitativo, nogen=s.mat_especifico
+      const q=s.cn_quimica, f=s.cn_fisica, b=s.cn_biologia, cts=s.cn_cts
+      const soc=s.sociales, ciu=s.ciudadanas, lc=s.lectura_critica, ing=s.ingles
+      if ([gen,nogen,q,f,b,cts,soc,ciu,lc,ing].some(x=>x==null)) return null
+      return (((gen+nogen)/2)*3 + ((q+f+b+cts)/4)*3 + ((soc+ciu)/2)*3 + lc*3 + ing) / 13
+    })},
+  ].map(({asig, akey, vals}) => ({ asig, akey, ...calcBoxStats(vals) }))
+
   // Desviación por materia
   const desvData = areaData.map(a => {
     const vals = students.map(s => {
@@ -962,7 +994,7 @@ export default function ColegioDashboard({session, onLogout}) {
   const tabs = [
     {id:'tablero',          label:'Tablero de Gestión'},
     {id:'niveles',          label:'% Estudiantes por Nivel de Desempeño'},
-    {id:'desv_materias',    label:'Desviación por Materias'},
+    {id:'desv_materias',    label:'Desviación por Asignatura'},
     {id:'desviacion',       label:'Desviación Competencias'},
     {id:'comp_comparativo', label:'Comparativo Competencias'},
     {id:'competencias',     label:'Notas Estudiantes por Competencias'},
@@ -1071,7 +1103,7 @@ export default function ColegioDashboard({session, onLogout}) {
                   id:'grp_materias', label:'Análisis por Asignaturas', isGroup: true,
                   children: [
                     {id:'niveles',       label:'% Estudiantes por Nivel de Desempeño'},
-                    {id:'desv_materias', label:'Desviación por Materias', soon:true},
+                    {id:'desv_materias', label:'Desviación por Asignatura'},
                   ]
                 },
                 {
@@ -1270,7 +1302,7 @@ export default function ColegioDashboard({session, onLogout}) {
                   id:'grp_materias', label:'Análisis por Asignaturas', isGroup: true,
                   children: [
                     {id:'niveles',       label:'% Estudiantes por Nivel de Desempeño'},
-                    {id:'desv_materias', label:'Desviación por Materias', soon:true},
+                    {id:'desv_materias', label:'Desviación por Asignatura'},
                   ]
                 },
                 {
@@ -1767,6 +1799,126 @@ export default function ColegioDashboard({session, onLogout}) {
           </div>
         )}
 
+        {/* ══ DESVIACIÓN POR ASIGNATURA ════════════════════════ */}
+        {tab==='desv_materias' && (
+          students.length === 0 ? <EmptyState/> :
+          <div style={{display:'grid', gap:16}}>
+            <Card>
+              <CardTitle sub="Distribución de puntajes por asignatura">
+                Desviación por Asignatura
+              </CardTitle>
+              {/* Box plot SVG */}
+              <div style={{width:'100%', overflowX:'auto'}}>
+                <svg viewBox="0 0 1020 300" style={{width:'100%', minWidth:640, display:'block'}}>
+                  {/* Grid lines */}
+                  {[0,25,50,75,100].map(v => {
+                    const y = 30 + 210 * (1 - v/110)
+                    return <g key={v}>
+                      <line x1={50} x2={1010} y1={y} y2={y} stroke="#f0f0f0" strokeWidth={1}/>
+                      <text x={44} y={y+4} textAnchor="end" fontSize={9} fill="#94a3b8">{v}</text>
+                    </g>
+                  })}
+                  {/* Boxes */}
+                  {desvAsigData.map((d, i) => {
+                    const cols = desvAsigData.length
+                    const slotW = 960 / cols
+                    const cx = 50 + slotW * i + slotW / 2
+                    const bw = slotW * 0.55
+                    const toY = v => 30 + 210 * (1 - v / 110)
+                    const yMin = toY(d.min), yQ1 = toY(d.q1), yMed = toY(d.median)
+                    const yQ3 = toY(d.q3), yMax = toY(d.max)
+                    const col = semaforoColor(d.mean, d.akey)
+                    return (
+                      <g key={i}>
+                        {/* Whisker line */}
+                        <line x1={cx} y1={yMin} x2={cx} y2={yMax} stroke="#64748b" strokeWidth={1.5}/>
+                        {/* Min cap */}
+                        <line x1={cx-bw/4} y1={yMin} x2={cx+bw/4} y2={yMin} stroke="#64748b" strokeWidth={1.5}/>
+                        {/* Max cap */}
+                        <line x1={cx-bw/4} y1={yMax} x2={cx+bw/4} y2={yMax} stroke="#64748b" strokeWidth={1.5}/>
+                        {/* Max label */}
+                        <rect x={cx-12} y={yMax-16} width={24} height={13} rx={2} fill="white" stroke="#e2e8f0" strokeWidth={1}/>
+                        <text x={cx} y={yMax-6} textAnchor="middle" fontSize={8} fill="#334155" fontWeight="600">
+                          {Math.round(d.max)}
+                        </text>
+                        {/* Box Q1-Q3 */}
+                        <rect x={cx-bw/2} y={yQ3} width={bw} height={yQ1-yQ3}
+                          fill="white" stroke="#64748b" strokeWidth={1.5} rx={2}/>
+                        {/* Median line */}
+                        <line x1={cx-bw/2} y1={yMed} x2={cx+bw/2} y2={yMed} stroke={col} strokeWidth={2.5}/>
+                        {/* Mean dot */}
+                        <circle cx={cx} cy={toY(d.mean)} r={3} fill={col}/>
+                        {/* X label */}
+                        <text x={cx} y={255} textAnchor="end" fontSize={9} fill="#64748b"
+                          transform={`rotate(-35,${cx},255)`}>{d.asig}</text>
+                      </g>
+                    )
+                  })}
+                </svg>
+              </div>
+              {/* Leyenda box plot */}
+              <div style={{display:'flex', gap:16, marginTop:8, flexWrap:'wrap', fontSize:10,
+                fontFamily:'Inter', color:C.gray}}>
+                <span style={{display:'flex', alignItems:'center', gap:4}}>
+                  <span style={{display:'inline-block', width:20, height:2, background:'#64748b'}}/>
+                  Min – Máx
+                </span>
+                <span style={{display:'flex', alignItems:'center', gap:4}}>
+                  <span style={{display:'inline-block', width:16, height:10, border:'1.5px solid #64748b', borderRadius:2}}/>
+                  Q1 – Q3
+                </span>
+                <span style={{display:'flex', alignItems:'center', gap:4}}>
+                  <span style={{display:'inline-block', width:16, height:2.5, background:C.green}}/>
+                  Mediana (color = semáforo promedio)
+                </span>
+                <span style={{display:'flex', alignItems:'center', gap:4}}>
+                  <span style={{display:'inline-block', width:6, height:6, borderRadius:'50%', background:C.green}}/>
+                  Promedio
+                </span>
+              </div>
+            </Card>
+            <Card>
+              <CardTitle sub="Estadísticas por asignatura">Tabla de Estadísticas</CardTitle>
+              <div style={{overflowX:'auto'}}>
+                <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter'}}>
+                  <thead>
+                    <tr style={{borderBottom:`2px solid ${C.bg2}`}}>
+                      {['Asignatura','Promedio','Desviación','Mín.','Máx.'].map((h,i) => (
+                        <th key={h} style={{textAlign: i===0?'left':'center', padding:'8px 12px',
+                          fontSize:10, color:C.gray, fontWeight:600, textTransform:'uppercase',
+                          letterSpacing:'0.05em'}}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {desvAsigData.map((d,i) => (
+                      <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`,
+                        background: i%2===0 ? `${C.bg}80` : 'transparent'}}>
+                        <td style={{padding:'10px 12px', fontSize:13, color:C.text,
+                          fontWeight: d.asig==='Definitiva' ? 700 : 500}}>{d.asig}</td>
+                        <td style={{padding:'10px 12px', textAlign:'center'}}>
+                          <Badge color={semaforoColor(d.mean, d.akey)}>
+                            {Math.round(d.mean)}
+                          </Badge>
+                        </td>
+                        <td style={{padding:'10px 12px', textAlign:'center', fontSize:13, color:C.gray}}>
+                          {Math.round(d.std)}
+                        </td>
+                        <td style={{padding:'10px 12px', textAlign:'center', fontSize:13, color:C.gray}}>
+                          {Math.round(d.min)}
+                        </td>
+                        <td style={{padding:'10px 12px', textAlign:'center', fontSize:13, color:C.gray}}>
+                          {Math.round(d.max)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
+        )}
+
         {/* ══ COMPETENCIAS ═════════════════════════════════════ */}
         {tab==='competencias' && (
           students.length === 0 ? <EmptyState/> :
@@ -2119,7 +2271,7 @@ export default function ColegioDashboard({session, onLogout}) {
         )}
 
         {/* ══ PRÓXIMAMENTE ══════════════════════════════════════ */}
-        {['desv_materias','comp_comparativo','comp_desviacion','comp_comp2','comp_notas','comp_mejora','consolidado','equilibrio'].includes(tab) && (
+        {['comp_comparativo','comp_desviacion','comp_comp2','comp_notas','comp_mejora','consolidado','equilibrio'].includes(tab) && (
           <Card>
             <div style={{textAlign:'center', padding:60, display:'flex', flexDirection:'column', alignItems:'center', gap:16}}>
               <div style={{fontSize:48}}>🚧</div>
