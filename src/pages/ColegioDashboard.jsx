@@ -2936,16 +2936,16 @@ export default function ColegioDashboard({session, onLogout}) {
             .map(s => ({...s, _def: calcDef(s)}))
             .sort((a, b) => {
               const v = listadoNotasSort.col
-              const av = v==='nombre' ? (a.estudiantes?.nombre||'') : v==='salon' ? (a.estudiantes?.salon||0) : v==='global' ? Math.round(a._def*5) : (a[v]||0)
-              const bv = v==='nombre' ? (b.estudiantes?.nombre||'') : v==='salon' ? (b.estudiantes?.salon||0) : v==='global' ? Math.round(b._def*5) : (b[v]||0)
+              const av = v==='nombre' ? (a.estudiantes?.nombre||'') : v==='global' ? Math.round(a._def*5) : (a[v]||0)
+              const bv = v==='nombre' ? (b.estudiantes?.nombre||'') : v==='global' ? Math.round(b._def*5) : (b[v]||0)
               const cmp = typeof av==='string' ? av.localeCompare(bv) : av - bv
               return listadoNotasSort.dir==='asc' ? cmp : -cmp
             })
 
-          const thBase = {padding:'6px 8px', textAlign:'center', color:'#fff', background:C.navy,
+          const thBase = {padding:'4px 3px', textAlign:'center', color:'#fff', background:C.navy,
             fontSize:10, fontWeight:700, whiteSpace:'nowrap',
             borderRight:'1px solid rgba(255,255,255,0.12)', cursor:'pointer', userSelect:'none'}
-          const tdBase = {padding:'5px 7px', textAlign:'center', fontSize:11, background:C.white}
+          const tdBase = {padding:'4px 3px', textAlign:'center', fontSize:11, background:C.white}
 
           // Col de nota con color en el número según área
           const notaTd = (val, area) => {
@@ -2958,41 +2958,48 @@ export default function ColegioDashboard({session, onLogout}) {
           }
 
           const AREAS = [
-            {label:'Matemáticas',        area:'mat', cols:[['mat_cuantitativo','Cuantitativo'],['mat_especifico','Específico']]},
-            {label:'Ciencias Naturales', area:'cn',  cols:[['cn_quimica','Química'],['cn_fisica','Física'],['cn_biologia','Biología'],['cn_cts','CTS']]},
-            {label:'Sociales y Ciudad.', area:'soc', cols:[['sociales','Sociales'],['ciudadanas','Ciudadanas']]},
-            {label:'Lectura Crítica',    area:'lc',  cols:[['lectura_critica','Lect. Crítica']]},
-            {label:'Inglés',             area:'ing', cols:[['ingles','Inglés']]},
+            {label:'Matemáticas',   area:'mat', cols:[['mat_cuantitativo','Cuant.'],['mat_especifico','Espec.']]},
+            {label:'Cs. Naturales', area:'cn',  cols:[['cn_quimica','Quím.'],['cn_fisica','Fís.'],['cn_biologia','Bio.'],['cn_cts','CTS']]},
+            {label:'Soc. y Ciu.',   area:'soc', cols:[['sociales','Soc.'],['ciudadanas','Ciud.']]},
+            {label:'L. Crítica',    area:'lc',  cols:[['lectura_critica','L.C.']]},
+            {label:'Inglés',        area:'ing', cols:[['ingles','Ing.']]},
           ]
 
           return students.length === 0 ? <EmptyState/> : (
             <Card>
               <div style={{overflowX:'auto'}}>
-                <table style={{borderCollapse:'collapse', fontFamily:'Inter', fontSize:11, minWidth:'100%'}}>
+                <table style={{borderCollapse:'collapse', fontFamily:'Inter', fontSize:11, width:'100%', tableLayout:'fixed'}}>
+                  <colgroup>
+                    <col style={{width:28}}/>
+                    <col style={{width:'auto'}}/>
+                    {AREAS.flatMap(a => a.cols.map(([col]) => <col key={col} style={{width:46}}/>))}
+                    <col style={{width:52}}/>
+                    <col style={{width:44}}/>
+                    <col style={{width:40}}/>
+                  </colgroup>
                   <thead>
                     <tr>
-                      <th rowSpan={2} style={{...thBase, minWidth:40, borderBottom:'1px solid rgba(255,255,255,0.15)'}}
-                        onClick={() => handleSortLN('salon')}>S{arrowLN('salon')}</th>
-                      <th rowSpan={2} style={{...thBase, minWidth:32, borderBottom:'1px solid rgba(255,255,255,0.15)',
-                        cursor:'default'}}>#</th>
-                      <th rowSpan={2} style={{...thBase, minWidth:240, textAlign:'left', borderBottom:'1px solid rgba(255,255,255,0.15)'}}
+                      <th rowSpan={2} style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)',
+                        cursor:'default', padding:'4px 4px'}}>#</th>
+                      <th rowSpan={2} style={{...thBase, textAlign:'left', borderBottom:'1px solid rgba(255,255,255,0.15)',
+                        padding:'4px 8px'}}
                         onClick={() => handleSortLN('nombre')}>Nombre Estudiante{arrowLN('nombre')}</th>
                       {AREAS.map(a => (
                         <th key={a.label} colSpan={a.cols.length}
-                          style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)', cursor:'default'}}>
+                          style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)', cursor:'default', padding:'4px 2px'}}>
                           {a.label}
                         </th>
                       ))}
-                      <th rowSpan={2} style={{...thBase, minWidth:60, borderBottom:'1px solid rgba(255,255,255,0.15)'}}
-                        onClick={() => handleSortLN('_def')}>Definitiva{arrowLN('_def')}</th>
-                      <th rowSpan={2} style={{...thBase, minWidth:60, borderBottom:'1px solid rgba(255,255,255,0.15)'}}
+                      <th rowSpan={2} style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)', padding:'4px 2px'}}
+                        onClick={() => handleSortLN('_def')}>Def.{arrowLN('_def')}</th>
+                      <th rowSpan={2} style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)', padding:'4px 2px'}}
                         onClick={() => handleSortLN('global')}>Global{arrowLN('global')}</th>
-                      <th rowSpan={2} style={{...thBase, minWidth:50, borderBottom:'1px solid rgba(255,255,255,0.15)',
-                        cursor:'default'}}>Detalle</th>
+                      <th rowSpan={2} style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)',
+                        cursor:'default', padding:'4px 2px'}}>Ver</th>
                     </tr>
                     <tr>
                       {AREAS.flatMap(a => a.cols.map(([col, h]) => (
-                        <th key={col} style={{...thBase, fontSize:9, borderTop:'1px solid rgba(255,255,255,0.15)'}}
+                        <th key={col} style={{...thBase, fontSize:9, borderTop:'1px solid rgba(255,255,255,0.15)', padding:'3px 2px'}}
                           onClick={() => handleSortLN(col)}>
                           {h}{arrowLN(col)}
                         </th>
@@ -3005,26 +3012,26 @@ export default function ColegioDashboard({session, onLogout}) {
                       const global = Math.round(def * 5)
                       return (
                         <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`}}>
-                          <td style={{...tdBase, color:C.gray}}>{s.estudiantes?.salon}</td>
-                          <td style={{...tdBase, color:C.grayLt, fontSize:10}}>{i+1}</td>
-                          <td style={{...tdBase, textAlign:'left', padding:'5px 10px',
-                            color:C.dark, fontWeight:500, whiteSpace:'nowrap'}}>
+                          <td style={{...tdBase, color:C.dark, fontWeight:600, fontSize:11, padding:'4px 4px'}}>{i+1}</td>
+                          <td style={{...tdBase, textAlign:'left', padding:'4px 8px',
+                            color:C.dark, fontWeight:500, whiteSpace:'nowrap', overflow:'hidden',
+                            textOverflow:'ellipsis'}}>
                             {s.estudiantes?.nombre}
                           </td>
                           {AREAS.flatMap(a => a.cols.map(([col]) => {
                             const {style, text} = notaTd(s[col], a.area)
                             return <td key={col} style={style}>{text}</td>
                           }))}
-                          <td style={{...tdBase, color: semaforoColor(def, '_'), fontWeight:700}}>
+                          <td style={{...tdBase, color: semaforoColor(def, '_'), fontWeight:700, fontSize:10}}>
                             {def.toFixed(2)}
                           </td>
-                          <td style={{...tdBase, fontWeight:700, color:C.navy, fontSize:13,
+                          <td style={{...tdBase, fontWeight:700, color:C.navy, fontSize:12,
                             fontFamily:'Playfair Display, serif'}}>
                             {global}
                           </td>
                           <td style={{...tdBase}}>
                             <span onClick={() => setSelectedStudent(s)}
-                              style={{cursor:'pointer', color:'#2563EB', fontWeight:600,
+                              style={{cursor:'pointer', color:'#2563EB', fontWeight:600, fontSize:10,
                                 textDecoration:'underline'}}>
                               Ver
                             </span>
