@@ -531,9 +531,11 @@ export default function AdminResultados({ onUpdate }) {
   }
 
   async function calibrarIRT(pruebaId, kd) {
-    // Lee TODOS los detalles de esta prueba (todos los colegios)
+    // ── 1. Leer todos los detalles de esta prueba (todos los colegios) ──
     const { data: todos } = await supabase
-      .from('resultados_estudiante').select('detalle').eq('prueba_id', pruebaId)
+      .from('resultados_estudiante')
+      .select('id,estudiante_id,detalle')
+      .eq('prueba_id', pruebaId)
     if (!todos || todos.length < 10) return
 
     const nPreg = kd.clave.length
@@ -550,19 +552,126 @@ export default function AdminResultados({ onUpdate }) {
       }
     }
 
-    const params = kd.clave.map((_, i) => {
+    // ── 2. Calcular b_i = logit(1-p_i) por pregunta ──
+    const bPorPregunta = kd.clave.map((_, i) => {
       const total = totales[i] || 1
       const p = Math.max(0.01, Math.min(0.99, aciertos[i] / total))
+      return { b: Math.log((1 - p) / p), p, total }
+    })
+
+    // ── 3. Agrupar b_i por área ──
+    const areas = [...new Set(kd.areas.filter(Boolean))]
+    const bPorArea = {}
+    areas.forEach(area => {
+      bPorArea[area] = kd.areas
+        .map((a, i) => a === area ? { i, b: bPorPregunta[i].b } : null)
+        .filter(Boolean)
+    })
+
+    // ── 4. Estimar θ por área por estudiante (1PL + c=0.25, EAP prior N(0,1)) ──
+    function estimarTheta(respuestas, bItems) {
+      // EAP sobre grilla de -4 a +4 con prior N(0,1)
+      const GRID = Array.from({ length: 41 }, (_, k) => -4 + k * 0.2)
+      const prior = GRID.map(t => Math.exp(-0.5 * t * t))
+      const C = 0.25
+
+      const likelihood = GRID.map((t, gi) => {
+        let logL = 0
+        for (const { i, b } of bItems) {
+          const xi = respuestas[i]
+          if (xi === undefined) continue
+          const P = C + (1 - C) / (1 + Math.exp(-(t - b)))
+          logL += xi === 1 ? Math.log(Math.max(P, 1e-10)) : Math.log(Math.max(1 - P, 1e-10))
+        }
+        return Math.exp(logL) * prior[gi]
+      })
+
+      const Z = likelihood.reduce((s, v) => s + v, 0) || 1
+      return GRID.reduce((s, t, gi) => s + t * likelihood[gi] / Z, 0)
+    }
+
+    // ── 5. Calcular θ de cada estudiante por área ──
+    const thetasPorArea = {}
+    areas.forEach(a => { thetasPorArea[a] = [] })
+
+    const irtPorEstudiante = todos.map(row => {
+      const respVec = new Array(nPreg).fill(undefined)
+      for (const item of (row.detalle || [])) {
+        const i = item.pregunta - 1
+        if (i >= 0 && i < nPreg) respVec[i] = item.correcto ? 1 : 0
+      }
+
+      const scores = {}
+      areas.forEach(area => {
+        const theta = estimarTheta(respVec, bPorArea[area])
+        scores[area] = theta
+        thetasPorArea[area].push(theta)
+      })
+      return { id: row.id, scores }
+    })
+
+    // ── 6. Normalizar θ → 0-100 por área (media=50, sd=10) ──
+    const stats = {}
+    areas.forEach(area => {
+      const ts = thetasPorArea[area]
+      const mu = ts.reduce((s, v) => s + v, 0) / ts.length
+      const sigma = Math.sqrt(ts.reduce((s, v) => s + (v - mu) ** 2, 0) / ts.length) || 1
+      stats[area] = { mu, sigma }
+    })
+
+    function thetaToScore(theta, area) {
+      const { mu, sigma } = stats[area]
+      return Math.max(0, Math.min(100, Math.round(50 + (theta - mu) / sigma * 10)))
+    }
+
+    // ── 7. Calcular puntaje global con pesos ICFES (3-3-3-3-1 / 13 × 5) ──
+    const PESOS_IRT = {
+      'Matemáticas': 3, 'Lectura Crítica': 3,
+      'Ciencias Naturales': 3, 'Ciencias Sociales': 3, 'Inglés': 1,
+    }
+    const pesoTotal = Object.values(PESOS_IRT).reduce((s, v) => s + v, 0)
+
+    const updates = irtPorEstudiante.map(({ id, scores }) => {
+      const porArea = {}
+      let sumaPonderada = 0, sumaPesos = 0
+      areas.forEach(area => {
+        const score = thetaToScore(scores[area], area)
+        porArea[area] = score
+        const peso = PESOS_IRT[area] || 1
+        sumaPonderada += score * peso
+        sumaPesos += peso
+      })
+      const ig = sumaPesos > 0 ? sumaPonderada / sumaPesos : 0
+      const global = Math.round(ig / pesoTotal * (pesoTotal * 5))
+      return { id, puntaje_irt: { ...porArea, global } }
+    })
+
+    // ── 8. Guardar θ normalizados en resultados_estudiante ──
+    for (const { id, puntaje_irt } of updates) {
+      supabase.from('resultados_estudiante')
+        .update({ puntaje_irt })
+        .eq('id', id)
+        .then(null, () => {})
+    }
+
+    // ── 9. Guardar b_i + estadísticos de normalización en parametros_irt ──
+    const params = kd.clave.map((_, i) => {
+      const { b, p, total } = bPorPregunta[i]
+      const area = kd.areas?.[i] || null
+      const s = area && stats[area] ? stats[area] : null
       return {
-        prueba_id:    pruebaId,
-        nro_pregunta: i + 1,
-        area:         kd.areas?.[i]        || null,
-        competencia:  kd.competencias?.[i] || null,
-        componente:   kd.componentes?.[i]  || null,
+        prueba_id:     pruebaId,
+        nro_pregunta:  i + 1,
+        area,
+        competencia:   kd.competencias?.[i] || null,
+        componente:    kd.componentes?.[i]  || null,
         dificultad_teo: kd.dificultades?.[i] || null,
-        p_correcta:   Math.round(p * 10000) / 10000,
-        b_logit:      Math.round(Math.log((1 - p) / p) * 10000) / 10000,
-        n_estudiantes: totales[i],
+        p_correcta:    Math.round(p * 10000) / 10000,
+        b_logit:       Math.round(b * 10000) / 10000,
+        n_estudiantes: total,
+        n_calibrado:   todos.length,
+        mu_theta:      s ? Math.round(s.mu * 10000) / 10000 : null,
+        sigma_theta:   s ? Math.round(s.sigma * 10000) / 10000 : null,
       }
     })
 
