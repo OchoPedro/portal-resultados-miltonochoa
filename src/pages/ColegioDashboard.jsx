@@ -894,25 +894,34 @@ export default function ColegioDashboard({session, onLogout}) {
     {rango:'≥ 440',   cant:globals.filter(g=>g>=440).length,             color:C.navy},
   ]
 
-  // Niveles por área
-  const nivelesData = [
-    {materia:'Matemáticas',  ...calcNiveles(students.map(s=>(s.mat_cuantitativo+s.mat_especifico)/2))},
-    {materia:'Cs. Naturales',...calcNiveles(students.map(s=>(s.cn_quimica+s.cn_fisica+s.cn_biologia+s.cn_cts)/4))},
-    {materia:'Soc. y Ciudad.',...calcNiveles(students.map(s=>((s.sociales||0)+(s.ciudadanas||0))/2))},
-    {materia:'Lect. Crítica',...calcNiveles(students.map(s=>s.lectura_critica))},
-    {materia:'Inglés',       ...calcNiveles(students.map(s=>s.ingles))},
-  ]
-
-  function calcNiveles(vals) {
-    const v = vals.filter(Boolean)
-    if (!v.length) return {superior:0,alto:0,basico:0,bajo:0}
+  // Niveles por asignatura (con umbrales específicos por área)
+  const nivelesAsig = [
+    {asig:'Genéricos',     akey:'mat', vals: students.map(s=>s.mat_cuantitativo)},
+    {asig:'No Genéricos',  akey:'mat', vals: students.map(s=>s.mat_especifico)},
+    {asig:'Química',       akey:'cn',  vals: students.map(s=>s.cn_quimica)},
+    {asig:'Física',        akey:'cn',  vals: students.map(s=>s.cn_fisica)},
+    {asig:'Biología',      akey:'cn',  vals: students.map(s=>s.cn_biologia)},
+    {asig:'CTS',           akey:'cn',  vals: students.map(s=>s.cn_cts)},
+    {asig:'Sociales',      akey:'soc', vals: students.map(s=>s.sociales)},
+    {asig:'Ciudadanas',    akey:'soc', vals: students.map(s=>s.ciudadanas)},
+    {asig:'Lect. Crítica', akey:'lc',  vals: students.map(s=>s.lectura_critica)},
+    {asig:'Inglés',        akey:'ing', vals: students.map(s=>s.ingles)},
+  ].map(({asig, akey, vals}) => {
+    const v = vals.filter(x => x != null)
+    const [t1,t2,t3] = SEMAFORO_T[akey]
+    const total = v.length
+    const n4c = v.filter(x=>x>t3).length
+    const n3c = v.filter(x=>x>t2 && x<=t3).length
+    const n2c = v.filter(x=>x>t1 && x<=t2).length
+    const n1c = v.filter(x=>x<=t1).length
     return {
-      superior: Math.round(v.filter(n=>n>=65).length/v.length*100),
-      alto:     Math.round(v.filter(n=>n>=45&&n<65).length/v.length*100),
-      basico:   Math.round(v.filter(n=>n>=25&&n<45).length/v.length*100),
-      bajo:     Math.round(v.filter(n=>n<25).length/v.length*100),
+      asig, total, n4c, n3c, n2c, n1c,
+      n4: total ? Math.round(n4c/total*100) : 0,
+      n3: total ? Math.round(n3c/total*100) : 0,
+      n2: total ? Math.round(n2c/total*100) : 0,
+      n1: total ? Math.round(n1c/total*100) : 0,
     }
-  }
+  })
 
   // Desviación por materia
   const desvData = areaData.map(a => {
@@ -1059,7 +1068,7 @@ export default function ColegioDashboard({session, onLogout}) {
               items: [
                 {id:'tablero',       label:'Tablero de Gestión'},
                 {
-                  id:'grp_materias', label:'Análisis por Materias', isGroup: true,
+                  id:'grp_materias', label:'Análisis por Asignaturas', isGroup: true,
                   children: [
                     {id:'niveles',       label:'% Estudiantes por Nivel de Desempeño'},
                     {id:'desv_materias', label:'Desviación por Materias', soon:true},
@@ -1258,7 +1267,7 @@ export default function ColegioDashboard({session, onLogout}) {
               items: [
                 {id:'tablero',       label:'Tablero de Gestión'},
                 {
-                  id:'grp_materias', label:'Análisis por Materias', isGroup: true,
+                  id:'grp_materias', label:'Análisis por Asignaturas', isGroup: true,
                   children: [
                     {id:'niveles',       label:'% Estudiantes por Nivel de Desempeño'},
                     {id:'desv_materias', label:'Desviación por Materias', soon:true},
@@ -1630,49 +1639,80 @@ export default function ColegioDashboard({session, onLogout}) {
           students.length === 0 ? <EmptyState/> :
           <div style={{display:'grid', gap:16}}>
             <Card>
-              <CardTitle sub="% de estudiantes por nivel de desempeño y área">
+              <CardTitle sub="% de estudiantes por nivel de desempeño y asignatura">
                 % Estudiantes por Nivel de Desempeño
               </CardTitle>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={nivelesData} margin={{top:10, right:0, bottom:0, left:-20}}>
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart data={nivelesAsig} margin={{top:10, right:0, bottom:20, left:-20}}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.bg2}/>
-                  <XAxis dataKey="materia" tick={{fontSize:11, fontFamily:'Inter', fill:C.gray}}/>
+                  <XAxis dataKey="asig" tick={{fontSize:10, fontFamily:'Inter', fill:C.gray}}
+                    angle={-30} textAnchor="end" interval={0}/>
                   <YAxis tick={{fontSize:10, fontFamily:'Inter', fill:C.gray}} domain={[0,100]}/>
                   <Tooltip contentStyle={{fontFamily:'Inter', fontSize:12, borderRadius:8}}/>
-                  <Legend wrapperStyle={{fontFamily:'Inter', fontSize:11}}/>
-                  <Bar dataKey="superior" name="Superior" stackId="a" fill={C.green}/>
-                  <Bar dataKey="alto" name="Alto" stackId="a" fill="#F59E0B"/>
-                  <Bar dataKey="basico" name="Básico" stackId="a" fill="#F97316"/>
-                  <Bar dataKey="bajo" name="Bajo" stackId="a" fill={C.red}/>
+                  <Bar dataKey="n4" name="Nivel 4" stackId="a" fill={C.green}/>
+                  <Bar dataKey="n3" name="Nivel 3" stackId="a" fill="#F59E0B"/>
+                  <Bar dataKey="n2" name="Nivel 2" stackId="a" fill="#F97316"/>
+                  <Bar dataKey="n1" name="Nivel 1" stackId="a" fill={C.red}/>
                 </BarChart>
               </ResponsiveContainer>
               <LeyendaNiveles/>
             </Card>
             <Card>
-              <CardTitle sub="Tabla detallada por área">Detalle por Área</CardTitle>
-              <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter'}}>
-                <thead>
-                  <tr style={{borderBottom:`2px solid ${C.bg2}`}}>
-                    {['Área','Superior %','Alto %','Básico %','Bajo %'].map(h => (
-                      <th key={h} style={{textAlign:'left', padding:'8px 12px', fontSize:10,
-                        color:C.gray, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em'}}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {nivelesData.map((m,i) => (
-                    <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`,
-                      background:i%2===0?`${C.bg}80`:'transparent'}}>
-                      <td style={{padding:'10px 12px', fontSize:13, color:C.text, fontWeight:500}}>{m.materia}</td>
-                      {[{v:m.superior,c:C.green},{v:m.alto,c:'#F59E0B'},{v:m.basico,c:'#F97316'},{v:m.bajo,c:C.red}].map((item,j) => (
-                        <td key={j} style={{padding:'10px 12px'}}>
-                          <Badge color={item.c}>{item.v}%</Badge>
-                        </td>
+              <CardTitle sub="Tabla detallada por asignatura">Detalle por Asignatura</CardTitle>
+              <div style={{overflowX:'auto'}}>
+                <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter'}}>
+                  <thead>
+                    <tr style={{borderBottom:`2px solid ${C.bg2}`}}>
+                      <th style={{textAlign:'left', padding:'8px 12px', fontSize:10,
+                        color:C.navy, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em'}}>
+                        Asignatura
+                      </th>
+                      {[
+                        {label:'Nivel 4', color:C.green},
+                        {label:'Nivel 3', color:'#F59E0B'},
+                        {label:'Nivel 2', color:'#F97316'},
+                        {label:'Nivel 1', color:C.red},
+                      ].map(({label, color}) => (
+                        <th key={label} colSpan={2} style={{textAlign:'center', padding:'8px 4px',
+                          fontSize:10, color, fontWeight:600, textTransform:'uppercase',
+                          letterSpacing:'0.05em', borderBottom:`2px solid ${color}`}}>
+                          {label}
+                        </th>
                       ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                    <tr style={{borderBottom:`1px solid ${C.bg2}`}}>
+                      <th/>
+                      {[C.green,'#F59E0B','#F97316',C.red].flatMap(color => [
+                        <th key={`${color}-pct`} style={{textAlign:'center', padding:'4px 8px',
+                          fontSize:9, color, fontWeight:600}}>%</th>,
+                        <th key={`${color}-cnt`} style={{textAlign:'center', padding:'4px 8px',
+                          fontSize:9, color:C.gray, fontWeight:600}}>Cant.</th>,
+                      ])}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {nivelesAsig.map((m,i) => (
+                      <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`,
+                        background:i%2===0?`${C.bg}80`:'transparent'}}>
+                        <td style={{padding:'10px 12px', fontSize:13, color:C.text, fontWeight:500,
+                          whiteSpace:'nowrap'}}>{m.asig}</td>
+                        {[
+                          {pct:m.n4, cnt:m.n4c, color:C.green},
+                          {pct:m.n3, cnt:m.n3c, color:'#F59E0B'},
+                          {pct:m.n2, cnt:m.n2c, color:'#F97316'},
+                          {pct:m.n1, cnt:m.n1c, color:C.red},
+                        ].map(({pct, cnt, color}, j) => [
+                          <td key={`p${j}`} style={{padding:'8px 8px', textAlign:'center'}}>
+                            <Badge color={color}>{pct}%</Badge>
+                          </td>,
+                          <td key={`c${j}`} style={{padding:'8px 8px', textAlign:'center',
+                            fontSize:12, color:C.gray}}>{cnt}</td>,
+                        ])}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </Card>
           </div>
         )}
