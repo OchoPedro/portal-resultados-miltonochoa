@@ -743,6 +743,7 @@ export default function ColegioDashboard({session, onLogout}) {
   const [rankingSort, setRankingSort] = useState({col:'_def', dir:'desc'})
   const [detallePruebaSort, setDetallePruebaSort] = useState({col:'nro_pregunta', dir:'asc'})
   const [listadoNotasSort, setListadoNotasSort] = useState({col:'_def', dir:'desc'})
+  const [nombreColWidth, setNombreColWidth] = useState(175)
   const [oportunidades, setOportunidades] = useState([])
   const [detallePreguntas, setDetallePreguntas] = useState([])
   const [allPruebasPromedio, setAllPruebasPromedio] = useState([])
@@ -2932,6 +2933,16 @@ export default function ColegioDashboard({session, onLogout}) {
           const handleSortLN = col => setListadoNotasSort(s => ({col, dir: s.col===col && s.dir==='asc' ? 'desc' : 'asc'}))
           const arrowLN = col => listadoNotasSort.col===col ? (listadoNotasSort.dir==='asc' ? ' ▲' : ' ▼') : ' ⇅'
 
+          const onResizeNombre = e => {
+            e.preventDefault()
+            const startX = e.clientX
+            const startW = nombreColWidth
+            const onMove = ev => setNombreColWidth(Math.max(80, Math.min(400, startW + ev.clientX - startX)))
+            const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp) }
+            document.addEventListener('mousemove', onMove)
+            document.addEventListener('mouseup', onUp)
+          }
+
           const ranked = [...students]
             .map(s => ({...s, _def: calcDef(s)}))
             .sort((a, b) => {
@@ -2971,7 +2982,7 @@ export default function ColegioDashboard({session, onLogout}) {
                 <table style={{borderCollapse:'collapse', fontFamily:'Inter', fontSize:11, width:'100%', tableLayout:'fixed'}}>
                   <colgroup>
                     <col style={{width:28}}/>
-                    <col style={{width:175}}/>
+                    <col style={{width:nombreColWidth}}/>
                     {AREAS.flatMap(a => a.cols.map(([col]) => <col key={col} style={{width:52}}/>))}
                     <col style={{width:52}}/>
                     <col style={{width:48}}/>
@@ -2982,8 +2993,15 @@ export default function ColegioDashboard({session, onLogout}) {
                       <th rowSpan={2} style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)',
                         cursor:'default', padding:'4px 4px'}}>#</th>
                       <th rowSpan={2} style={{...thBase, textAlign:'left', borderBottom:'1px solid rgba(255,255,255,0.15)',
-                        padding:'4px 8px'}}
-                        onClick={() => handleSortLN('nombre')}>Nombre Estudiante{arrowLN('nombre')}</th>
+                        padding:'4px 8px', position:'relative'}}
+                        onClick={() => handleSortLN('nombre')}>
+                        Nombre Estudiante{arrowLN('nombre')}
+                        <div onMouseDown={onResizeNombre}
+                          style={{position:'absolute', right:0, top:0, bottom:0, width:5,
+                            cursor:'col-resize', background:'rgba(255,255,255,0.15)',
+                            borderRadius:2}}
+                          onClick={e => e.stopPropagation()}/>
+                      </th>
                       {AREAS.map(a => (
                         <th key={a.label} colSpan={a.cols.length}
                           style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)', cursor:'default', padding:'4px 2px'}}>
