@@ -49,6 +49,19 @@ const LeyendaNiveles = () => (
 )
 
 // Leyenda por área con umbrales específicos — usada en Tablero de Gestión
+const AREAS_ASIGNATURAS = [
+  {label:'Matemáticas',        akey:'mat', t:SEMAFORO_T.mat,
+   asignaturas:['Genéricos','No Genéricos']},
+  {label:'Ciencias Naturales', akey:'cn',  t:SEMAFORO_T.cn,
+   asignaturas:['Química','Física','Biología','CTS']},
+  {label:'Sociales y Ciudad.', akey:'soc', t:SEMAFORO_T.soc,
+   asignaturas:['Sociales','Ciudadanas']},
+  {label:'Lectura Crítica',    akey:'lc',  t:SEMAFORO_T.lc,
+   asignaturas:['Lectura Crítica']},
+  {label:'Inglés',             akey:'ing', t:SEMAFORO_T.ing,
+   asignaturas:['Inglés']},
+]
+
 const LeyendaNivelesPorArea = () => (
   <div style={{marginTop:20}}>
     <div style={{fontSize:11, fontFamily:'Inter', fontWeight:600, color:C.navy,
@@ -59,41 +72,45 @@ const LeyendaNivelesPorArea = () => (
       <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter', fontSize:11}}>
         <thead>
           <tr>
-            {['Área','Insuficiente','Mínimo','Satisfactorio','Avanzado'].map((h,i) => (
-              <th key={i} style={{padding:'6px 10px', textAlign:'center',
-                color: i===0?C.navy:NIVEL_COLOR[i-1], fontWeight:600,
-                borderBottom:`2px solid ${i===0?C.navy:NIVEL_COLOR[i-1]}`}}>{h}</th>
+            {['Área','Asignatura','Insuficiente','Mínimo','Satisfactorio','Avanzado'].map((h,i) => (
+              <th key={i} style={{padding:'6px 10px', textAlign: i<2 ? 'left' : 'center',
+                color: i<2 ? C.navy : NIVEL_COLOR[i-2], fontWeight:600,
+                borderBottom:`2px solid ${i<2 ? C.navy : NIVEL_COLOR[i-2]}`}}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {[
-            {label:'Matemáticas',       area:'mat', t:SEMAFORO_T.mat},
-            {label:'Ciencias Naturales', area:'cn',  t:SEMAFORO_T.cn},
-            {label:'Sociales y Ciudad.', area:'soc', t:SEMAFORO_T.soc},
-            {label:'Lectura Crítica',    area:'lc',  t:SEMAFORO_T.lc},
-            {label:'Inglés',             area:'ing', t:SEMAFORO_T.ing},
-          ].map(({label,t},i) => (
-            <tr key={i} style={{borderBottom:`1px solid #f0f0f0`}}>
-              <td style={{padding:'6px 10px', fontWeight:600, color:C.navy}}>{label}</td>
-              <td style={{padding:'6px 10px', textAlign:'center'}}>
-                <span style={{background:NIVEL_BG[0], color:NIVEL_COLOR[0],
-                  padding:'2px 8px', borderRadius:4, fontWeight:600}}>0 – {t[0]}</span>
-              </td>
-              <td style={{padding:'6px 10px', textAlign:'center'}}>
-                <span style={{background:NIVEL_BG[1], color:NIVEL_COLOR[1],
-                  padding:'2px 8px', borderRadius:4, fontWeight:600}}>{t[0]+1} – {t[1]}</span>
-              </td>
-              <td style={{padding:'6px 10px', textAlign:'center'}}>
-                <span style={{background:NIVEL_BG[2], color:NIVEL_COLOR[2],
-                  padding:'2px 8px', borderRadius:4, fontWeight:600}}>{t[1]+1} – {t[2]}</span>
-              </td>
-              <td style={{padding:'6px 10px', textAlign:'center'}}>
-                <span style={{background:NIVEL_BG[3], color:NIVEL_COLOR[3],
-                  padding:'2px 8px', borderRadius:4, fontWeight:600}}>{t[2]+1} – 100</span>
-              </td>
-            </tr>
-          ))}
+          {AREAS_ASIGNATURAS.flatMap(({label, t, asignaturas}) =>
+            asignaturas.map((asig, i) => (
+              <tr key={`${label}-${i}`} style={{borderBottom:`1px solid #f0f0f0`}}>
+                {i === 0 && (
+                  <td rowSpan={asignaturas.length}
+                    style={{padding:'6px 10px', fontWeight:600, color:C.navy,
+                      verticalAlign:'middle',
+                      borderRight:'1px solid #f0f0f0'}}>
+                    {label}
+                  </td>
+                )}
+                <td style={{padding:'6px 10px', color:C.gray}}>{asig}</td>
+                <td style={{padding:'6px 10px', textAlign:'center'}}>
+                  <span style={{background:NIVEL_BG[0], color:NIVEL_COLOR[0],
+                    padding:'2px 8px', borderRadius:4, fontWeight:600}}>0 – {t[0]}</span>
+                </td>
+                <td style={{padding:'6px 10px', textAlign:'center'}}>
+                  <span style={{background:NIVEL_BG[1], color:NIVEL_COLOR[1],
+                    padding:'2px 8px', borderRadius:4, fontWeight:600}}>{t[0]+1} – {t[1]}</span>
+                </td>
+                <td style={{padding:'6px 10px', textAlign:'center'}}>
+                  <span style={{background:NIVEL_BG[2], color:NIVEL_COLOR[2],
+                    padding:'2px 8px', borderRadius:4, fontWeight:600}}>{t[1]+1} – {t[2]}</span>
+                </td>
+                <td style={{padding:'6px 10px', textAlign:'center'}}>
+                  <span style={{background:NIVEL_BG[3], color:NIVEL_COLOR[3],
+                    padding:'2px 8px', borderRadius:4, fontWeight:600}}>{t[2]+1} – 100</span>
+                </td>
+              </tr>
+            ))
+          )}
         </tbody>
       </table>
     </div>
@@ -1471,7 +1488,6 @@ export default function ColegioDashboard({session, onLogout}) {
                       </tbody>
                     </table>
                   </div>
-                  <LeyendaNivelesPorArea/>
                 </>
               )}
             </Card>
