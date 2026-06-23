@@ -13,6 +13,24 @@ import {
 // ── HELPERS ──────────────────────────────────────────────────
 const avgArr = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0
 
+const toTitleCase = str => str
+  ? str.toLowerCase().replace(/(?:^|\s)\S/g, c => c.toUpperCase())
+  : str
+
+const REGION_NOMBRES = {
+  'ANTIOQUIA':'Andina','BOGOTÁ D.C.':'Andina','BOYACÁ':'Andina',
+  'CALDAS':'Andina','CUNDINAMARCA':'Andina','HUILA':'Andina',
+  'NORTE DE SANTANDER':'Andina','NORTE SANTANDER':'Andina',
+  'QUINDÍO':'Andina','RISARALDA':'Andina','SANTANDER':'Andina','TOLIMA':'Andina',
+  'ATLÁNTICO':'Caribe','BOLÍVAR':'Caribe','CESAR':'Caribe',
+  'CÓRDOBA':'Caribe','LA GUAJIRA':'Caribe','MAGDALENA':'Caribe',
+  'SUCRE':'Caribe','SAN ANDRÉS':'Caribe',
+  'CAUCA':'Pacífico','CHOCÓ':'Pacífico','NARIÑO':'Pacífico','VALLE DEL CAUCA':'Pacífico',
+  'ARAUCA':'Llanos','CASANARE':'Llanos','META':'Llanos','VICHADA':'Llanos',
+  'AMAZONAS':'Amazonía','CAQUETÁ':'Amazonía','GUAINÍA':'Amazonía',
+  'GUAVIARE':'Amazonía','PUTUMAYO':'Amazonía','VAUPÉS':'Amazonía',
+}
+
 // Semáforo por área — umbrales específicos según criterios pedagógicos AAMO
 const SEMAFORO_T = {
   mat: [35, 50, 70],   // insuf ≤35, min ≤50, satis ≤70, avanz >70
@@ -923,7 +941,14 @@ export default function ColegioDashboard({session, onLogout}) {
 
   // Tablero orden
   const tableroOrden = ['mejores','nacional','region','departamento','municipio','plantel']
-  const tableroLabels = {mejores:'Mejores Promedios', nacional:'Nacional', region:'Región', departamento:'Departamento', municipio:'Municipio', plantel:'Plantel'}
+  const tableroLabels = {
+    mejores:      'Mejores Promedios',
+    nacional:     'Colombia',
+    region:       REGION_NOMBRES[session?.departamento_nombre?.toUpperCase()] || 'Región',
+    departamento: toTitleCase(session?.departamento_nombre) || 'Departamento',
+    municipio:    toTitleCase(session?.municipio) || 'Municipio',
+    plantel:      'Plantel',
+  }
 
   const tabs = [
     {id:'tablero',          label:'Tablero de Gestión'},
