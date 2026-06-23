@@ -11,23 +11,92 @@ import {
 } from 'recharts'
 
 // ── HELPERS ──────────────────────────────────────────────────
-const avgArr = arr => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0)/arr.length*10)/10 : 0
-const semaforoBg  = v => v>=65?'#DCFCE7':v>=45?'#FEF9C3':v>=25?'#FFEDD5':'#FEE2E2'
-const semaforoColor = v => v>=65?C.green:v>=45?'#F59E0B':v>=25?'#F97316':C.red
+const avgArr = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0
 
+// Semáforo por área — umbrales específicos según criterios pedagógicos AAMO
+const SEMAFORO_T = {
+  mat: [35, 50, 70],   // insuf ≤35, min ≤50, satis ≤70, avanz >70
+  cn:  [40, 55, 70],
+  soc: [40, 55, 70],
+  lc:  [35, 50, 65],
+  ing: [36, 57, 70],
+  _:   [24, 44, 64],   // genérico para competencias, porcentajes, etc.
+}
+const NIVEL_BG    = ['#FEE2E2','#FFEDD5','#FEF9C3','#DCFCE7']
+const NIVEL_COLOR = [C.red,'#F97316','#F59E0B',C.green]
+const semaforoNivel = (v, area='_') => {
+  const [t1,t2,t3] = SEMAFORO_T[area] || SEMAFORO_T['_']
+  return v > t3 ? 3 : v > t2 ? 2 : v > t1 ? 1 : 0
+}
+const semaforoBg    = (v, area) => NIVEL_BG[semaforoNivel(v, area)]
+const semaforoColor = (v, area) => NIVEL_COLOR[semaforoNivel(v, area)]
+
+// Leyenda genérica (para tabs de competencias, desviación, etc.)
 const LeyendaNiveles = () => (
   <div style={{display:'flex', gap:8, flexWrap:'wrap', marginTop:12}}>
     {[
-      {label:'Avanzado (65-100)', color:C.green},
-      {label:'Satisfactorio (45-64)', color:'#F59E0B'},
-      {label:'Mínimo (25-44)', color:'#F97316'},
-      {label:'Insuficiente (0-24)', color:C.red},
+      {label:'Avanzado', color:C.green},
+      {label:'Satisfactorio', color:'#F59E0B'},
+      {label:'Mínimo', color:'#F97316'},
+      {label:'Insuficiente', color:C.red},
     ].map((l,i) => (
       <div key={i} style={{display:'flex', alignItems:'center', gap:6}}>
         <div style={{width:12, height:12, borderRadius:2, background:l.color}}/>
         <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>{l.label}</span>
       </div>
     ))}
+  </div>
+)
+
+// Leyenda por área con umbrales específicos — usada en Tablero de Gestión
+const LeyendaNivelesPorArea = () => (
+  <div style={{marginTop:20}}>
+    <div style={{fontSize:11, fontFamily:'Inter', fontWeight:600, color:C.navy,
+      letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:10}}>
+      Umbrales por Área
+    </div>
+    <div style={{overflowX:'auto'}}>
+      <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter', fontSize:11}}>
+        <thead>
+          <tr>
+            {['Área','Insuficiente','Mínimo','Satisfactorio','Avanzado'].map((h,i) => (
+              <th key={i} style={{padding:'6px 10px', textAlign:'center',
+                color: i===0?C.navy:NIVEL_COLOR[i-1], fontWeight:600,
+                borderBottom:`2px solid ${i===0?C.navy:NIVEL_COLOR[i-1]}`}}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {[
+            {label:'Matemáticas',       area:'mat', t:SEMAFORO_T.mat},
+            {label:'Ciencias Naturales', area:'cn',  t:SEMAFORO_T.cn},
+            {label:'Sociales y Ciudad.', area:'soc', t:SEMAFORO_T.soc},
+            {label:'Lectura Crítica',    area:'lc',  t:SEMAFORO_T.lc},
+            {label:'Inglés',             area:'ing', t:SEMAFORO_T.ing},
+          ].map(({label,t},i) => (
+            <tr key={i} style={{borderBottom:`1px solid #f0f0f0`}}>
+              <td style={{padding:'6px 10px', fontWeight:600, color:C.navy}}>{label}</td>
+              <td style={{padding:'6px 10px', textAlign:'center'}}>
+                <span style={{background:NIVEL_BG[0], color:NIVEL_COLOR[0],
+                  padding:'2px 8px', borderRadius:4, fontWeight:600}}>0 – {t[0]}</span>
+              </td>
+              <td style={{padding:'6px 10px', textAlign:'center'}}>
+                <span style={{background:NIVEL_BG[1], color:NIVEL_COLOR[1],
+                  padding:'2px 8px', borderRadius:4, fontWeight:600}}>{t[0]+1} – {t[1]}</span>
+              </td>
+              <td style={{padding:'6px 10px', textAlign:'center'}}>
+                <span style={{background:NIVEL_BG[2], color:NIVEL_COLOR[2],
+                  padding:'2px 8px', borderRadius:4, fontWeight:600}}>{t[1]+1} – {t[2]}</span>
+              </td>
+              <td style={{padding:'6px 10px', textAlign:'center'}}>
+                <span style={{background:NIVEL_BG[3], color:NIVEL_COLOR[3],
+                  padding:'2px 8px', borderRadius:4, fontWeight:600}}>{t[2]+1} – 100</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   </div>
 )
 
@@ -1376,10 +1445,16 @@ export default function ColegioDashboard({session, onLogout}) {
                               <td style={{padding:'10px 14px', fontSize:13, fontWeight:600, color:C.navy}}>
                                 {tableroLabels[tipo]}
                               </td>
-                              {[row.matematicas, row.ciencias_naturales, row.sociales_ciudadanas,
-                                row.lectura_critica, row.ingles, row.definitiva].map((val,j) => (
+                              {[
+                                {val:row.matematicas,        area:'mat'},
+                                {val:row.ciencias_naturales, area:'cn'},
+                                {val:row.sociales_ciudadanas,area:'soc'},
+                                {val:row.lectura_critica,    area:'lc'},
+                                {val:row.ingles,             area:'ing'},
+                                {val:row.definitiva,         area:'_'},
+                              ].map(({val,area},j) => (
                                 <td key={j} style={{padding:'8px', textAlign:'center'}}>
-                                  <div style={{background:semaforoBg(val), color:semaforoColor(val),
+                                  <div style={{background:semaforoBg(val,area), color:semaforoColor(val,area),
                                     padding:'6px 10px', borderRadius:6, fontWeight:700, fontSize:14,
                                     fontFamily:'Playfair Display, serif', display:'inline-block', minWidth:40}}>
                                     {val}
@@ -1396,7 +1471,7 @@ export default function ColegioDashboard({session, onLogout}) {
                       </tbody>
                     </table>
                   </div>
-                  <LeyendaNiveles/>
+                  <LeyendaNivelesPorArea/>
                 </>
               )}
             </Card>
@@ -1420,11 +1495,21 @@ export default function ColegioDashboard({session, onLogout}) {
                         <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`}}>
                           <td style={{padding:'10px', textAlign:'center', fontSize:13, fontWeight:600, color:C.navy}}>{row.grado}</td>
                           <td style={{padding:'10px', textAlign:'center', fontSize:13, fontWeight:600, color:C.navy}}>{row.salon}</td>
-                          {[row.mat_genericos, row.mat_nogenericos, row.cn_quimica, row.cn_fisica,
-                            row.cn_biologia, row.cn_cts, row.soc_sociales, row.soc_ciudadanas,
-                            row.lectura_critica, row.ingles, row.definitiva].map((val,j) => (
+                          {[
+                            {val:row.mat_genericos,   area:'mat'},
+                            {val:row.mat_nogenericos, area:'mat'},
+                            {val:row.cn_quimica,      area:'cn'},
+                            {val:row.cn_fisica,       area:'cn'},
+                            {val:row.cn_biologia,     area:'cn'},
+                            {val:row.cn_cts,          area:'cn'},
+                            {val:row.soc_sociales,    area:'soc'},
+                            {val:row.soc_ciudadanas,  area:'soc'},
+                            {val:row.lectura_critica, area:'lc'},
+                            {val:row.ingles,          area:'ing'},
+                            {val:row.definitiva,      area:'_'},
+                          ].map(({val,area},j) => (
                             <td key={j} style={{padding:'6px', textAlign:'center'}}>
-                              <div style={{background:semaforoBg(val), color:semaforoColor(val),
+                              <div style={{background:semaforoBg(val,area), color:semaforoColor(val,area),
                                 padding:'4px 8px', borderRadius:5, fontWeight:700, fontSize:13,
                                 display:'inline-block', minWidth:36}}>{val}</div>
                             </td>
@@ -1437,7 +1522,7 @@ export default function ColegioDashboard({session, onLogout}) {
                     </tbody>
                   </table>
                 </div>
-                <LeyendaNiveles/>
+                <LeyendaNivelesPorArea/>
               </Card>
             )}
           </div>
