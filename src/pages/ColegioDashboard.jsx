@@ -699,6 +699,7 @@ export default function ColegioDashboard({session, onLogout}) {
   const mobile = useMobile()
   const tablet = useTablet()
   const [tab, setTab] = useState('carta')
+  const [boxHover, setBoxHover] = useState(null) // {d, x, y}
   const [menuSection, setMenuSection] = useState('plantel')
   const [subGroup, setSubGroup] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -1807,8 +1808,9 @@ export default function ColegioDashboard({session, onLogout}) {
               <CardTitle sub="Distribución de puntajes por asignatura">
                 Desviación por Asignatura
               </CardTitle>
-              {/* Box plot SVG */}
-              <div style={{width:'100%', overflowX:'auto'}}>
+              {/* Box plot SVG interactivo */}
+              <div style={{width:'100%', overflowX:'auto', position:'relative'}}
+                onMouseLeave={()=>setBoxHover(null)}>
                 <svg viewBox="0 0 1020 300" style={{width:'100%', minWidth:640, display:'block'}}>
                   {/* Grid lines */}
                   {[0,25,50,75,100].map(v => {
@@ -1820,43 +1822,91 @@ export default function ColegioDashboard({session, onLogout}) {
                   })}
                   {/* Boxes */}
                   {desvAsigData.map((d, i) => {
-                    const cols = desvAsigData.length
+                    const cols  = desvAsigData.length
                     const slotW = 960 / cols
-                    const cx = 50 + slotW * i + slotW / 2
-                    const bw = slotW * 0.55
-                    const toY = v => 30 + 210 * (1 - v / 110)
-                    const yMin = toY(d.min), yQ1 = toY(d.q1), yMed = toY(d.median)
-                    const yQ3 = toY(d.q3), yMax = toY(d.max)
-                    const col = semaforoColor(d.mean, d.akey)
+                    const cx    = 50 + slotW * i + slotW / 2
+                    const bw    = slotW * 0.55
+                    const toY   = v => 30 + 210 * (1 - v / 110)
+                    const yMin  = toY(d.min), yQ1 = toY(d.q1), yMed = toY(d.median)
+                    const yQ3   = toY(d.q3),  yMax = toY(d.max)
+                    const col   = semaforoColor(d.mean, d.akey)
+                    const hot   = boxHover?.i === i
+                    const strokeC = hot ? C.navy : '#64748b'
+                    const boxFill = hot ? `${semaforoBg(d.mean, d.akey)}` : 'white'
                     return (
-                      <g key={i}>
-                        {/* Whisker line */}
-                        <line x1={cx} y1={yMin} x2={cx} y2={yMax} stroke="#64748b" strokeWidth={1.5}/>
+                      <g key={i} style={{cursor:'pointer'}}
+                        onMouseEnter={e => setBoxHover({d, i, x:e.clientX, y:e.clientY})}
+                        onMouseMove={e  => setBoxHover(h => h ? {...h, x:e.clientX, y:e.clientY} : h)}>
+                        {/* Hover hit area */}
+                        <rect x={cx-slotW/2} y={10} width={slotW} height={250} fill="transparent"/>
+                        {/* Whisker */}
+                        <line x1={cx} y1={yMin} x2={cx} y2={yMax} stroke={strokeC} strokeWidth={hot?2:1.5}/>
                         {/* Min cap */}
-                        <line x1={cx-bw/4} y1={yMin} x2={cx+bw/4} y2={yMin} stroke="#64748b" strokeWidth={1.5}/>
+                        <line x1={cx-bw/4} y1={yMin} x2={cx+bw/4} y2={yMin} stroke={strokeC} strokeWidth={hot?2:1.5}/>
                         {/* Max cap */}
-                        <line x1={cx-bw/4} y1={yMax} x2={cx+bw/4} y2={yMax} stroke="#64748b" strokeWidth={1.5}/>
+                        <line x1={cx-bw/4} y1={yMax} x2={cx+bw/4} y2={yMax} stroke={strokeC} strokeWidth={hot?2:1.5}/>
                         {/* Max label */}
-                        <rect x={cx-12} y={yMax-16} width={24} height={13} rx={2} fill="white" stroke="#e2e8f0" strokeWidth={1}/>
-                        <text x={cx} y={yMax-6} textAnchor="middle" fontSize={8} fill="#334155" fontWeight="600">
-                          {Math.round(d.max)}
-                        </text>
-                        {/* Box Q1-Q3 */}
-                        <rect x={cx-bw/2} y={yQ3} width={bw} height={yQ1-yQ3}
-                          fill="white" stroke="#64748b" strokeWidth={1.5} rx={2}/>
-                        {/* Median line */}
-                        <line x1={cx-bw/2} y1={yMed} x2={cx+bw/2} y2={yMed} stroke={col} strokeWidth={2.5}/>
+                        <rect x={cx-13} y={yMax-17} width={26} height={14} rx={3}
+                          fill={hot ? C.navy : 'white'} stroke={hot ? C.navy : '#e2e8f0'} strokeWidth={1}/>
+                        <text x={cx} y={yMax-6} textAnchor="middle" fontSize={8}
+                          fill={hot ? 'white' : '#334155'} fontWeight="600">{Math.round(d.max)}</text>
+                        {/* Box Q1–Q3 */}
+                        <rect x={cx-bw/2} y={yQ3} width={bw} height={Math.max(yQ1-yQ3,2)}
+                          fill={boxFill} stroke={strokeC} strokeWidth={hot?2:1.5} rx={3}/>
+                        {/* Median */}
+                        <line x1={cx-bw/2} y1={yMed} x2={cx+bw/2} y2={yMed}
+                          stroke={col} strokeWidth={hot?3.5:2.5}/>
                         {/* Mean dot */}
-                        <circle cx={cx} cy={toY(d.mean)} r={3} fill={col}/>
+                        <circle cx={cx} cy={toY(d.mean)} r={hot?4.5:3} fill={col}
+                          stroke="white" strokeWidth={1}/>
                         {/* X label */}
-                        <text x={cx} y={255} textAnchor="end" fontSize={9} fill="#64748b"
-                          transform={`rotate(-35,${cx},255)`}>{d.asig}</text>
+                        <text x={cx} y={258} textAnchor="end" fontSize={9}
+                          fill={hot ? C.navy : '#64748b'} fontWeight={hot?600:400}
+                          transform={`rotate(-35,${cx},258)`}>{d.asig}</text>
                       </g>
                     )
                   })}
                 </svg>
+
+                {/* Tooltip flotante */}
+                {boxHover && (
+                  <div style={{
+                    position:'fixed', top: boxHover.y - 10, left: boxHover.x + 18,
+                    background:C.white, border:`1px solid ${C.grayLt}`,
+                    borderRadius:10, padding:'12px 16px', fontFamily:'Inter', fontSize:12,
+                    boxShadow:'0 8px 24px rgba(10,31,61,0.15)', zIndex:9999,
+                    pointerEvents:'none', minWidth:170,
+                  }}>
+                    <div style={{fontWeight:700, color:C.navy, marginBottom:8, fontSize:13}}>
+                      {boxHover.d.asig}
+                    </div>
+                    {[
+                      {label:'Máximo',    val: boxHover.d.max,    color:C.gray},
+                      {label:'Q3 (75%)',  val: boxHover.d.q3,     color:C.gray},
+                      {label:'Mediana',   val: boxHover.d.median, color: semaforoColor(boxHover.d.median, boxHover.d.akey), bold:true},
+                      {label:'Promedio',  val: boxHover.d.mean,   color: semaforoColor(boxHover.d.mean,   boxHover.d.akey), bold:true},
+                      {label:'Q1 (25%)',  val: boxHover.d.q1,     color:C.gray},
+                      {label:'Mínimo',    val: boxHover.d.min,    color:C.gray},
+                    ].map(({label, val, color, bold}) => (
+                      <div key={label} style={{display:'flex', justifyContent:'space-between',
+                        gap:16, marginBottom:4, color}}>
+                        <span style={{color:C.gray}}>{label}</span>
+                        <span style={{fontWeight: bold?700:500}}>{Math.round(val)}</span>
+                      </div>
+                    ))}
+                    <div style={{borderTop:`1px solid ${C.bg2}`, marginTop:6, paddingTop:6,
+                      display:'flex', justifyContent:'space-between', color:C.gray}}>
+                      <span>Desviación</span>
+                      <span style={{fontWeight:500}}>{Math.round(boxHover.d.std)}</span>
+                    </div>
+                    <div style={{display:'flex', justifyContent:'space-between', color:C.gray, marginTop:4}}>
+                      <span>Estudiantes</span>
+                      <span style={{fontWeight:500}}>{boxHover.d.n}</span>
+                    </div>
+                  </div>
+                )}
               </div>
-              {/* Leyenda box plot */}
+              {/* Leyenda */}
               <div style={{display:'flex', gap:16, marginTop:8, flexWrap:'wrap', fontSize:10,
                 fontFamily:'Inter', color:C.gray}}>
                 <span style={{display:'flex', alignItems:'center', gap:4}}>
@@ -1869,7 +1919,7 @@ export default function ColegioDashboard({session, onLogout}) {
                 </span>
                 <span style={{display:'flex', alignItems:'center', gap:4}}>
                   <span style={{display:'inline-block', width:16, height:2.5, background:C.green}}/>
-                  Mediana (color = semáforo promedio)
+                  Mediana
                 </span>
                 <span style={{display:'flex', alignItems:'center', gap:4}}>
                   <span style={{display:'inline-block', width:6, height:6, borderRadius:'50%', background:C.green}}/>
