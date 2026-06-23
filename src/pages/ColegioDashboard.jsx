@@ -724,7 +724,7 @@ export default function ColegioDashboard({session, onLogout}) {
   const [notasCompN, setNotasCompN] = useState([])
   const [notasCompNAsig, setNotasCompNAsig] = useState('Todas')
   const [compNGestion, setCompNGestion] = useState([])
-  const [mejoraLimite, setMejoraLimite] = useState(10)
+  const [mejoraLimite, setMejoraLimite] = useState(0)
   const [mejoraAsig, setMejoraAsig] = useState('Todas')
   const [compNAsigFilter, setCompNAsigFilter] = useState('Todas')
   const [oportunidades, setOportunidades] = useState([])
@@ -2518,15 +2518,22 @@ export default function ColegioDashboard({session, onLogout}) {
 
         {/* ══ OPORTUNIDADES ════════════════════════════════════ */}
         {tab==='mejora' && (() => {
-          const limites = [5,10,15,20,25,30,35,40,45,50]
           const asignaturas = ['Todas', ...new Set(compGestion.map(r => r.materia))]
           const asigActual = mejoraAsig === 'Todas' ? (asignaturas[1] || 'Todas') : mejoraAsig
+
+          // Límites: de 0 a N (de 5 en 5) tal que nac_prom_min + limite <= 100
+          const compRows = compGestion.filter(r => r.materia === asigActual)
+          const minNacProm = compRows.length > 0 ? Math.min(...compRows.map(r => r.nac_prom || 0)) : 0
+          const maxLimite = Math.floor((100 - minNacProm) / 5) * 5
+          const limites = []
+          for (let v = 0; v <= maxLimite; v += 5) limites.push(v)
+          const limiteActual = Math.min(mejoraLimite, maxLimite)
 
           // Una fila por competencia con nac_prom del RPC
           const filas = compGestion
             .filter(r => r.materia === asigActual)
             .map(r => {
-              const umbral = (r.nac_prom || 0) + mejoraLimite
+              const umbral = (r.nac_prom || 0) + limiteActual
               const notasDeComp = notasComp.filter(n => n.materia === asigActual && n.competencia === r.competencia)
               const total = notasDeComp.length
               const encima = notasDeComp.filter(n => n.nota > umbral).length
@@ -2559,8 +2566,8 @@ export default function ColegioDashboard({session, onLogout}) {
                   </div>
                   <div style={{display:'flex', alignItems:'center', gap:8}}>
                     <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Límite:</span>
-                    <select value={mejoraLimite} onChange={e => setMejoraLimite(Number(e.target.value))} style={selStyle}>
-                      {limites.map(v => <option key={v} value={v}>+{v}</option>)}
+                    <select value={limiteActual} onChange={e => setMejoraLimite(Number(e.target.value))} style={selStyle}>
+                      {limites.map(v => <option key={v} value={v}>{v === 0 ? '0' : `+${v}`}</option>)}
                     </select>
                   </div>
                 </div>
