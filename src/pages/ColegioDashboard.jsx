@@ -1871,7 +1871,8 @@ export default function ColegioDashboard({session, onLogout}) {
                 {/* Tooltip flotante */}
                 {boxHover && (
                   <div style={{
-                    position:'fixed', top: boxHover.y - 10, left: boxHover.x + 18,
+                    position:'fixed', top: boxHover.y - 10,
+                    left: boxHover.x > window.innerWidth - 220 ? boxHover.x - 188 : boxHover.x + 18,
                     background:C.white, border:`1px solid ${C.grayLt}`,
                     borderRadius:10, padding:'12px 16px', fontFamily:'Inter', fontSize:12,
                     boxShadow:'0 8px 24px rgba(10,31,61,0.15)', zIndex:9999,
