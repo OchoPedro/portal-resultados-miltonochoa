@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import {
   C,
@@ -274,7 +274,7 @@ function PlantelEstudiantes({ colegioId }) {
           <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter', minWidth: mobile ? 480 : 'auto'}}>
             <thead>
               <tr style={{borderBottom:`2px solid ${C.bg2}`}}>
-                {['#','Nombre','Documento','Grado','Salón','Usuario'].map(h => (
+                {['#','Nombre','Grado','Salón','Usuario'].map(h => (
                   <th key={h} style={{textAlign:'left', padding:'8px 12px', fontSize:10,
                     color:C.gray, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em', whiteSpace:'nowrap'}}>{h}</th>
                 ))}
@@ -286,7 +286,6 @@ function PlantelEstudiantes({ colegioId }) {
                   background:i%2===0?`${C.bg}80`:'transparent'}}>
                   <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{i+1}</td>
                   <td style={{padding:'10px 12px', fontSize:13, color:C.text, fontWeight:500, whiteSpace:'nowrap'}}>{e.nombre}</td>
-                  <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{e.usuario}</td>
                   <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{e.grado||'—'}</td>
                   <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{e.salon||'—'}</td>
                   <td style={{padding:'10px 12px', fontSize:12, color:C.navy, fontWeight:500}}>{e.usuario}</td>
@@ -510,7 +509,7 @@ function PlantelMencion({ colegioId, pruebas }) {
     {label:'Sociales',          val:ganador.sociales},
     {label:'Lect. Crítica',     val:ganador.lectura_critica},
     {label:'Inglés',            val:ganador.ingles},
-  ].filter(a => a.val) : []
+  ].filter(a => a.val != null) : []
 
   return (
     <Card>
@@ -754,7 +753,16 @@ export default function ColegioDashboard({session, onLogout}) {
   const [detallePreguntas, setDetallePreguntas] = useState([])
   const [allPruebasPromedio, setAllPruebasPromedio] = useState([])
 
-  useEffect(() => { loadAll() }, [])
+  const mountedRef = useRef(true)
+  useEffect(() => { return () => { mountedRef.current = false } }, [])
+
+  useEffect(() => { setBoxHover(null) }, [tab])
+
+  useEffect(() => {
+    let cancelled = false
+    loadAll()
+    return () => { cancelled = true }
+  }, [])
 
   // Filtered students based on selectors
   const students = allStudents.filter(s => {
@@ -764,21 +772,31 @@ export default function ColegioDashboard({session, onLogout}) {
   })
 
   // Derived filter options from loaded data
-  const gradosDisponibles = ['Todos', ...new Set(allStudents.map(s => s.estudiantes?.grado != null ? String(s.estudiantes.grado) : null).filter(Boolean)).values()]
-  const salonesDisponibles = ['Todos', ...new Set(
-    allStudents
-      .filter(s => selectedGrado === 'Todos' || String(s.estudiantes?.grado) === selectedGrado)
-      .map(s => s.estudiantes?.salon != null ? String(s.estudiantes.salon) : null).filter(Boolean)
-  ).values()]
+  const gradosDisponibles = useMemo(() =>
+    ['Todos', ...new Set(allStudents.map(s => s.estudiantes?.grado != null ? String(s.estudiantes.grado) : null).filter(Boolean)).values()],
+    [allStudents]
+  )
+  const salonesDisponibles = useMemo(() =>
+    ['Todos', ...new Set(
+      allStudents
+        .filter(s => selectedGrado === 'Todos' || String(s.estudiantes?.grado) === selectedGrado)
+        .map(s => s.estudiantes?.salon != null ? String(s.estudiantes.salon) : null).filter(Boolean)
+    ).values()],
+    [allStudents, selectedGrado]
+  )
 
   // Reload when prueba changes
   useEffect(() => {
-    if (selectedPrueba) loadForPrueba(selectedPrueba)
+    if (!selectedPrueba) return
+    let cancelled = false
+    loadForPrueba(selectedPrueba, () => cancelled)
+    return () => { cancelled = true }
   }, [selectedPrueba])
 
   // Load student detail when selectedStudent changes
   useEffect(() => {
     if (!selectedStudent || !selectedPrueba) return
+    let cancelled = false
     setStudentDetalle(null)
     setLoadingDetalle(true)
     supabase
@@ -788,9 +806,11 @@ export default function ColegioDashboard({session, onLogout}) {
       .eq('prueba_id', selectedPrueba.id)
       .single()
       .then(({ data }) => {
+        if (cancelled) return
         setStudentDetalle(data?.detalle || [])
         setLoadingDetalle(false)
       })
+    return () => { cancelled = true }
   }, [selectedStudent, selectedPrueba])
 
   const loadAll = async () => {
@@ -826,18 +846,19 @@ export default function ColegioDashboard({session, onLogout}) {
           if (!byPrueba[r.prueba_id]) byPrueba[r.prueba_id] = []
           byPrueba[r.prueba_id].push(r)
         })
+        const avgNull = arr => { const f = arr.filter(v => v != null && !isNaN(v)); return f.length ? f.reduce((a,b)=>a+b,0)/f.length : null }
         const promedios = [...pruebasData].reverse().map(p => {
           const arr = byPrueba[p.id] || []
           if (!arr.length) return null
           return {
             label: p.codigo || p.nombre,
             prueba: p,
-            global: Math.round(avgArr(arr.map(r=>r.puntaje_global).filter(Boolean))),
-            mat:    Math.round(avgArr(arr.flatMap(r=>[r.mat_cuantitativo,r.mat_especifico]).filter(Boolean))),
-            cn:     Math.round(avgArr(arr.flatMap(r=>[r.cn_quimica,r.cn_fisica,r.cn_biologia,r.cn_cts]).filter(Boolean))),
-            soc:    Math.round(avgArr(arr.flatMap(r=>[(r.sociales||0),(r.ciudadanas||0)]).filter(Boolean))),
-            lc:     Math.round(avgArr(arr.map(r=>r.lectura_critica).filter(Boolean))),
-            ing:    Math.round(avgArr(arr.map(r=>r.ingles).filter(Boolean))),
+            global: Math.round(avgNull(arr.map(r=>r.puntaje_global))),
+            mat:    Math.round(avgNull(arr.flatMap(r=>[r.mat_cuantitativo,r.mat_especifico]))),
+            cn:     Math.round(avgNull(arr.flatMap(r=>[r.cn_quimica,r.cn_fisica,r.cn_biologia,r.cn_cts]))),
+            soc:    Math.round(avgNull(arr.flatMap(r=>[r.sociales,r.ciudadanas]))),
+            lc:     Math.round(avgNull(arr.map(r=>r.lectura_critica))),
+            ing:    Math.round(avgNull(arr.map(r=>r.ingles))),
             n: arr.length,
           }
         }).filter(Boolean)
@@ -851,8 +872,27 @@ export default function ColegioDashboard({session, onLogout}) {
     }
   }
 
-  const loadForPrueba = async (pruebaSelec) => {
+  const loadForPrueba = async (pruebaSelec, isCancelled = () => false) => {
     setLoading(true)
+    // Reset all derived filters when prueba changes
+    setCompNAsigFilter('Todas')
+    setMejoraView('table')
+    setCompMejoraView('table')
+    setDesviacionView('bars')
+    setCompDesviacionView('bars')
+    setMejoraLimite(0)
+    setCompMejoraLimite(0)
+    setMejoraArea('Todas')
+    setCompMejoraArea('Todas')
+    setMejoraAsig('Todas')
+    setCompMejoraAsig('Todas')
+    setNotasCompSort({col:'nombre', dir:'asc'})
+    setNotasCompNSort({col:'nombre', dir:'asc'})
+    setRankingSort({col:'_def', dir:'desc'})
+    setDetallePruebaSort({col:'nro_pregunta', dir:'asc'})
+    setListadoNotasSort({col:'_def', dir:'desc'})
+    setSelectedStudent(null)
+    setStudentDetalle(null)
     try {
       const pid = pruebaSelec.id
       const cid = session.id
@@ -864,9 +904,22 @@ export default function ColegioDashboard({session, onLogout}) {
         .select('*, estudiantes(nombre, salon, grado, codigo, usuario)')
         .eq('colegio_id', cid).eq('prueba_id', pid)
         .order('puntaje_global', {ascending: false})
+      if (isCancelled()) return
       setAllStudents(res || [])
       setSelectedGrado('Todos')
       setSelectedSalon('Todos')
+
+      if (!res?.length) {
+        setCompetencias([])
+        setCompGestion([])
+        setNotasComp([])
+        setNotasCompN([])
+        setCompNGestion([])
+        setOportunidades([])
+        setDetallePreguntas([])
+        setLoading(false)
+        return
+      }
 
       // Tablero de gestión (calculado dinámicamente)
       const { data: tablero } = await supabase.rpc('get_tablero_gestion', {
@@ -878,6 +931,7 @@ export default function ColegioDashboard({session, onLogout}) {
         setTableroSalon(tablero.por_salon || [])
       }
 
+      if (isCancelled()) return
       // Competencias
       const { data: comps } = await supabase
         .from('notas_competencia')
@@ -925,6 +979,7 @@ export default function ColegioDashboard({session, onLogout}) {
         .in('estudiante_id', (res||[]).map(r => r.estudiante_id))
         .eq('prueba_id', pid)
         .order('materia').order('componente').order('nota')
+      if (isCancelled()) return
       setNotasCompN(ncn || [])
       setNotasCompNAsig('Todas')
 
@@ -958,32 +1013,32 @@ export default function ColegioDashboard({session, onLogout}) {
   }
 
   // ── COMPUTED DATA ─────────────────────────────────────────
-  const globals = students.map(s => s.puntaje_global).filter(Boolean)
+  const globals = students.map(s => s.puntaje_global).filter(v => v != null && !isNaN(v))
   const promGlobal = globals.length ? Math.round(avgArr(globals)) : 0
   const maxStudent = students[0]
   const minStudent = students[students.length-1]
 
   // Áreas para radar
   const radarData = [
-    {area:'Matemáticas',    plantel: Math.round(avgArr(students.map(s=>(s.mat_cuantitativo+s.mat_especifico)/2).filter(Boolean)))},
-    {area:'Cs. Naturales',  plantel: Math.round(avgArr(students.map(s=>(s.cn_quimica+s.cn_fisica+s.cn_biologia+s.cn_cts)/4).filter(Boolean)))},
-    {area:'Soc. y Ciudad.', plantel: Math.round(avgArr(students.map(s=>((s.sociales||0)+(s.ciudadanas||0))/2).filter(Boolean)))},
-    {area:'Lect. Crítica',  plantel: Math.round(avgArr(students.map(s=>s.lectura_critica).filter(Boolean)))},
-    {area:'Inglés',         plantel: Math.round(avgArr(students.map(s=>s.ingles).filter(Boolean)))},
+    {area:'Matemáticas',    plantel: Math.round(avgArr(students.map(s=>s.mat_cuantitativo != null && s.mat_especifico != null ? (s.mat_cuantitativo+s.mat_especifico)/2 : null).filter(v => v != null && !isNaN(v))))},
+    {area:'Cs. Naturales',  plantel: Math.round(avgArr(students.map(s=>s.cn_quimica != null && s.cn_fisica != null && s.cn_biologia != null && s.cn_cts != null ? (s.cn_quimica+s.cn_fisica+s.cn_biologia+s.cn_cts)/4 : null).filter(v => v != null && !isNaN(v))))},
+    {area:'Soc. y Ciudad.', plantel: Math.round(avgArr(students.map(s=>s.sociales != null && s.ciudadanas != null ? (s.sociales+s.ciudadanas)/2 : null).filter(v => v != null && !isNaN(v))))},
+    {area:'Lect. Crítica',  plantel: Math.round(avgArr(students.map(s=>s.lectura_critica).filter(v => v != null && !isNaN(v))))},
+    {area:'Inglés',         plantel: Math.round(avgArr(students.map(s=>s.ingles).filter(v => v != null && !isNaN(v))))},
   ]
 
   // Promedios por área para barras
   const areaData = [
-    {area:'Mat. Cuant.', plan: Math.round(avgArr(students.map(s=>s.mat_cuantitativo).filter(Boolean)))},
-    {area:'Mat. Espec.', plan: Math.round(avgArr(students.map(s=>s.mat_especifico).filter(Boolean)))},
-    {area:'Química',     plan: Math.round(avgArr(students.map(s=>s.cn_quimica).filter(Boolean)))},
-    {area:'Física',      plan: Math.round(avgArr(students.map(s=>s.cn_fisica).filter(Boolean)))},
-    {area:'Biología',    plan: Math.round(avgArr(students.map(s=>s.cn_biologia).filter(Boolean)))},
-    {area:'CTS',         plan: Math.round(avgArr(students.map(s=>s.cn_cts).filter(Boolean)))},
-    {area:'Sociales',    plan: Math.round(avgArr(students.map(s=>s.sociales).filter(Boolean)))},
-    {area:'Ciudadanas',  plan: Math.round(avgArr(students.map(s=>s.ciudadanas).filter(Boolean)))},
-    {area:'Lect. Crít.', plan: Math.round(avgArr(students.map(s=>s.lectura_critica).filter(Boolean)))},
-    {area:'Inglés',      plan: Math.round(avgArr(students.map(s=>s.ingles).filter(Boolean)))},
+    {area:'Mat. Cuant.', plan: Math.round(avgArr(students.map(s=>s.mat_cuantitativo).filter(v => v != null && !isNaN(v))))},
+    {area:'Mat. Espec.', plan: Math.round(avgArr(students.map(s=>s.mat_especifico).filter(v => v != null && !isNaN(v))))},
+    {area:'Química',     plan: Math.round(avgArr(students.map(s=>s.cn_quimica).filter(v => v != null && !isNaN(v))))},
+    {area:'Física',      plan: Math.round(avgArr(students.map(s=>s.cn_fisica).filter(v => v != null && !isNaN(v))))},
+    {area:'Biología',    plan: Math.round(avgArr(students.map(s=>s.cn_biologia).filter(v => v != null && !isNaN(v))))},
+    {area:'CTS',         plan: Math.round(avgArr(students.map(s=>s.cn_cts).filter(v => v != null && !isNaN(v))))},
+    {area:'Sociales',    plan: Math.round(avgArr(students.map(s=>s.sociales).filter(v => v != null && !isNaN(v))))},
+    {area:'Ciudadanas',  plan: Math.round(avgArr(students.map(s=>s.ciudadanas).filter(v => v != null && !isNaN(v))))},
+    {area:'Lect. Crít.', plan: Math.round(avgArr(students.map(s=>s.lectura_critica).filter(v => v != null && !isNaN(v))))},
+    {area:'Inglés',      plan: Math.round(avgArr(students.map(s=>s.ingles).filter(v => v != null && !isNaN(v))))},
   ]
 
   // Distribución puntajes
@@ -1084,7 +1139,7 @@ export default function ColegioDashboard({session, onLogout}) {
       if (a.area==='Lect. Crít.') return s.lectura_critica
       if (a.area==='Inglés')      return s.ingles
       return null
-    }).filter(Boolean)
+    }).filter(v => v != null && !isNaN(v))
     const prom = avgArr(vals)
     return {
       materia: a.area,
@@ -1303,7 +1358,6 @@ export default function ColegioDashboard({session, onLogout}) {
                           if (p) setSelectedPrueba(p)
                         }}
                         options={allPruebas
-                          .filter(p => !selectedPrueba || p.tipo === selectedPrueba.tipo)
                           .map(p => ({value: p.codigo, label: p.codigo}))}
                       />
                       <FilterSelect
@@ -1504,7 +1558,6 @@ export default function ColegioDashboard({session, onLogout}) {
                           if (p) setSelectedPrueba(p)
                         }}
                         options={allPruebas
-                          .filter(p => !selectedPrueba || p.tipo === selectedPrueba.tipo)
                           .map(p => ({value: p.codigo, label: p.codigo}))}
                       />
                       <FilterSelect
@@ -2635,11 +2688,14 @@ export default function ColegioDashboard({session, onLogout}) {
 
           // Filas: filtra por asignatura seleccionada o todas las del área
           const materiasFicha = asigActual === 'Todas' ? asigsFiltradas : [asigActual]
+          const filteredIds = new Set(students.map(s => s.estudiante_id))
+          const notasCompFiltradas = notasComp.filter(r => filteredIds.has(r.estudiante_id))
+
           const filasBase = compGestion
             .filter(r => materiasFicha.includes(r.materia))
             .map(r => {
               const umbral = (r.nac_prom || 0) + limiteActual
-              const notasDeComp = notasComp.filter(n => n.materia === r.materia && n.competencia === r.competencia)
+              const notasDeComp = notasCompFiltradas.filter(n => n.materia === r.materia && n.competencia === r.competencia)
               const total = notasDeComp.length
               const encima = notasDeComp.filter(n => n.nota > umbral).length
               const debajo = total - encima
@@ -2848,10 +2904,11 @@ export default function ColegioDashboard({session, onLogout}) {
         {/* ══ RANKING ══════════════════════════════════════════ */}
         {tab==='ranking' && (() => {
           const calcDefR = s => {
-            const mc=s.mat_cuantitativo||0, me=s.mat_especifico||0, q=s.cn_quimica||0, f=s.cn_fisica||0
-            const b=s.cn_biologia||0, cts=s.cn_cts||0, sc=s.sociales||0, ciu=s.ciudadanas||0
-            const lc=s.lectura_critica||0, ing=s.ingles||0
-            return ((mc+me)/2*3 + (q+f+b+cts)/4*3 + (sc+ciu)/2*3 + lc*3 + ing) / 13
+            const mc=s.mat_cuantitativo, me=s.mat_especifico, q=s.cn_quimica, f=s.cn_fisica
+            const b=s.cn_biologia, cts=s.cn_cts, sc=s.sociales, ciu=s.ciudadanas
+            const lc=s.lectura_critica, ing=s.ingles
+            if ([mc,me,q,f,b,cts,sc,ciu,lc,ing].every(v => v == null)) return null
+            return (((mc||0)+(me||0))/2*3 + ((q||0)+(f||0)+(b||0)+(cts||0))/4*3 + ((sc||0)+(ciu||0))/2*3 + (lc||0)*3 + (ing||0)) / 13
           }
           const RANK_COLS = [
             {key:'nombre', label:'Estudiante'}, {key:'puntaje_global', label:'Global'},
@@ -3007,12 +3064,13 @@ export default function ColegioDashboard({session, onLogout}) {
         {tab==='listado_notas' && (() => {
           // Fórmula Tablero de Gestión
           const calcDef = s => {
-            const mc = s.mat_cuantitativo||0, me = s.mat_especifico||0
-            const q  = s.cn_quimica||0,       f  = s.cn_fisica||0
-            const b  = s.cn_biologia||0,      cts= s.cn_cts||0
-            const sc = s.sociales||0,         ciu= s.ciudadanas||0
-            const lc = s.lectura_critica||0,  ing= s.ingles||0
-            return ((mc+me)/2*3 + (q+f+b+cts)/4*3 + (sc+ciu)/2*3 + lc*3 + ing) / 13
+            const mc = s.mat_cuantitativo, me = s.mat_especifico
+            const q  = s.cn_quimica,       f  = s.cn_fisica
+            const b  = s.cn_biologia,      cts= s.cn_cts
+            const sc = s.sociales,         ciu= s.ciudadanas
+            const lc = s.lectura_critica,  ing= s.ingles
+            if ([mc,me,q,f,b,cts,sc,ciu,lc,ing].every(v => v == null)) return null
+            return (((mc||0)+(me||0))/2*3 + ((q||0)+(f||0)+(b||0)+(cts||0))/4*3 + ((sc||0)+(ciu||0))/2*3 + (lc||0)*3 + (ing||0)) / 13
           }
 
           const handleSortLN = col => setListadoNotasSort(s => ({col, dir: s.col===col && s.dir==='asc' ? 'desc' : 'asc'}))
@@ -3022,18 +3080,21 @@ export default function ColegioDashboard({session, onLogout}) {
             e.preventDefault()
             const startX = e.clientX
             const startW = nombreColWidth
-            const onMove = ev => setNombreColWidth(Math.max(80, Math.min(400, startW + ev.clientX - startX)))
+            const onMove = ev => { if (mountedRef.current) setNombreColWidth(Math.max(80, Math.min(400, startW + ev.clientX - startX))) }
             const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp) }
             document.addEventListener('mousemove', onMove)
             document.addEventListener('mouseup', onUp)
           }
 
-          const ranked = [...students]
-            .map(s => ({...s, _def: calcDef(s)}))
-            .sort((a, b) => {
+          const withDef = [...students].map(s => ({...s, _def: calcDef(s)}))
+          const byDef = [...withDef].sort((a,b) => (b._def||0) - (a._def||0))
+          byDef.forEach((s, idx) => {
+            s._pct = byDef.length > 1 ? Math.round(((byDef.length - 1 - idx) / (byDef.length - 1)) * 100) : 100
+          })
+          const ranked = [...withDef].sort((a, b) => {
               const v = listadoNotasSort.col
-              const av = v==='nombre' ? (a.estudiantes?.nombre||'') : v==='global' ? Math.round(a._def*5) : (a[v]||0)
-              const bv = v==='nombre' ? (b.estudiantes?.nombre||'') : v==='global' ? Math.round(b._def*5) : (b[v]||0)
+              const av = v==='nombre' ? (a.estudiantes?.nombre||'') : v==='global' ? Math.round((a._def||0)*5) : (a[v]||0)
+              const bv = v==='nombre' ? (b.estudiantes?.nombre||'') : v==='global' ? Math.round((b._def||0)*5) : (b[v]||0)
               const cmp = typeof av==='string' ? av.localeCompare(bv) : av - bv
               return listadoNotasSort.dir==='asc' ? cmp : -cmp
             })
@@ -3115,8 +3176,8 @@ export default function ColegioDashboard({session, onLogout}) {
                   <tbody>
                     {ranked.map((s, i) => {
                       const def = s._def
-                      const global = Math.round(def * 5)
-                      const pct = ranked.length > 1 ? Math.round(((ranked.length - 1 - i) / (ranked.length - 1)) * 100) : 100
+                      const global = def != null ? Math.round(def * 5) : null
+                      const pct = s._pct
                       return (
                         <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`}}>
                           <td style={{...tdBase, color:C.dark, fontWeight:600, fontSize:11, padding:'4px 4px'}}>{i+1}</td>
@@ -3129,16 +3190,16 @@ export default function ColegioDashboard({session, onLogout}) {
                             const {style, text} = notaTd(s[col], a.area)
                             return <td key={col} style={style}>{text}</td>
                           }))}
-                          <td style={{...tdBase, color: semaforoColor(def, '_'), fontWeight:700, fontSize:10}}>
-                            {def.toFixed(2)}
+                          <td style={{...tdBase, color: def != null ? semaforoColor(def, '_') : C.grayLt, fontWeight:700, fontSize:10}}>
+                            {def != null ? def.toFixed(2) : '—'}
                           </td>
                           <td style={{...tdBase, fontWeight:700, color:C.navy, fontSize:12,
                             fontFamily:'Playfair Display, serif'}}>
-                            {global}
+                            {global != null ? global : '—'}
                           </td>
                           <td style={{...tdBase, fontWeight:600, fontSize:10,
                             color: pct>=75 ? '#16A34A' : pct>=50 ? '#D97706' : '#DC2626'}}>
-                            {pct}%
+                            {pct != null ? `${pct}%` : '—'}
                           </td>
                           <td style={{...tdBase}}>
                             <span onClick={() => setSelectedStudent(s)}
@@ -3528,12 +3589,15 @@ export default function ColegioDashboard({session, onLogout}) {
           const limiteActual = Math.min(compMejoraLimite, maxLimite)
 
           // Filas
+          const filteredIdsN = new Set(students.map(s => s.estudiante_id))
+          const notasCompNFiltradas = notasCompN.filter(r => filteredIdsN.has(r.estudiante_id))
+
           const materiasFicha = asigActual === 'Todas' ? asigsFiltradas : [asigActual]
           const filasBase = compNGestion
             .filter(r => materiasFicha.includes(r.materia))
             .map(r => {
               const umbral = (r.nac_prom || 0) + limiteActual
-              const notasDeComp = notasCompN.filter(n => n.materia === r.materia && n.componente === r.componente)
+              const notasDeComp = notasCompNFiltradas.filter(n => n.materia === r.materia && n.componente === r.componente)
               const total = notasDeComp.length
               const encima = notasDeComp.filter(n => n.nota > umbral).length
               const debajo = total - encima
