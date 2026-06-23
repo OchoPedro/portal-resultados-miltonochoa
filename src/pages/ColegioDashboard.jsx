@@ -2395,57 +2395,101 @@ export default function ColegioDashboard({session, onLogout}) {
         )}
 
         {/* ══ COMPETENCIAS ═════════════════════════════════════ */}
-        {tab==='competencias' && (
-          students.length === 0 ? <EmptyState/> :
-          <div style={{display:'grid', gridTemplateColumns: mobile ? '1fr' : '1fr 1fr', gap:16}}>
-            {competencias.length === 0 ? (
-              <div style={{gridColumn: mobile ? 'auto' : '1/3'}}><EmptyState/></div>
-            ) : (
-              <>
-                <Card style={{gridColumn: mobile ? 'auto' : '1/3'}}>
-                  <CardTitle sub="Promedio por competencia evaluada">Desempeño por Competencia</CardTitle>
-                  <ResponsiveContainer width="100%" height={Math.max(300, competencias.length*28)}>
-                    <BarChart data={competencias} layout="vertical"
-                      margin={{top:0, right:40, bottom:0, left:230}}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={C.bg2}/>
-                      <XAxis type="number" tick={{fontSize:11, fontFamily:'Inter', fill:C.gray}} domain={[0,100]}/>
-                      <YAxis type="category" dataKey="comp" tick={{fontSize:11, fontFamily:'Inter', fill:C.gray}} width={225}/>
-                      <Tooltip contentStyle={{fontFamily:'Inter', fontSize:12, borderRadius:8}}/>
-                      <Bar dataKey="prom" name="Promedio %" radius={[0,4,4,0]}>
-                        {competencias.map((d,i) => <Cell key={i} fill={semaforoColor(d.prom)}/>)}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </Card>
-                <Card>
-                  <CardTitle sub="Radar competencial">Radar</CardTitle>
-                  <ResponsiveContainer width="100%" height={280}>
-                    <RadarChart data={competencias.slice(0,8).map(c=>({...c,comp:c.comp.split(' ').slice(0,2).join(' ')}))}>
-                      <PolarGrid stroke={C.bg2}/>
-                      <PolarAngleAxis dataKey="comp" tick={{fontSize:9, fontFamily:'Inter', fill:C.gray}}/>
-                      <Radar name="Plantel" dataKey="prom" stroke={C.navy} fill={C.navy} fillOpacity={0.2} strokeWidth={2}/>
-                    </RadarChart>
-                  </ResponsiveContainer>
-                </Card>
-                <Card>
-                  <CardTitle sub="Detalle por competencia">Nivel por Competencia</CardTitle>
-                  {competencias.map((c,i) => (
-                    <div key={i} style={{marginBottom:10}}>
-                      <div style={{display:'flex', justifyContent:'space-between', marginBottom:4}}>
-                        <span style={{fontSize:11, color:C.text, fontFamily:'Inter'}}>{c.comp}</span>
-                        <Badge color={semaforoColor(c.prom)}>{c.prom}%</Badge>
-                      </div>
-                      <div style={{height:5, background:C.bg2, borderRadius:3, overflow:'hidden'}}>
-                        <div style={{height:'100%', width:`${c.prom}%`, borderRadius:3,
-                          background:semaforoColor(c.prom)}}/>
-                      </div>
-                    </div>
-                  ))}
-                </Card>
-              </>
-            )}
-          </div>
-        )}
+        {tab==='competencias' && (() => {
+          const estMap = {}
+          allStudents.forEach(s => { if (s.estudiantes) estMap[s.estudiante_id] = s.estudiantes })
+
+          const asignaturas = ['Todas', ...new Set(notasComp.map(r => r.materia))]
+
+          const filas = notasComp.filter(r => {
+            const est = estMap[r.estudiante_id]
+            if (!est) return false
+            if (selectedGrado !== 'Todos' && est.grado !== selectedGrado) return false
+            if (selectedSalon !== 'Todos' && est.salon !== selectedSalon) return false
+            if (notasCompAsig !== 'Todas' && r.materia !== notasCompAsig) return false
+            return true
+          })
+
+          const thSt = {padding:'8px 10px', textAlign:'left', background:'#1E3A5F',
+            color:'white', fontSize:11, fontWeight:700, whiteSpace:'nowrap',
+            borderBottom:'1px solid rgba(255,255,255,0.15)'}
+          const thNum = {...thSt, textAlign:'center'}
+
+          return students.length === 0 ? <EmptyState/> : (
+            <Card>
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start',
+                flexWrap:'wrap', gap:12, marginBottom:20}}>
+                <CardTitle sub={`${filas.length} registros`}>
+                  Notas Estudiantes por Competencias
+                </CardTitle>
+                <div style={{display:'flex', alignItems:'center', gap:8}}>
+                  <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Materia:</span>
+                  <select value={notasCompAsig} onChange={e => setNotasCompAsig(e.target.value)}
+                    style={{padding:'6px 10px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+                      fontFamily:'Inter', fontSize:12, color:C.text, background:C.white,
+                      outline:'none', cursor:'pointer'}}>
+                    {asignaturas.map(a => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {filas.length === 0 ? (
+                <div style={{textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter', fontSize:13}}>
+                  Sin datos para los filtros seleccionados.
+                </div>
+              ) : (
+                <div style={{overflowX:'auto'}}>
+                  <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter', fontSize:12}}>
+                    <thead>
+                      <tr>
+                        <th style={thSt}>Estudiante</th>
+                        <th style={thNum}>Grado</th>
+                        <th style={thNum}>Salón</th>
+                        <th style={thSt}>Materia</th>
+                        <th style={thSt}>Competencia</th>
+                        <th style={thNum}>Nota</th>
+                        <th style={thNum}>Preguntas</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filas.map((r, i) => {
+                        const est = estMap[r.estudiante_id] || {}
+                        const nota = r.nota != null ? Math.round(r.nota * 100) / 100 : null
+                        const bg = nota != null ? semaforoBg(nota, '_') : C.bg2
+                        const fg = nota != null ? semaforoColor(nota, '_') : C.gray
+                        return (
+                          <tr key={i} style={{background: i%2===0 ? C.white : C.bg2,
+                            borderBottom:`1px solid ${C.bg2}`}}>
+                            <td style={{padding:'7px 10px', color:C.dark, fontWeight:500}}>
+                              {est.nombre || '—'}
+                            </td>
+                            <td style={{padding:'7px 10px', textAlign:'center', color:C.gray}}>
+                              {est.grado ?? '—'}
+                            </td>
+                            <td style={{padding:'7px 10px', textAlign:'center', color:C.gray}}>
+                              {est.salon ?? '—'}
+                            </td>
+                            <td style={{padding:'7px 10px', color:C.text}}>{r.materia}</td>
+                            <td style={{padding:'7px 10px', color:C.text}}>{r.competencia}</td>
+                            <td style={{padding:'7px 10px', textAlign:'center'}}>
+                              <span style={{display:'inline-block', minWidth:52, padding:'2px 8px',
+                                borderRadius:20, background:bg, color:fg, fontWeight:700, fontSize:12}}>
+                                {nota != null ? nota.toFixed(2) : '—'}
+                              </span>
+                            </td>
+                            <td style={{padding:'7px 10px', textAlign:'center', color:C.gray}}>
+                              {r.preguntas ?? '—'}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Card>
+          )
+        })()}
 
         {/* ══ NOTAS ESTUDIANTES POR COMPETENCIAS ══════════════ */}
         {tab==='comp_notas' && (() => {
