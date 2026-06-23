@@ -751,17 +751,17 @@ export default function ColegioDashboard({session, onLogout}) {
 
   // Filtered students based on selectors
   const students = allStudents.filter(s => {
-    if (selectedGrado !== 'Todos' && s.estudiantes?.grado !== selectedGrado) return false
-    if (selectedSalon !== 'Todos' && s.estudiantes?.salon !== selectedSalon) return false
+    if (selectedGrado !== 'Todos' && String(s.estudiantes?.grado) !== selectedGrado) return false
+    if (selectedSalon !== 'Todos' && String(s.estudiantes?.salon) !== selectedSalon) return false
     return true
   })
 
   // Derived filter options from loaded data
-  const gradosDisponibles = ['Todos', ...new Set(allStudents.map(s => s.estudiantes?.grado).filter(Boolean)).values()]
+  const gradosDisponibles = ['Todos', ...new Set(allStudents.map(s => s.estudiantes?.grado != null ? String(s.estudiantes.grado) : null).filter(Boolean)).values()]
   const salonesDisponibles = ['Todos', ...new Set(
     allStudents
-      .filter(s => selectedGrado === 'Todos' || s.estudiantes?.grado === selectedGrado)
-      .map(s => s.estudiantes?.salon).filter(Boolean)
+      .filter(s => selectedGrado === 'Todos' || String(s.estudiantes?.grado) === selectedGrado)
+      .map(s => s.estudiantes?.salon != null ? String(s.estudiantes.salon) : null).filter(Boolean)
   ).values()]
 
   // Reload when prueba changes
@@ -2462,8 +2462,8 @@ export default function ColegioDashboard({session, onLogout}) {
           const filasBase = notasComp.filter(r => {
             const est = estMap[r.estudiante_id]
             if (!est) return false
-            if (selectedGrado !== 'Todos' && est.grado !== selectedGrado) return false
-            if (selectedSalon !== 'Todos' && est.salon !== selectedSalon) return false
+            if (selectedGrado !== 'Todos' && String(est.grado) !== selectedGrado) return false
+            if (selectedSalon !== 'Todos' && String(est.salon) !== selectedSalon) return false
             if (notasCompAsig !== 'Todas' && r.materia !== notasCompAsig) return false
             return true
           })
@@ -3270,8 +3270,8 @@ export default function ColegioDashboard({session, onLogout}) {
           const filasBaseN = notasCompN.filter(r => {
             const est = estMap[r.estudiante_id]
             if (!est) return false
-            if (selectedGrado !== 'Todos' && est.grado !== selectedGrado) return false
-            if (selectedSalon !== 'Todos' && est.salon !== selectedSalon) return false
+            if (selectedGrado !== 'Todos' && String(est.grado) !== selectedGrado) return false
+            if (selectedSalon !== 'Todos' && String(est.salon) !== selectedSalon) return false
             if (notasCompNAsig !== 'Todas' && r.materia !== notasCompNAsig) return false
             return true
           })
