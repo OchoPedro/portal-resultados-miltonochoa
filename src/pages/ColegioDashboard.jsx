@@ -1440,10 +1440,6 @@ export default function ColegioDashboard({session, onLogout}) {
         </div>
         )}
 
-        {['tablero','niveles','desv_materias','desviacion','comp_comparativo','competencias','mejora','comp_desviacion','comp_comp2','comp_notas','comp_mejora','listado_notas','detalle_prueba','consolidado','equilibrio'].includes(tab) && (
-          <TabBar tabs={tabs} active={tab} onChange={setTab}/>
-        )}
-
         {/* ══ TABLERO ══════════════════════════════════════════ */}
         {tab==='tablero' && (
           students.length === 0 ? <EmptyState/> :
