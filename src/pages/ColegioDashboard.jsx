@@ -1241,7 +1241,8 @@ export default function ColegioDashboard({session, onLogout}) {
                     {id:'comp_mejora',     label:'Oportunidad de Mejoramiento'},
                   ]
                 },
-                {id:'listado_notas', label:'Listado de Notas'},
+                {id:'listado_notas',    label:'Listado de Notas'},
+                {id:'notas_acumuladas', label:'Notas Acumuladas'},
                 {
                   id:'grp_detalle', label:'Detalle de Prueba', isGroup: true,
                   children: [
@@ -1441,7 +1442,8 @@ export default function ColegioDashboard({session, onLogout}) {
                     {id:'comp_mejora',     label:'Oportunidad de Mejoramiento'},
                   ]
                 },
-                {id:'listado_notas', label:'Listado de Notas'},
+                {id:'listado_notas',    label:'Listado de Notas'},
+                {id:'notas_acumuladas', label:'Notas Acumuladas'},
                 {
                   id:'grp_detalle', label:'Detalle de Prueba', isGroup: true,
                   children: [
