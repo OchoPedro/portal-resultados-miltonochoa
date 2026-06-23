@@ -1668,10 +1668,10 @@ export default function ColegioDashboard({session, onLogout}) {
                         Asignatura
                       </th>
                       {[
-                        {label:'Nivel 4', color:C.green},
-                        {label:'Nivel 3', color:'#F59E0B'},
-                        {label:'Nivel 2', color:'#F97316'},
                         {label:'Nivel 1', color:C.red},
+                        {label:'Nivel 2', color:'#F97316'},
+                        {label:'Nivel 3', color:'#F59E0B'},
+                        {label:'Nivel 4', color:C.green},
                       ].map(({label, color}) => (
                         <th key={label} colSpan={2} style={{textAlign:'center', padding:'8px 4px',
                           fontSize:10, color, fontWeight:600, textTransform:'uppercase',
@@ -1682,7 +1682,7 @@ export default function ColegioDashboard({session, onLogout}) {
                     </tr>
                     <tr style={{borderBottom:`1px solid ${C.bg2}`}}>
                       <th/>
-                      {[C.green,'#F59E0B','#F97316',C.red].flatMap(color => [
+                      {[C.red,'#F97316','#F59E0B',C.green].flatMap(color => [
                         <th key={`${color}-pct`} style={{textAlign:'center', padding:'4px 8px',
                           fontSize:9, color, fontWeight:600}}>%</th>,
                         <th key={`${color}-cnt`} style={{textAlign:'center', padding:'4px 8px',
@@ -1697,10 +1697,10 @@ export default function ColegioDashboard({session, onLogout}) {
                         <td style={{padding:'10px 12px', fontSize:13, color:C.text, fontWeight:500,
                           whiteSpace:'nowrap'}}>{m.asig}</td>
                         {[
-                          {pct:m.n4, cnt:m.n4c, color:C.green},
-                          {pct:m.n3, cnt:m.n3c, color:'#F59E0B'},
-                          {pct:m.n2, cnt:m.n2c, color:'#F97316'},
                           {pct:m.n1, cnt:m.n1c, color:C.red},
+                          {pct:m.n2, cnt:m.n2c, color:'#F97316'},
+                          {pct:m.n3, cnt:m.n3c, color:'#F59E0B'},
+                          {pct:m.n4, cnt:m.n4c, color:C.green},
                         ].map(({pct, cnt, color}, j) => [
                           <td key={`p${j}`} style={{padding:'8px 8px', textAlign:'center'}}>
                             <Badge color={color}>{pct}%</Badge>
