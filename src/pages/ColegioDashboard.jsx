@@ -717,6 +717,8 @@ export default function ColegioDashboard({session, onLogout}) {
   const [tableroComp, setTableroComp] = useState([])
   const [tableroSalon, setTableroSalon] = useState([])
   const [competencias, setCompetencias] = useState([])
+  const [compGestion, setCompGestion] = useState([])
+  const [compAsigFilter, setCompAsigFilter] = useState('Todas')
   const [oportunidades, setOportunidades] = useState([])
   const [detallePreguntas, setDetallePreguntas] = useState([])
   const [allPruebasPromedio, setAllPruebasPromedio] = useState([])
@@ -846,6 +848,14 @@ export default function ColegioDashboard({session, onLogout}) {
         })).sort((a,b) => b.prom - a.prom)
         setCompetencias(compArr)
       }
+
+      // Desviación competencias (comparativo geográfico)
+      const { data: cgData } = await supabase.rpc('get_competencias_gestion', {
+        p_prueba_id: pid,
+        p_colegio_id: cid,
+      })
+      setCompGestion(cgData || [])
+      setCompAsigFilter('Todas')
 
       // Oportunidades
       const { data: opor } = await supabase
@@ -1779,54 +1789,153 @@ export default function ColegioDashboard({session, onLogout}) {
         )}
 
         {/* ══ DESVIACIÓN ═══════════════════════════════════════ */}
-        {tab==='desviacion' && (
-          students.length === 0 ? <EmptyState/> :
-          <div style={{display:'grid', gap:16}}>
-            <Card>
-              <CardTitle sub="Promedio por materia con color semáforo">Desviación por Materias</CardTitle>
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={desvData} margin={{top:10, right:20, bottom:0, left:-20}}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={C.bg2}/>
-                  <XAxis dataKey="materia" tick={{fontSize:10, fontFamily:'Inter', fill:C.gray}}/>
-                  <YAxis tick={{fontSize:10, fontFamily:'Inter', fill:C.gray}} domain={[0,110]}/>
-                  <Tooltip contentStyle={{fontFamily:'Inter', fontSize:12, borderRadius:8}}/>
-                  <Bar dataKey="prom" name="Promedio" radius={[4,4,0,0]}>
-                    {desvData.map((d,i) => <Cell key={i} fill={semaforoColor(d.prom)}/>)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </Card>
-            <Card>
-              <CardTitle sub="Promedio / Desviación / Mínimo / Máximo por materia">Tabla de Desviación</CardTitle>
-              <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter'}}>
-                <thead>
-                  <tr style={{borderBottom:`2px solid ${C.bg2}`}}>
-                    {['Materia','Promedio','Desviación','Mín.','Máx.'].map(h => (
-                      <th key={h} style={{textAlign:'left', padding:'8px 12px', fontSize:10,
-                        color:C.gray, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em'}}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {desvData.map((m,i) => (
-                    <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`,
-                      background:i%2===0?`${C.bg}80`:'transparent'}}>
-                      <td style={{padding:'10px 12px', fontSize:13, color:C.text, fontWeight:500}}>{m.materia}</td>
-                      <td style={{padding:'10px 12px'}}>
-                        <div style={{display:'inline-block', background:semaforoBg(m.prom),
-                          color:semaforoColor(m.prom), padding:'4px 10px', borderRadius:6,
-                          fontWeight:700, fontSize:14, fontFamily:'Playfair Display, serif'}}>{m.prom}</div>
-                      </td>
-                      <td style={{padding:'10px 12px', fontSize:13, color:C.gray}}>{m.desv}</td>
-                      <td style={{padding:'10px 12px', fontSize:13, color:C.gray}}>{m.min}</td>
-                      <td style={{padding:'10px 12px', fontSize:13, color:C.gray}}>{m.max}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </Card>
-          </div>
-        )}
+        {tab==='desviacion' && (() => {
+          const regionNombre = REGION_NOMBRES[session?.departamento_nombre?.toUpperCase()] || 'Región'
+          const dptoNombre   = toTitleCase(session?.departamento_nombre) || 'Dpto.'
+          const ciudadNombre = toTitleCase(session?.municipio) || 'Ciudad'
+
+          const asignaturas = ['Todas', ...new Set(compGestion.map(r => r.materia)).values()]
+          const filas = compAsigFilter === 'Todas'
+            ? compGestion
+            : compGestion.filter(r => r.materia === compAsigFilter)
+
+          const fmtVal = v => v != null ? Math.round(v) : '—'
+          const fmtDesv = v => v != null ? Math.round(v) : '—'
+
+          const ColHeader = ({label, sub}) => (
+            <th colSpan={2} style={{padding:'8px 10px', textAlign:'center', background:'#1E3A5F',
+              color:'white', fontSize:11, fontWeight:700, borderRight:'2px solid rgba(255,255,255,0.15)',
+              borderBottom:'1px solid rgba(255,255,255,0.2)', whiteSpace:'nowrap'}}>
+              {label}{sub && <div style={{fontSize:9, fontWeight:400, opacity:0.7, marginTop:1}}>{sub}</div>}
+            </th>
+          )
+
+          return students.length === 0 ? <EmptyState/> : (
+            <div style={{display:'grid', gap:16}}>
+              <Card>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start',
+                  flexWrap:'wrap', gap:12, marginBottom:20}}>
+                  <CardTitle sub="Promedio y desviación por competencia vs referentes geográficos">
+                    Desviación por Competencias
+                  </CardTitle>
+                  <div style={{display:'flex', alignItems:'center', gap:8}}>
+                    <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Asignatura:</span>
+                    <select value={compAsigFilter} onChange={e=>setCompAsigFilter(e.target.value)}
+                      style={{padding:'6px 10px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+                        fontFamily:'Inter', fontSize:12, color:C.text, background:C.white,
+                        outline:'none', cursor:'pointer'}}>
+                      {asignaturas.map(a => <option key={a} value={a}>{a}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {filas.length === 0 ? (
+                  <div style={{textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter', fontSize:13}}>
+                    Sin datos de competencias para esta asignatura.
+                  </div>
+                ) : (
+                  <div style={{overflowX:'auto'}}>
+                    <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter', fontSize:12}}>
+                      <thead>
+                        <tr>
+                          <th rowSpan={2} style={{padding:'10px 14px', background:C.navy, color:'white',
+                            fontSize:11, fontWeight:700, textAlign:'left', minWidth:140,
+                            borderRight:'2px solid rgba(255,255,255,0.2)', verticalAlign:'middle'}}>
+                            Materia
+                          </th>
+                          <th rowSpan={2} style={{padding:'10px 14px', background:C.navy, color:'white',
+                            fontSize:11, fontWeight:700, textAlign:'left', minWidth:200,
+                            borderRight:'2px solid rgba(255,255,255,0.2)', verticalAlign:'middle'}}>
+                            Competencia
+                          </th>
+                          <ColHeader label="Colombia"/>
+                          <ColHeader label={regionNombre}/>
+                          <ColHeader label={dptoNombre}/>
+                          <ColHeader label={ciudadNombre}/>
+                          <ColHeader label="Plantel" sub="(este colegio)"/>
+                        </tr>
+                        <tr>
+                          {['Colombia','Región','Dpto.','Ciudad','Plantel'].map(scope => (
+                            ['Prom','Desv'].map(metric => (
+                              <th key={`${scope}-${metric}`}
+                                style={{padding:'6px 8px', textAlign:'center',
+                                  background: metric==='Prom' ? '#F0F4FF' : '#F8FAFC',
+                                  color: metric==='Prom' ? C.navy : C.gray,
+                                  fontSize:10, fontWeight:700,
+                                  borderRight:'1px solid #E5E7EB',
+                                  borderBottom:'2px solid #D1D5DB',
+                                  minWidth:52}}>
+                                {metric}
+                              </th>
+                            ))
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filas.map((r, i) => {
+                          const plantelProm = r.plantel_prom != null ? Math.round(r.plantel_prom) : null
+                          return (
+                            <tr key={i} style={{background: i%2===0 ? C.white : '#F8FAFC',
+                              borderBottom:'1px solid #F1F5F9'}}>
+                              <td style={{padding:'10px 14px', fontWeight:600, color:C.navy,
+                                borderRight:'2px solid #E5E7EB', fontSize:12}}>
+                                {r.materia}
+                              </td>
+                              <td style={{padding:'10px 14px', color:C.text,
+                                borderRight:'2px solid #E5E7EB', fontSize:12}}>
+                                {r.competencia}
+                              </td>
+                              {[
+                                [r.nac_prom,    r.nac_desv],
+                                [r.reg_prom,    r.reg_desv],
+                                [r.dpto_prom,   r.dpto_desv],
+                                [r.ciudad_prom, r.ciudad_desv],
+                                [r.plantel_prom, r.plantel_desv],
+                              ].map(([prom, desv], j) => {
+                                const promVal = prom != null ? Math.round(prom) : null
+                                const isLast = j === 4
+                                return [
+                                  <td key={`p${j}`} style={{
+                                    padding:'10px 8px', textAlign:'center',
+                                    borderRight:'1px solid #F1F5F9',
+                                    background: isLast && plantelProm != null
+                                      ? `${semaforoBg(plantelProm,'_')}` : 'transparent',
+                                  }}>
+                                    {promVal != null ? (
+                                      <span style={{
+                                        fontWeight:700, fontSize:14,
+                                        fontFamily:'Playfair Display, serif',
+                                        color: isLast ? semaforoColor(promVal,'_') : C.navy,
+                                      }}>{promVal}</span>
+                                    ) : <span style={{color:'#CBD5E1',fontSize:12}}>—</span>}
+                                  </td>,
+                                  <td key={`d${j}`} style={{
+                                    padding:'10px 8px', textAlign:'center',
+                                    borderRight: j<4 ? '2px solid #E2E8F0' : 'none',
+                                    color:C.gray, fontSize:12,
+                                  }}>
+                                    {desv != null ? Math.round(desv) : <span style={{color:'#CBD5E1'}}>—</span>}
+                                  </td>,
+                                ]
+                              })}
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <div style={{marginTop:16, padding:'10px 14px', background:C.bg, borderRadius:8,
+                  fontSize:11, color:C.gray, fontFamily:'Inter', lineHeight:1.6}}>
+                  <strong style={{color:C.navy}}>Nota:</strong> Los promedios de Colombia, {regionNombre}, {dptoNombre} y {ciudadNombre}
+                  se calculan como el promedio de los colegios registrados con esta misma prueba.
+                  Los valores se actualizan a medida que más colegios carguen resultados.
+                </div>
+              </Card>
+            </div>
+          )
+        })()}
 
         {/* ══ DESVIACIÓN POR ASIGNATURA ════════════════════════ */}
         {tab==='desv_materias' && (
