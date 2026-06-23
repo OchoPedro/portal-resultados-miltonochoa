@@ -728,6 +728,10 @@ export default function ColegioDashboard({session, onLogout}) {
   const [mejoraAsig, setMejoraAsig] = useState('Todas')
   const [mejoraArea, setMejoraArea] = useState('Todas')
   const [mejoraSort, setMejoraSort] = useState({col:'pctDebajo', dir:'desc'})
+  const [compMejoraLimite, setCompMejoraLimite] = useState(0)
+  const [compMejoraAsig, setCompMejoraAsig] = useState('Todas')
+  const [compMejoraArea, setCompMejoraArea] = useState('Todas')
+  const [compMejoraSort, setCompMejoraSort] = useState({col:'pctDebajo', dir:'desc'})
   const [compNAsigFilter, setCompNAsigFilter] = useState('Todas')
   const [oportunidades, setOportunidades] = useState([])
   const [detallePreguntas, setDetallePreguntas] = useState([])
@@ -1200,7 +1204,7 @@ export default function ColegioDashboard({session, onLogout}) {
                     {id:'comp_desviacion', label:'Desviación Componentes'},
                     {id:'comp_comp2',      label:'Comparativo Componentes',           soon:true},
                     {id:'comp_notas',      label:'Notas Estudiantes por Componentes'},
-                    {id:'comp_mejora',     label:'Oportunidad de Mejoramiento',       soon:true},
+                    {id:'comp_mejora',     label:'Oportunidad de Mejoramiento'},
                   ]
                 },
                 {id:'listado_notas', label:'Listado de Notas'},
@@ -1400,7 +1404,7 @@ export default function ColegioDashboard({session, onLogout}) {
                     {id:'comp_desviacion', label:'Desviación Componentes'},
                     {id:'comp_comp2',      label:'Comparativo Componentes',           soon:true},
                     {id:'comp_notas',      label:'Notas Estudiantes por Componentes'},
-                    {id:'comp_mejora',     label:'Oportunidad de Mejoramiento',       soon:true},
+                    {id:'comp_mejora',     label:'Oportunidad de Mejoramiento'},
                   ]
                 },
                 {id:'listado_notas', label:'Listado de Notas'},
@@ -3182,8 +3186,204 @@ export default function ColegioDashboard({session, onLogout}) {
           )
         })()}
 
+        {/* ══ COMP OPORTUNIDADES ═══════════════════════════════ */}
+        {tab==='comp_mejora' && (() => {
+          // Mapeo materia → área desde el Excel (f[2]=Área, f[3]=Asignatura)
+          const matAreaMap = {}
+          const rawRows = selectedPrueba?.estructura_excel?.raw || []
+          rawRows.slice(2).forEach(f => {
+            const area = (f[2] || '').toString().trim()
+            const mat  = (f[3] || '').toString().trim()
+            if (area && mat) matAreaMap[mat] = area
+          })
+
+          const todasAreas = [...new Set(Object.values(matAreaMap))]
+          const areaActual = todasAreas.includes(compMejoraArea) ? compMejoraArea : (todasAreas[0] || '')
+
+          const todasAsigs = [...new Set(compNGestion.map(r => r.materia))]
+          const asigsFiltradas = todasAsigs.filter(m => matAreaMap[m] === areaActual)
+          const asigActual = (compMejoraAsig === 'Todas' || !asigsFiltradas.includes(compMejoraAsig))
+            ? 'Todas'
+            : compMejoraAsig
+
+          // Límite: máximo nac_prom del área para que ningún umbral supere 100
+          const compRowsArea = compNGestion.filter(r => asigsFiltradas.includes(r.materia))
+          const maxNacProm = compRowsArea.length > 0 ? Math.max(...compRowsArea.map(r => r.nac_prom || 0)) : 0
+          const maxLimite = Math.floor((100 - maxNacProm) / 5) * 5
+          const limites = []
+          for (let v = 0; v <= maxLimite; v += 5) limites.push(v)
+          const limiteActual = Math.min(compMejoraLimite, maxLimite)
+
+          // Filas
+          const materiasFicha = asigActual === 'Todas' ? asigsFiltradas : [asigActual]
+          const filasBase = compNGestion
+            .filter(r => materiasFicha.includes(r.materia))
+            .map(r => {
+              const umbral = (r.nac_prom || 0) + limiteActual
+              const notasDeComp = notasCompN.filter(n => n.materia === r.materia && n.componente === r.componente)
+              const total = notasDeComp.length
+              const encima = notasDeComp.filter(n => n.nota > umbral).length
+              const debajo = total - encima
+              const pctEncima = total > 0 ? Math.round((encima / total) * 100) : 0
+              const pctDebajo = total > 0 ? Math.round((debajo / total) * 100) : 0
+              return { materia: r.materia, componente: r.componente, nacProm: r.nac_prom || 0, umbral, total, encima, debajo, pctEncima, pctDebajo }
+            })
+
+          const filas = [...filasBase].sort((a, b) => {
+            const v = compMejoraSort.col
+            const av = typeof a[v] === 'string' ? a[v].localeCompare(b[v]) : a[v] - b[v]
+            return compMejoraSort.dir === 'asc' ? av : -av
+          })
+
+          const handleSort = col => setCompMejoraSort(s =>
+            s.col === col ? {col, dir: s.dir === 'asc' ? 'desc' : 'asc'} : {col, dir: 'desc'}
+          )
+          const arrow = col => compMejoraSort.col === col ? (compMejoraSort.dir === 'asc' ? ' ▲' : ' ▼') : ' ⇅'
+
+          const selStyle = {padding:'6px 10px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+            fontFamily:'Inter', fontSize:12, color:C.text, background:C.white, outline:'none', cursor:'pointer'}
+          const thBase = {padding:'8px 12px', background:'#1E3A5F', color:'white', fontSize:11,
+            fontWeight:700, whiteSpace:'nowrap', borderBottom:'1px solid rgba(255,255,255,0.15)',
+            cursor:'pointer', userSelect:'none'}
+          const thSt  = {...thBase, textAlign:'left'}
+          const thNum = {...thBase, textAlign:'center'}
+
+          return students.length === 0 ? <EmptyState/> : (
+            <Card>
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start',
+                flexWrap:'wrap', gap:12, marginBottom:20}}>
+                <CardTitle sub={`${filas.length} componentes · Umbral = Prom. Nacional + Límite`}>
+                  Oportunidad de Mejoramiento
+                </CardTitle>
+                <div style={{display:'flex', alignItems:'center', gap:12, flexWrap:'wrap'}}>
+                  <div style={{display:'flex', alignItems:'center', gap:8}}>
+                    <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Área:</span>
+                    <select value={areaActual} onChange={e => { setCompMejoraArea(e.target.value); setCompMejoraAsig('Todas') }} style={selStyle}>
+                      {todasAreas.map(a => <option key={a} value={a}>{a}</option>)}
+                    </select>
+                  </div>
+                  <div style={{display:'flex', alignItems:'center', gap:8}}>
+                    <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Asignatura:</span>
+                    <select value={asigActual} onChange={e => setCompMejoraAsig(e.target.value)} style={selStyle}>
+                      <option value="Todas">Todas</option>
+                      {asigsFiltradas.map(a => <option key={a} value={a}>{a}</option>)}
+                    </select>
+                  </div>
+                  <div style={{display:'flex', alignItems:'center', gap:8}}>
+                    <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Límite:</span>
+                    <select value={limiteActual} onChange={e => setCompMejoraLimite(Number(e.target.value))} style={selStyle}>
+                      {limites.map(v => <option key={v} value={v}>{v === 0 ? '0' : `+${v}`}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {filas.length === 0 ? (
+                <div style={{textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter', fontSize:13}}>
+                  Sin datos para los filtros seleccionados.
+                </div>
+              ) : (
+                <>
+                  <div style={{display:'flex', gap:20, marginBottom:14, flexWrap:'wrap'}}>
+                    <div style={{display:'flex', alignItems:'center', gap:6, fontFamily:'Inter', fontSize:11, color:C.gray}}>
+                      <span style={{width:12, height:12, borderRadius:2, background:C.red, display:'inline-block'}}/>
+                      Por debajo del umbral
+                    </div>
+                    <div style={{display:'flex', alignItems:'center', gap:6, fontFamily:'Inter', fontSize:11, color:C.gray}}>
+                      <span style={{width:12, height:12, borderRadius:2, background:C.green, display:'inline-block'}}/>
+                      Por encima del umbral
+                    </div>
+                    <div style={{fontFamily:'Inter', fontSize:11, color:C.gray, marginLeft:'auto'}}>
+                      Clic en encabezado para ordenar
+                    </div>
+                  </div>
+                  <div style={{overflowX:'auto'}}>
+                    <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter', fontSize:12}}>
+                      <thead>
+                        <tr>
+                          {asigActual === 'Todas' && (
+                            <th style={thSt} onClick={() => handleSort('materia')}>
+                              Asignatura{arrow('materia')}
+                            </th>
+                          )}
+                          <th style={thSt} onClick={() => handleSort('componente')}>
+                            Componente{arrow('componente')}
+                          </th>
+                          <th style={thNum} onClick={() => handleSort('nacProm')}>
+                            Prom. Nacional{arrow('nacProm')}
+                          </th>
+                          <th style={thNum} onClick={() => handleSort('umbral')}>
+                            Umbral{arrow('umbral')}
+                          </th>
+                          <th style={thNum} onClick={() => handleSort('total')}>
+                            Estudiantes{arrow('total')}
+                          </th>
+                          <th style={thNum} onClick={() => handleSort('pctDebajo')}>
+                            % Por debajo{arrow('pctDebajo')}
+                          </th>
+                          <th style={thNum} onClick={() => handleSort('pctEncima')}>
+                            % Por encima{arrow('pctEncima')}
+                          </th>
+                          <th style={{...thSt, minWidth:140, cursor:'default'}}>Distribución</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filas.map((f, i) => (
+                          <tr key={i} style={{background: i%2===0 ? C.white : C.bg2, borderBottom:`1px solid ${C.bg2}`}}>
+                            {asigActual === 'Todas' && (
+                              <td style={{padding:'8px 12px', color:C.gray, fontSize:11}}>{f.materia}</td>
+                            )}
+                            <td style={{padding:'8px 12px', color:C.dark, fontWeight:500, maxWidth:280}}>
+                              {f.componente}
+                            </td>
+                            <td style={{padding:'8px 12px', textAlign:'center', color:C.gray}}>
+                              {f.nacProm.toFixed(1)}
+                            </td>
+                            <td style={{padding:'8px 12px', textAlign:'center'}}>
+                              <span style={{fontWeight:700, color:C.navy}}>{f.umbral.toFixed(1)}</span>
+                            </td>
+                            <td style={{padding:'8px 12px', textAlign:'center', color:C.gray}}>
+                              {f.total}
+                            </td>
+                            <td style={{padding:'8px 12px', textAlign:'center'}}>
+                              <span style={{display:'inline-block', minWidth:52, padding:'2px 8px', borderRadius:20,
+                                background: f.pctDebajo >= 60 ? `${C.red}22` : f.pctDebajo >= 40 ? '#FEF3C722' : `${C.green}18`,
+                                color: f.pctDebajo >= 60 ? C.red : f.pctDebajo >= 40 ? '#D97706' : C.green,
+                                fontWeight:700}}>
+                                {f.pctDebajo}%
+                              </span>
+                            </td>
+                            <td style={{padding:'8px 12px', textAlign:'center'}}>
+                              <span style={{display:'inline-block', minWidth:52, padding:'2px 8px', borderRadius:20,
+                                background: f.pctEncima >= 60 ? `${C.green}18` : f.pctEncima >= 40 ? '#FEF3C722' : `${C.red}22`,
+                                color: f.pctEncima >= 60 ? C.green : f.pctEncima >= 40 ? '#D97706' : C.red,
+                                fontWeight:700}}>
+                                {f.pctEncima}%
+                              </span>
+                            </td>
+                            <td style={{padding:'8px 12px'}}>
+                              <div style={{display:'flex', height:18, borderRadius:4, overflow:'hidden', background:C.bg2, minWidth:120}}>
+                                {f.total > 0 && (
+                                  <>
+                                    <div style={{width:`${f.pctDebajo}%`, background:C.red, transition:'width 0.3s'}}/>
+                                    <div style={{width:`${f.pctEncima}%`, background:C.green, transition:'width 0.3s'}}/>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </Card>
+          )
+        })()}
+
         {/* ══ PRÓXIMAMENTE ══════════════════════════════════════ */}
-        {['comp_comparativo','comp_comp2','comp_mejora','consolidado','equilibrio'].includes(tab) && (
+        {['comp_comparativo','comp_comp2','consolidado','equilibrio'].includes(tab) && (
           <Card>
             <div style={{textAlign:'center', padding:60, display:'flex', flexDirection:'column', alignItems:'center', gap:16}}>
               <div style={{fontSize:48}}>🚧</div>
