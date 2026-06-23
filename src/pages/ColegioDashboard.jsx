@@ -724,6 +724,8 @@ export default function ColegioDashboard({session, onLogout}) {
   const [notasCompN, setNotasCompN] = useState([])
   const [notasCompNAsig, setNotasCompNAsig] = useState('Todas')
   const [compNGestion, setCompNGestion] = useState([])
+  const [mejoraLimite, setMejoraLimite] = useState(10)
+  const [mejoraAsig, setMejoraAsig] = useState('Todas')
   const [compNAsigFilter, setCompNAsigFilter] = useState('Todas')
   const [oportunidades, setOportunidades] = useState([])
   const [detallePreguntas, setDetallePreguntas] = useState([])
@@ -864,6 +866,7 @@ export default function ColegioDashboard({session, onLogout}) {
       // Seleccionar automáticamente la primera asignatura disponible
       const firstMat = cgData?.length ? cgData[0].materia : 'Todas'
       setCompAsigFilter(firstMat)
+      setMejoraAsig(firstMat)
 
       // Notas por competencia
       const { data: nc } = await supabase
@@ -2514,57 +2517,136 @@ export default function ColegioDashboard({session, onLogout}) {
         })()}
 
         {/* ══ OPORTUNIDADES ════════════════════════════════════ */}
-        {tab==='mejora' && (
-          students.length === 0 ? <EmptyState/> :
-          <Card>
-            <CardTitle sub={`${oportunidades.length} preguntas identificadas`}>
-              Oportunidades de Mejoramiento
-            </CardTitle>
-            {oportunidades.length === 0 ? (
-              <EmptyState msg="No hay oportunidades de mejora cargadas para esta prueba."/>
-            ) : (
-              <div style={{overflowX:'auto'}}>
-                <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter'}}>
-                  <thead>
-                    <tr style={{borderBottom:`2px solid ${C.bg2}`}}>
-                      {['Sesión','Nro','Materia','Componente','% Colegio','% Nacional','Brecha','Nivel'].map(h => (
-                        <th key={h} style={{textAlign:'left', padding:'8px 12px', fontSize:10,
-                          color:C.gray, fontWeight:600, textTransform:'uppercase',
-                          letterSpacing:'0.05em', whiteSpace:'nowrap'}}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {oportunidades.map((q,i) => (
-                      <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`,
-                        background:i%2===0?`${C.bg}80`:'transparent'}}>
-                        <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{q.sesion}</td>
-                        <td style={{padding:'10px 12px', fontSize:15, fontWeight:700,
-                          color:C.navy, fontFamily:'Playfair Display, serif'}}>{q.nro_pregunta}</td>
-                        <td style={{padding:'10px 12px', fontSize:12, color:C.text, fontWeight:500}}>{q.materia}</td>
-                        <td style={{padding:'10px 12px', fontSize:11, color:C.gray}}>{q.componente}</td>
-                        <td style={{padding:'10px 12px'}}>
-                          <Badge color={q.pct_colegio<20?C.red:'#F59E0B'}>{q.pct_colegio}%</Badge>
-                        </td>
-                        <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{q.pct_nacional}%</td>
-                        <td style={{padding:'10px 12px'}}>
-                          <Badge color={q.pct_colegio<q.pct_nacional?C.red:C.green}>
-                            {q.pct_colegio<q.pct_nacional?`−${q.pct_nacional-q.pct_colegio}`:`+${q.pct_colegio-q.pct_nacional}`}%
-                          </Badge>
-                        </td>
-                        <td style={{padding:'10px 12px'}}>
-                          <Badge color={q.dificultad==='Superior'?C.red:q.dificultad==='Alto'?'#F59E0B':C.blue}>
-                            {q.dificultad}
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+        {tab==='mejora' && (() => {
+          const limites = [5,10,15,20,25,30,35,40,45,50]
+          const asignaturas = ['Todas', ...new Set(compGestion.map(r => r.materia))]
+          const asigActual = mejoraAsig === 'Todas' ? (asignaturas[1] || 'Todas') : mejoraAsig
+
+          // Una fila por competencia con nac_prom del RPC
+          const filas = compGestion
+            .filter(r => r.materia === asigActual)
+            .map(r => {
+              const umbral = (r.nac_prom || 0) + mejoraLimite
+              const notasDeComp = notasComp.filter(n => n.materia === asigActual && n.competencia === r.competencia)
+              const total = notasDeComp.length
+              const encima = notasDeComp.filter(n => n.nota > umbral).length
+              const debajo = total - encima
+              const pctEncima = total > 0 ? Math.round((encima / total) * 100) : 0
+              const pctDebajo = total > 0 ? Math.round((debajo / total) * 100) : 0
+              return { competencia: r.competencia, nacProm: r.nac_prom || 0, umbral, total, encima, debajo, pctEncima, pctDebajo }
+            })
+            .sort((a, b) => b.pctDebajo - a.pctDebajo)
+
+          const selStyle = {padding:'6px 10px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+            fontFamily:'Inter', fontSize:12, color:C.text, background:C.white, outline:'none', cursor:'pointer'}
+          const thSt = {padding:'8px 12px', textAlign:'left', background:'#1E3A5F', color:'white',
+            fontSize:11, fontWeight:700, whiteSpace:'nowrap', borderBottom:'1px solid rgba(255,255,255,0.15)'}
+          const thNum = {...thSt, textAlign:'center'}
+
+          return students.length === 0 ? <EmptyState/> : (
+            <Card>
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start',
+                flexWrap:'wrap', gap:12, marginBottom:20}}>
+                <CardTitle sub={`${filas.length} competencias · Umbral = Prom. Nacional + Límite`}>
+                  Oportunidad de Mejoramiento
+                </CardTitle>
+                <div style={{display:'flex', alignItems:'center', gap:16, flexWrap:'wrap'}}>
+                  <div style={{display:'flex', alignItems:'center', gap:8}}>
+                    <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Asignatura:</span>
+                    <select value={mejoraAsig} onChange={e => setMejoraAsig(e.target.value)} style={selStyle}>
+                      {asignaturas.map(a => <option key={a} value={a}>{a}</option>)}
+                    </select>
+                  </div>
+                  <div style={{display:'flex', alignItems:'center', gap:8}}>
+                    <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Límite:</span>
+                    <select value={mejoraLimite} onChange={e => setMejoraLimite(Number(e.target.value))} style={selStyle}>
+                      {limites.map(v => <option key={v} value={v}>+{v}</option>)}
+                    </select>
+                  </div>
+                </div>
               </div>
-            )}
-          </Card>
-        )}
+
+              {asigActual === 'Todas' || filas.length === 0 ? (
+                <div style={{textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter', fontSize:13}}>
+                  {asigActual === 'Todas' ? 'Selecciona una asignatura para ver el reporte.' : 'Sin datos para los filtros seleccionados.'}
+                </div>
+              ) : (
+                <>
+                  {/* Leyenda */}
+                  <div style={{display:'flex', gap:20, marginBottom:14, flexWrap:'wrap'}}>
+                    <div style={{display:'flex', alignItems:'center', gap:6, fontFamily:'Inter', fontSize:11, color:C.gray}}>
+                      <span style={{width:12, height:12, borderRadius:2, background:C.red, display:'inline-block'}}/>
+                      Por debajo del umbral
+                    </div>
+                    <div style={{display:'flex', alignItems:'center', gap:6, fontFamily:'Inter', fontSize:11, color:C.gray}}>
+                      <span style={{width:12, height:12, borderRadius:2, background:C.green, display:'inline-block'}}/>
+                      Por encima del umbral
+                    </div>
+                  </div>
+                  <div style={{overflowX:'auto'}}>
+                    <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter', fontSize:12}}>
+                      <thead>
+                        <tr>
+                          <th style={thSt}>Competencia</th>
+                          <th style={thNum}>Prom. Nacional</th>
+                          <th style={thNum}>Umbral</th>
+                          <th style={thNum}>Estudiantes</th>
+                          <th style={thNum}>% Por debajo</th>
+                          <th style={thNum}>% Por encima</th>
+                          <th style={{...thSt, minWidth:140}}>Distribución</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filas.map((f, i) => (
+                          <tr key={i} style={{background: i%2===0 ? C.white : C.bg2, borderBottom:`1px solid ${C.bg2}`}}>
+                            <td style={{padding:'8px 12px', color:C.dark, fontWeight:500, maxWidth:260}}>
+                              {f.competencia}
+                            </td>
+                            <td style={{padding:'8px 12px', textAlign:'center', color:C.gray}}>
+                              {f.nacProm.toFixed(1)}
+                            </td>
+                            <td style={{padding:'8px 12px', textAlign:'center'}}>
+                              <span style={{fontWeight:700, color:C.navy}}>{f.umbral.toFixed(1)}</span>
+                            </td>
+                            <td style={{padding:'8px 12px', textAlign:'center', color:C.gray}}>
+                              {f.total}
+                            </td>
+                            <td style={{padding:'8px 12px', textAlign:'center'}}>
+                              <span style={{display:'inline-block', minWidth:52, padding:'2px 8px',
+                                borderRadius:20, background: f.pctDebajo >= 60 ? `${C.red}22` : f.pctDebajo >= 40 ? '#FEF3C722' : `${C.green}18`,
+                                color: f.pctDebajo >= 60 ? C.red : f.pctDebajo >= 40 ? '#D97706' : C.green,
+                                fontWeight:700}}>
+                                {f.pctDebajo}%
+                              </span>
+                            </td>
+                            <td style={{padding:'8px 12px', textAlign:'center'}}>
+                              <span style={{display:'inline-block', minWidth:52, padding:'2px 8px',
+                                borderRadius:20, background: f.pctEncima >= 60 ? `${C.green}18` : f.pctEncima >= 40 ? '#FEF3C722' : `${C.red}22`,
+                                color: f.pctEncima >= 60 ? C.green : f.pctEncima >= 40 ? '#D97706' : C.red,
+                                fontWeight:700}}>
+                                {f.pctEncima}%
+                              </span>
+                            </td>
+                            <td style={{padding:'8px 12px'}}>
+                              <div style={{display:'flex', height:18, borderRadius:4, overflow:'hidden', background:C.bg2, minWidth:120}}>
+                                {f.total > 0 && (
+                                  <>
+                                    <div style={{width:`${f.pctDebajo}%`, background:C.red, transition:'width 0.3s'}}/>
+                                    <div style={{width:`${f.pctEncima}%`, background:C.green, transition:'width 0.3s'}}/>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </Card>
+          )
+        })()}
 
         {/* ══ RANKING ══════════════════════════════════════════ */}
         {tab==='ranking' && (
