@@ -1,4 +1,12 @@
+import { createClient } from '@supabase/supabase-js'
+import { verifyJWT } from './_jwt.js'
+
 export const config = { maxDuration: 5 }
+
+const adminSupabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
 
 const ALLOWED_ORIGINS = [
   'https://portal-resultados-miltonochoa.vercel.app',
@@ -7,6 +15,11 @@ const ALLOWED_ORIGINS = [
 const isAllowed = (o) =>
   ALLOWED_ORIGINS.includes(o) ||
   /^https:\/\/portal-resultados-miltonochoa-[a-z0-9-]+\.vercel\.app$/.test(o)
+
+function parseCookie(str, name) {
+  const m = str.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`))
+  return m ? m[1] : null
+}
 
 export default async function handler(req, res) {
   const origin = req.headers['origin'] || ''
@@ -19,6 +32,22 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(204).end()
   if (req.method !== 'POST') return res.status(405).end()
+
+  // Registrar logout en sesiones_log (no bloqueante)
+  try {
+    const token = parseCookie(req.headers.cookie || '', 'mo_session')
+    if (token) {
+      const payload = await verifyJWT(token)
+      const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket?.remoteAddress || 'unknown'
+      adminSupabase.from('sesiones_log').insert({
+        usuario: String(payload.sub),
+        rol: payload.app_role,
+        ip,
+        user_agent: req.headers['user-agent'] || '',
+        accion: 'logout',
+      }).then(null, () => {})
+    }
+  } catch {}
 
   res.setHeader('Set-Cookie', [
     'mo_session=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0',

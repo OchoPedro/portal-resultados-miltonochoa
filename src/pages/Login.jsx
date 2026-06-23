@@ -86,18 +86,6 @@ export default function Login({ onLogin }) {
     }
   }, [onLogin])
 
-  useEffect(() => {
-    const hash = window.location.hash.slice(1)
-    if (!hash) return
-    const params = new URLSearchParams(hash)
-    const u = params.get('u')
-    const p = params.get('p')
-    if (u && p) {
-      if (window.location.hash) history.replaceState(null, '', window.location.pathname)
-      doLogin(u, p, true)
-    }
-  }, [doLogin])
-
   const handleLogin = (e) => {
     e.preventDefault()
     doLogin(usuario, password, false)

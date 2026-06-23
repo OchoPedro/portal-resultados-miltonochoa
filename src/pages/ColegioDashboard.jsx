@@ -804,6 +804,7 @@ export default function ColegioDashboard({session, onLogout}) {
       .select('detalle')
       .eq('estudiante_id', selectedStudent.estudiante_id)
       .eq('prueba_id', selectedPrueba.id)
+      .eq('colegio_id', session.id)
       .single()
       .then(({ data }) => {
         if (cancelled) return
@@ -821,10 +822,13 @@ export default function ColegioDashboard({session, onLogout}) {
         ultima_sesion: new Date().toISOString()
       }).eq('id', session.id)
 
+      if (!mountedRef.current) return
+
       // Cargar todas las pruebas activas
       const { data: pruebasData } = await supabase
         .from('pruebas').select('id, codigo, nombre, fecha, grado, tipo, activa, created_at, estructura_excel').eq('activa', true)
         .order('created_at', {ascending: false})
+      if (!mountedRef.current) return
       setAllPruebas(pruebasData || [])
 
       if (!pruebasData?.length) { setLoading(false); return }

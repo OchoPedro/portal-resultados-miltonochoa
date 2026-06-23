@@ -6,7 +6,6 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 export let supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 export function setSupabaseToken(token) {
-  if (token) sessionStorage.setItem('mo_token', token)
   supabase = createClient(supabaseUrl, supabaseAnonKey, {
     global: {
       fetch: (url, options = {}) => {
@@ -19,6 +18,5 @@ export function setSupabaseToken(token) {
 }
 
 export function clearSupabaseToken() {
-  sessionStorage.removeItem('mo_token')
   supabase = createClient(supabaseUrl, supabaseAnonKey)
 }

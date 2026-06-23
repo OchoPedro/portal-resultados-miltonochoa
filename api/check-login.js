@@ -27,7 +27,7 @@ async function getIntentos(ip) {
 async function registrarFallo(ip, intentosActuales) {
   const nuevos = intentosActuales + 1
   const bloqueado_hasta = nuevos >= MAX_INTENTOS
-    ? new Date(Date.now() + 10 * 365 * 24 * 60 * 60 * 1000).toISOString()
+    ? new Date(Date.now() + 15 * 60 * 1000).toISOString()
     : null
   await adminSupabase.from('login_attempts').upsert({ ip, intentos: nuevos, bloqueado_hasta })
 }
@@ -48,13 +48,14 @@ async function generarLoginToken(userId, role) {
 
 export default async function handler(req, res) {
   const origin = req.headers.origin || ''
-  if (ALLOWED_ORIGINS.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin)
-  }
+  const allowed = ALLOWED_ORIGINS.includes(origin)
+  res.setHeader('Access-Control-Allow-Origin', allowed ? origin : ALLOWED_ORIGINS[0])
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Vary', 'Origin')
 
   if (req.method === 'OPTIONS') return res.status(204).end()
+  if (!allowed) return res.status(403).json({ ok: false })
   if (req.method !== 'POST') return res.status(405).json({ ok: false })
 
   const { usuario, password } = req.body || {}

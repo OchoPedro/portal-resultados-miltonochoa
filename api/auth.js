@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { SignJWT } from 'jose'
 import bcrypt from 'bcryptjs'
-import { createHash } from 'crypto'
+import { createHash, randomInt } from 'crypto'
 import { signUserJWT } from './_jwt.js'
 
 const checkPassword = async (stored, entered) => {
@@ -184,7 +184,7 @@ export default async function handler(req, res) {
         const { Resend } = await import('resend')
         const resend = new Resend(process.env.RESEND_API_KEY)
         // Generar OTP de 6 dígitos
-        const otp = Math.floor(100000 + Math.random() * 900000).toString()
+        const otp = randomInt(100000, 1000000).toString()
         const adminId = userResult.data.id
 
         // Borrar OTPs anteriores e insertar uno nuevo
