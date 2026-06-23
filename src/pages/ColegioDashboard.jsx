@@ -855,7 +855,9 @@ export default function ColegioDashboard({session, onLogout}) {
         p_colegio_id: cid,
       })
       setCompGestion(cgData || [])
-      setCompAsigFilter('Todas')
+      // Seleccionar automáticamente la primera asignatura disponible
+      const firstMat = cgData?.length ? cgData[0].materia : 'Todas'
+      setCompAsigFilter(firstMat)
 
       // Oportunidades
       const { data: opor } = await supabase
@@ -1829,7 +1831,16 @@ export default function ColegioDashboard({session, onLogout}) {
                   </div>
                 </div>
 
-                {filas.length > 0 && (() => {
+                {filas.length > 0 && compAsigFilter === 'Todas' && (
+                  <div style={{display:'flex', alignItems:'center', justifyContent:'center',
+                    height:120, background:C.bg2, borderRadius:10, marginBottom:24,
+                    color:C.gray, fontFamily:'Inter', fontSize:13, gap:8}}>
+                    <span style={{fontSize:20}}>📊</span>
+                    Selecciona una asignatura para ver la gráfica de competencias
+                  </div>
+                )}
+
+                {filas.length > 0 && compAsigFilter !== 'Todas' && (() => {
                   // Barras flotantes: cada barra va de (prom - desv) a (prom + desv)
                   // Las etiquetas muestran el valor mínimo (abajo) y máximo (arriba) de la barra
                   const SCOPES = [
