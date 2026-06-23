@@ -35,10 +35,10 @@ const semaforoColor = (v, area) => NIVEL_COLOR[semaforoNivel(v, area)]
 const LeyendaNiveles = () => (
   <div style={{display:'flex', gap:8, flexWrap:'wrap', marginTop:12}}>
     {[
-      {label:'Avanzado', color:C.green},
-      {label:'Satisfactorio', color:'#F59E0B'},
-      {label:'Mínimo', color:'#F97316'},
-      {label:'Insuficiente', color:C.red},
+      {label:'Nivel 4', color:C.green},
+      {label:'Nivel 3', color:'#F59E0B'},
+      {label:'Nivel 2', color:'#F97316'},
+      {label:'Nivel 1', color:C.red},
     ].map((l,i) => (
       <div key={i} style={{display:'flex', alignItems:'center', gap:6}}>
         <div style={{width:12, height:12, borderRadius:2, background:l.color}}/>
@@ -72,7 +72,7 @@ const LeyendaNivelesPorArea = () => (
       <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter', fontSize:11}}>
         <thead>
           <tr>
-            {['Área','Asignatura','Insuficiente','Mínimo','Satisfactorio','Avanzado'].map((h,i) => (
+            {['Área','Asignatura','Nivel 1','Nivel 2','Nivel 3','Nivel 4'].map((h,i) => (
               <th key={i} style={{padding:'6px 10px', textAlign: i<2 ? 'left' : 'center',
                 color: i<2 ? C.navy : NIVEL_COLOR[i-2], fontWeight:600,
                 borderBottom:`2px solid ${i<2 ? C.navy : NIVEL_COLOR[i-2]}`}}>{h}</th>
