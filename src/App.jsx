@@ -11,10 +11,13 @@ export default function App() {
 
   // Restaurar sesión desde la cookie httpOnly via /api/me
   useEffect(() => {
+    const isAdminPath = window.location.pathname.startsWith('/aamo-admin')
     fetch('/api/me', { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (data?.token) {
+          // Si la URL es /aamo-admin pero la sesión no es de admin, no restaurar
+          if (isAdminPath && data.user?.role !== 'admin') return
           setSupabaseToken(data.token)
           setSession(data.user)
         }
