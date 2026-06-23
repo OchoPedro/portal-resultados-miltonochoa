@@ -53,10 +53,10 @@ const semaforoColor = (v, area) => NIVEL_COLOR[semaforoNivel(v, area)]
 const LeyendaNiveles = () => (
   <div style={{display:'flex', gap:8, flexWrap:'wrap', marginTop:12}}>
     {[
-      {label:'Nivel 4', color:C.green},
-      {label:'Nivel 3', color:'#F59E0B'},
-      {label:'Nivel 2', color:'#F97316'},
       {label:'Nivel 1', color:C.red},
+      {label:'Nivel 2', color:'#F97316'},
+      {label:'Nivel 3', color:'#F59E0B'},
+      {label:'Nivel 4', color:C.green},
     ].map((l,i) => (
       <div key={i} style={{display:'flex', alignItems:'center', gap:6}}>
         <div style={{width:12, height:12, borderRadius:2, background:l.color}}/>
