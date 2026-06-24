@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { C } from '../../components/ui'
 
 const METODOS = [
+  { id:'masivo',  icon:'📦', titulo:'Carga masiva',      sub:'Múltiples TXT — todos los colegios', badge:'Nuevo',       desc:'Sube todos los archivos TXT de una vez. El sistema detecta automáticamente a qué colegio pertenece cada estudiante por su número de documento.' },
   { id:'optico',  icon:'🧾', titulo:'Lector óptico',     sub:'Archivo .txt',                  badge:'Recomendado', desc:'Sube el archivo de texto que exporta el lector óptico. Cada línea es un estudiante con su cadena de respuestas. Es el método más confiable y rápido.' },
   { id:'pdf',     icon:'📄', titulo:'Hojas escaneadas',  sub:'Archivo .pdf — Claude Vision',   badge:'IA',          desc:'Sube el PDF con las hojas escaneadas. Claude Vision lee cada página automáticamente. Funciona aunque falten hojas de algún estudiante.' },
   { id:'fotos',   icon:'📷', titulo:'Fotos de hojas',    sub:'Imágenes JPG o PNG',             badge:'IA',          desc:'Sube las fotos de las hojas de respuesta. Puedes seleccionar varias imágenes a la vez. Claude Vision lee cada foto automáticamente.' },
@@ -241,6 +242,7 @@ export default function AdminResultados({ onUpdate }) {
   const [pruebaId, setPruebaId]       = useState('')
   const [archivo, setArchivo]         = useState(null)
   const [archivos, setArchivos]       = useState([])
+  const [archivosMasivo, setArchivosMasivo] = useState([])
   const [cargando, setCargando]       = useState(true)
   const [procesando, setProcesando]   = useState(false)
   const [progreso, setProgreso]       = useState({ actual:0, total:0, msg:'' })
@@ -308,21 +310,21 @@ export default function AdminResultados({ onUpdate }) {
   }
 
   function resetFormFields() {
-    setArchivo(null); setArchivos([]); setPreview(null); setResultado(null)
+    setArchivo(null); setArchivos([]); setArchivosMasivo([]); setPreview(null); setResultado(null)
     setError(''); setConfirmar(false)
     setManualGrado(''); setManualEstId(''); setManualDoc(''); setEstDisp([])
     setManualResp(''); setManualPrev(''); setGradosDisp([])
   }
 
   function reset() {
-    setMetodo(null); setArchivo(null); setArchivos([]); setPreview(null); setResultado(null)
+    setMetodo(null); setArchivo(null); setArchivos([]); setArchivosMasivo([]); setPreview(null); setResultado(null)
     setError(''); setColegioId(''); setPruebaId(''); setProgreso({ actual:0, total:0, msg:'' })
     setManualDoc(''); setManualResp(''); setManualPrev(''); setManualGrado(''); setManualEstId(''); setEstDisp([])
     setUsuarioInput(''); setDepartamento(''); setMunicipio(''); setGradosDisp([])
     cancelarRef.current = false
   }
   function resetForm() {
-    setArchivo(null); setArchivos([]); setPreview(null); setResultado(null)
+    setArchivo(null); setArchivos([]); setArchivosMasivo([]); setPreview(null); setResultado(null)
     setError(''); setConfirmar(false); setProgreso({ actual:0, total:0, msg:'' })
     setManualDoc(''); setManualResp(''); setManualPrev(''); setManualGrado(''); setManualEstId(''); setEstDisp([])
   }
@@ -379,6 +381,67 @@ export default function AdminResultados({ onUpdate }) {
       const estudiantesLeidos = filasTXT.map(f => ({ documento:f.documento, respuestas:f.respuestas, tieneS1:true, tieneS2:true }))
       const filas = await procesarResultados(estudiantesLeidos, kd.clave, kd.areas, kd.asignaturas, kd.competencias, colegioId, pruebaId, kd.componentes, kd.dificultades)
       setPreview({ clave:kd.clave, filas, prueba:kd.prueba, via:'optico', dificultades:kd.dificultades })
+    } catch(e) { setError('Error: ' + e.message) }
+    finally { setProcesando(false) }
+  }
+
+  // ── MASIVO (auto-detección de colegio) ────────────────
+  async function procesarMasivo() {
+    setError('')
+    if (!pruebaId || archivosMasivo.length === 0) { setError('Selecciona la prueba y al menos un archivo TXT.'); return }
+    const kd = getClave()
+    if (!kd) { setError('La prueba no tiene preguntas cargadas.'); return }
+    setProcesando(true)
+    setProgreso({ actual:0, total:archivosMasivo.length, msg:'Leyendo archivos…' })
+    try {
+      // Leer todos los TXT
+      const estudiantesLeidos = []
+      for (let i = 0; i < archivosMasivo.length; i++) {
+        const texto = await archivosMasivo[i].text()
+        const filas = parsearTXT(texto)
+        for (const f of filas) {
+          estudiantesLeidos.push({ documento:f.documento, respuestas:f.respuestas, tieneS1:true, tieneS2:true })
+        }
+        setProgreso({ actual:i+1, total:archivosMasivo.length, msg:`Leyendo archivos… (${i+1}/${archivosMasivo.length})` })
+      }
+
+      if (!estudiantesLeidos.length) { setError('Los archivos no tienen líneas válidas.'); return }
+
+      // Buscar estudiantes en TODOS los colegios (sin filtrar por colegio_id)
+      setProgreso({ actual:archivosMasivo.length, total:archivosMasivo.length, msg:`Buscando ${estudiantesLeidos.length} estudiantes en la base de datos…` })
+      const documentos = [...new Set(estudiantesLeidos.map(e => e.documento).filter(Boolean))]
+
+      // Buscar en lotes de 200 para no exceder límites
+      const estudiantesDB = []
+      for (let i = 0; i < documentos.length; i += 200) {
+        const lote = documentos.slice(i, i + 200)
+        const { data } = await supabase
+          .from('estudiantes')
+          .select('id,nombre,usuario,grado,salon,colegio_id')
+          .in('usuario', lote)
+          .eq('activo', true)
+        if (data) estudiantesDB.push(...data)
+      }
+
+      // Calcular resultados
+      const filas = estudiantesLeidos.map(e => {
+        const est = estudiantesDB.find(db => db.usuario === e.documento)
+        const calc = calcularResultado(e.respuestas, kd.clave, kd.areas, kd.asignaturas, kd.competencias, kd.componentes, kd.dificultades)
+        return { documento:e.documento, respuestas:e.respuestas, encontrado:!!est, estudiante:est||null,
+          tieneS1:true, tieneS2:true, ...calc }
+      })
+
+      // Verificar cuáles ya tienen resultado guardado
+      const ids = filas.filter(f => f.encontrado).map(f => f.estudiante.id)
+      let yaGuardados = []
+      if (ids.length) {
+        const { data:ex } = await supabase.from('resultados_estudiante')
+          .select('estudiante_id').in('estudiante_id', ids).eq('prueba_id', pruebaId)
+        yaGuardados = (ex || []).map(e => e.estudiante_id)
+      }
+
+      const filasConEstado = filas.map(f => ({ ...f, yaGuardado: f.encontrado && yaGuardados.includes(f.estudiante?.id) }))
+      setPreview({ clave:kd.clave, filas:filasConEstado, prueba:kd.prueba, via:'optico', masivo:true, dificultades:kd.dificultades })
     } catch(e) { setError('Error: ' + e.message) }
     finally { setProcesando(false) }
   }
@@ -474,8 +537,9 @@ export default function AdminResultados({ onUpdate }) {
       const filasValidas = preview.filas.filter(f => f.encontrado)
       let guardados = 0, errores = 0
       for (const f of filasValidas) {
+        const cid = preview.masivo ? f.estudiante.colegio_id : colegioId
         const { error:err } = await supabase.from('resultados_estudiante').upsert({
-          estudiante_id:f.estudiante.id, prueba_id:pruebaId, colegio_id:colegioId,
+          estudiante_id:f.estudiante.id, prueba_id:pruebaId, colegio_id:cid,
           respuestas:f.respuestas, correctas:f.correctas, total:f.total,
           desempeno_pct:f.porcentaje, puntaje_global:f.puntaje,
           mat_cuantitativo:f.pctAsig?.mat_cuantitativo??null, mat_especifico:f.pctAsig?.mat_especifico??null,
@@ -518,7 +582,7 @@ export default function AdminResultados({ onUpdate }) {
         }
       }
       const noEncontrados = preview.filas.filter(f=>!f.encontrado).length
-      setResultado({ guardados, errores, noEncontrados, total:preview.filas.length })
+      setResultado({ guardados, errores, noEncontrados, total:preview.filas.length, masivo:!!preview.masivo })
       setPreview(null)
       if (onUpdate) onUpdate()
       // Calibrar IRT en background (no bloqueante)
@@ -681,9 +745,11 @@ export default function AdminResultados({ onUpdate }) {
 
   const metodoActivo = METODOS.find(m => m.id === metodo)
   const pruebaActiva = pruebas.find(p => p.id === pruebaId)
-  const listo = colegioId && pruebaId && (
-    metodo === 'manual' ? manualEstId && manualResp :
-    metodo === 'fotos'  ? archivos.length > 0 : archivo
+  const listo = pruebaId && (
+    metodo === 'masivo'  ? archivosMasivo.length > 0 :
+    metodo === 'manual'  ? colegioId && manualEstId && manualResp :
+    metodo === 'fotos'   ? colegioId && archivos.length > 0 :
+    colegioId && archivo
   )
   const pctProg = progreso.total > 0 ? Math.round((progreso.actual / progreso.total) * 100) : 0
 
@@ -730,7 +796,7 @@ export default function AdminResultados({ onUpdate }) {
         {[
           { label:'Estudiantes procesados',       val:resultado.total,         color:C.navy  },
           { label:'Guardados correctamente',       val:resultado.guardados,     color:C.green },
-          { label:'No encontrados en el colegio', val:resultado.noEncontrados, color:resultado.noEncontrados>0?C.amber:C.gray },
+          { label:`No encontrados en ${resultado.masivo?'la base de datos':'el colegio'}`, val:resultado.noEncontrados, color:resultado.noEncontrados>0?C.amber:C.gray },
           { label:'Errores al guardar',            val:resultado.errores,       color:resultado.errores>0?C.red:C.gray },
         ].map((r,i) => (
           <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px 0', borderBottom:i<3?`1px solid ${C.bg2}`:'none' }}>
@@ -772,7 +838,7 @@ export default function AdminResultados({ onUpdate }) {
           <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
             <thead>
               <tr style={{ background:C.navy }}>
-                {['Documento','Nombre','Grado','Salón','Sesiones','Correctas','Puntaje','Nivel','Estado'].map(h => (
+                {['Documento','Nombre','Grado','Salón',...(preview.masivo?['Colegio']:['Sesiones']),'Correctas','Puntaje','Nivel','Estado'].map(h => (
                   <th key={h} style={{ padding:'11px 14px', color:'rgba(255,255,255,0.8)', fontWeight:600, textAlign:'left', whiteSpace:'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -784,9 +850,14 @@ export default function AdminResultados({ onUpdate }) {
                   <td style={{ padding:'10px 14px', color:C.text, fontWeight:500 }}>{f.encontrado?f.estudiante.nombre:'—'}</td>
                   <td style={{ padding:'10px 14px', color:C.gray }}>{f.estudiante?.grado||'—'}</td>
                   <td style={{ padding:'10px 14px', color:C.gray }}>{f.estudiante?.salon||'—'}</td>
-                  <td style={{ padding:'10px 14px', fontSize:11 }}>
-                    {f.tieneS1!==undefined ? <>{f.tieneS1?'✅':'⚠️'}S1 {f.tieneS2?'✅':'⚠️'}S2</> : '—'}
-                  </td>
+                  {preview.masivo
+                    ? <td style={{ padding:'10px 14px', fontSize:12, color:C.gray, maxWidth:180, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                        {f.encontrado ? (colegiosData.find(c=>c.id===f.estudiante?.colegio_id)?.nombre || f.estudiante?.colegio_id?.slice(0,8)+'…') : '—'}
+                      </td>
+                    : <td style={{ padding:'10px 14px', fontSize:11 }}>
+                        {f.tieneS1!==undefined ? <>{f.tieneS1?'✅':'⚠️'}S1 {f.tieneS2?'✅':'⚠️'}S2</> : '—'}
+                      </td>
+                  }
                   <td style={{ padding:'10px 14px', fontWeight:600 }}>{f.correctas}/{f.total}</td>
                   <td style={{ padding:'10px 14px', color:C.navy, fontWeight:700 }}>{f.puntaje}</td>
                   <td style={{ padding:'10px 14px' }}><Badge pct={f.porcentaje}/></td>
@@ -840,6 +911,8 @@ export default function AdminResultados({ onUpdate }) {
       <p style={{ fontSize:14, color:C.gray, margin:'0 0 24px' }}>{metodoActivo.desc}</p>
 
       <Card style={{ maxWidth:640 }}>
+        {/* Selector de colegio — oculto en modo masivo */}
+        {metodo !== 'masivo' && (<>
         {/* Usuario colegio (auto-fill) */}
         <div style={{ marginBottom:18 }}>
           <Label>Usuario del colegio</Label>
@@ -893,6 +966,7 @@ export default function AdminResultados({ onUpdate }) {
             {colegiosFiltrados.map(c => <option key={c.id} value={c.id}>{c.nombre}{c.usuario ? ` (${c.usuario})` : ''}</option>)}
           </select>
         </div>
+        </>)}
 
         {/* Prueba */}
         <div style={{ marginBottom:18 }}>
@@ -907,6 +981,32 @@ export default function AdminResultados({ onUpdate }) {
             </div>
           )}
         </div>
+
+        {/* Masivo — solo prueba + archivos TXT múltiples (sin colegio) */}
+        {metodo === 'masivo' && (
+          <div style={{ marginBottom:6 }}>
+            <div style={{ padding:'12px 16px', background:'#EFF6FF', borderRadius:9, fontSize:13, color:'#1D4ED8', marginBottom:18, lineHeight:1.6 }}>
+              📦 <strong>Carga masiva:</strong> sube todos los archivos TXT a la vez. El sistema detecta automáticamente el colegio de cada estudiante por su número de documento.
+            </div>
+            <Label>Archivos del lector óptico (.txt)</Label>
+            <input type="file" accept=".txt" multiple
+              onChange={e => { setArchivosMasivo(Array.from(e.target.files)); setPreview(null); setError('') }}
+              style={{ width:'100%', padding:'10px 12px', borderRadius:9, fontSize:13.5, border:`1px dashed ${C.grayLt}`, background:C.bg, color:C.text }} />
+            {archivosMasivo.length > 0 && (
+              <div style={{ marginTop:10, padding:'10px 14px', background:C.bg2, borderRadius:9 }}>
+                <div style={{ fontSize:12, color:C.navy, fontWeight:700, marginBottom:6 }}>📄 {archivosMasivo.length} archivo(s):</div>
+                <div style={{ maxHeight:120, overflowY:'auto' }}>
+                  {archivosMasivo.map((f,i) => (
+                    <div key={i} style={{ display:'flex', justifyContent:'space-between', fontSize:12, padding:'2px 0', borderBottom:`1px solid ${C.bg2}` }}>
+                      <span>{f.name}</span>
+                      <span style={{ color:C.gray }}>{(f.size/1024).toFixed(0)} KB</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Archivo — TXT o PDF */}
         {(metodo === 'optico' || metodo === 'pdf') && (
@@ -1036,7 +1136,7 @@ export default function AdminResultados({ onUpdate }) {
 
         <div style={{ marginTop:24, borderTop:`1px solid ${C.bg2}`, paddingTop:20 }}>
           <button disabled={!listo||procesando}
-            onClick={metodo==='optico'?procesarTXT:metodo==='pdf'?procesarPDF:metodo==='fotos'?procesarFotos:procesarManual}
+            onClick={metodo==='masivo'?procesarMasivo:metodo==='optico'?procesarTXT:metodo==='pdf'?procesarPDF:metodo==='fotos'?procesarFotos:procesarManual}
             style={{ width:'100%', padding:'13px', borderRadius:10, fontSize:15, fontWeight:700, border:'none',
               cursor:listo&&!procesando?'pointer':'not-allowed',
               background:listo&&!procesando?C.green:C.grayLt, color:listo&&!procesando?C.white:C.gray }}>
