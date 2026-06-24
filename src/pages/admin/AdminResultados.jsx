@@ -71,7 +71,8 @@ function calcularResultado(respuestasEstudiante, clave, areas, asignaturas, comp
 function parsearTXT(texto) {
   return texto.trim().split('\n').filter(l => l.trim()).map(l => {
     const p = l.trim().split(';')
-    return { documento:p[0]?.trim(), respuestas:p[p.length-1]?.trim() }
+    // Formato: usuario;dato;dato;respuestas — siempre en índice 3
+    return { documento:p[0]?.trim(), respuestas:p[3]?.trim() }
   }).filter(e => e.documento && e.respuestas)
 }
 
