@@ -1327,7 +1327,7 @@ export default function ColegioDashboard({session, onLogout}) {
                   children: [
                     {id:'detalle_prueba', label:'Detalle de Prueba'},
                     {id:'consolidado',    label:'Consolidado de Respuestas', soon:true},
-                    {id:'equilibrio',     label:'Equilibrio de la Prueba',   soon:true},
+                    {id:'equilibrio',     label:'Equilibrio de la Prueba'},
                   ]
                 },
               ],
@@ -1529,7 +1529,7 @@ export default function ColegioDashboard({session, onLogout}) {
                   children: [
                     {id:'detalle_prueba', label:'Detalle de Prueba'},
                     {id:'consolidado',    label:'Consolidado de Respuestas', soon:true},
-                    {id:'equilibrio',     label:'Equilibrio de la Prueba',   soon:true},
+                    {id:'equilibrio',     label:'Equilibrio de la Prueba'},
                   ]
                 },
               ],
