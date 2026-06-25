@@ -4242,9 +4242,9 @@ export default function ColegioDashboard({session, onLogout}) {
           )
 
           const NIVELES = ['Bajo','Básico','Alto','Superior']
-          const difColor = {'Bajo':'#2563EB','Básico':'#D97706','Alto':'#DC2626','Superior':'#7C3AED'}
-          const difBg    = {'Bajo':'#EFF6FF','Básico':'#FFFBEB','Alto':'#FEF2F2','Superior':'#F5F3FF'}
-          const difLabel = d => d==='Superior'?'Nivel 4': d==='Alto'?'Nivel 3': d==='Básico'?'Nivel 2': d==='Bajo'?'Nivel 1': d
+          const difColor = {'Bajo':'#6B7280','Básico':'#0891B2','Alto':'#2563EB','Superior':'#7C3AED'}
+          const difBg    = {'Bajo':'#F3F4F6','Básico':'#ECFEFF','Alto':'#EFF6FF','Superior':'#F5F3FF'}
+          const difLabel = d => d||'—'
 
           const materias = [...new Set(detallePreguntas.map(q => q.materia).filter(Boolean))].sort()
           const matActual = materias.includes(equilibrioMateria) ? equilibrioMateria : (materias[0] || '')
