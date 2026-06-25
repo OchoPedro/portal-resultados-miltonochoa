@@ -347,7 +347,7 @@ export default function AdminResultados({ onUpdate }) {
       return -1
     }
 
-    const i_rta   = idx(['rta', 'respuesta', 'clave'])
+    const i_rta   = idx(['rta', 'respuesta', 'clave', 'respuesta correcta'])
     const i_area  = idx(['área', 'area'])
     const i_asig  = idx(['asignatura'])
     const i_comp  = idx(['competencia'])
@@ -355,11 +355,13 @@ export default function AdminResultados({ onUpdate }) {
     const i_dif   = idx(['dificultad'])
 
     // Si no encontró encabezados reconocidos, usar índices del formato anterior
-    const dataRows = (i_rta >= 0) ? raw.slice(1) : raw.slice(2)
+    // Filtrar filas vacías (sobrantes de Excel)
+    const allRows = (i_rta >= 0) ? raw.slice(1) : raw.slice(2)
+    const dataRows = allRows.filter(f => f.some(v => v !== '' && v !== null && v !== undefined))
     const get = (f, iDyn, iLeg) => (iDyn >= 0 ? f[iDyn] : f[iLeg] || '')
 
     return {
-      clave:        dataRows.map(f => get(f, i_rta,    9).toString().trim().toUpperCase()),
+      clave:        dataRows.map(f => get(f, i_rta,    10).toString().trim().toUpperCase()),
       areas:        dataRows.map(f => get(f, i_area,   2).toString().trim()),
       asignaturas:  dataRows.map(f => get(f, i_asig,   3).toString().trim()),
       competencias: dataRows.map(f => get(f, i_comp,   6).toString().trim()),
@@ -978,7 +980,7 @@ export default function AdminResultados({ onUpdate }) {
           </select>
           {pruebaActiva && (
             <div style={{ fontSize:12, color:C.green, marginTop:6, fontWeight:600 }}>
-              ✓ {(pruebaActiva.estructura_excel?.raw?.length||0)-2} preguntas cargadas
+              ✓ {(pruebaActiva.estructura_excel?.raw||[]).slice(1).filter(f=>f.some(v=>v!==''&&v!==null&&v!==undefined)).length} preguntas cargadas
             </div>
           )}
         </div>
