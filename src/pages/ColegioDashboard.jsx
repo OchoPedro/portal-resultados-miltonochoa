@@ -2002,10 +2002,11 @@ export default function ColegioDashboard({session, onLogout}) {
                   // Barras flotantes: cada barra va de (prom - desv) a (prom + desv)
                   // Las etiquetas muestran el valor mínimo (abajo) y máximo (arriba) de la barra
                   const SCOPES = [
-                    {sfx:'nac',  color:'#2563EB', label:'Nacional',    promKey:'nac_prom',    desvKey:'nac_desv'},
-                    {sfx:'dpto', color:'#7C3AED', label:dptoNombre,   promKey:'dpto_prom',   desvKey:'dpto_desv'},
-                    {sfx:'ciu',  color:'#06B6D4', label:ciudadNombre, promKey:'ciudad_prom', desvKey:'ciudad_desv'},
-                    {sfx:'pln',  color:'#1E3A5F', label:'Plantel',     promKey:'plantel_prom',desvKey:'plantel_desv'},
+                    {sfx:'nac',  color:'#2563EB', label:'Nacional',     promKey:'nac_prom',    desvKey:'nac_desv'},
+                    {sfx:'reg',  color:'#059669', label:regionNombre,   promKey:'reg_prom',    desvKey:'reg_desv'},
+                    {sfx:'dpto', color:'#7C3AED', label:dptoNombre,    promKey:'dpto_prom',   desvKey:'dpto_desv'},
+                    {sfx:'ciu',  color:'#06B6D4', label:ciudadNombre,  promKey:'ciudad_prom', desvKey:'ciudad_desv'},
+                    {sfx:'pln',  color:'#1E3A5F', label:'Plantel',      promKey:'plantel_prom',desvKey:'plantel_desv'},
                   ]
                   const clamp = v => Math.max(0, Math.min(100, Math.round(v)))
                   const chartData = filas.map(r => {
@@ -3315,6 +3316,7 @@ export default function ColegioDashboard({session, onLogout}) {
 
         {/* ══ DESVIACIÓN COMPONENTES ═══════════════════════════ */}
         {tab==='comp_desviacion' && (() => {
+          const regionNombre = REGION_NOMBRES[session?.departamento_nombre?.toUpperCase()] || 'Región'
           const dptoNombre   = toTitleCase(session?.departamento_nombre) || 'Dpto.'
           const ciudadNombre = toTitleCase(session?.municipio) || 'Ciudad'
           const asignaturas  = ['Todas', ...new Set(compNGestion.map(r => r.materia)).values()]
@@ -3372,7 +3374,8 @@ export default function ColegioDashboard({session, onLogout}) {
 
                 {filas.length > 0 && compNAsigFilter !== 'Todas' && (() => {
                   const SCOPES = [
-                    {sfx:'nac',  color:'#2563EB', label:'Nacional',    promKey:'nac_prom',    desvKey:'nac_desv'},
+                    {sfx:'nac',  color:'#2563EB', label:'Nacional',     promKey:'nac_prom',    desvKey:'nac_desv'},
+                    {sfx:'reg',  color:'#059669', label:regionNombre,  promKey:'reg_prom',    desvKey:'reg_desv'},
                     {sfx:'dpto', color:'#7C3AED', label:dptoNombre,   promKey:'dpto_prom',   desvKey:'dpto_desv'},
                     {sfx:'ciu',  color:'#06B6D4', label:ciudadNombre, promKey:'ciudad_prom', desvKey:'ciudad_desv'},
                     {sfx:'pln',  color:'#1E3A5F', label:'Plantel',    promKey:'plantel_prom',desvKey:'plantel_desv'},
