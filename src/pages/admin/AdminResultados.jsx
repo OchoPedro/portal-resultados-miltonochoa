@@ -538,57 +538,58 @@ export default function AdminResultados({ onUpdate }) {
     setGuardando(true); setError('')
     try {
       const filasValidas = preview.filas.filter(f => f.encontrado)
-      let guardados = 0, errores = 0
-      for (const f of filasValidas) {
-        const cid = preview.masivo ? f.estudiante.colegio_id : colegioId
-        const { error:err } = await supabase.from('resultados_estudiante').upsert({
-          estudiante_id:f.estudiante.id, prueba_id:pruebaId, colegio_id:cid,
-          respuestas:f.respuestas, correctas:f.correctas, total:f.total,
-          desempeno_pct:f.porcentaje, puntaje_global:f.puntaje,
-          mat_cuantitativo:f.pctAsig?.mat_cuantitativo??null, mat_especifico:f.pctAsig?.mat_especifico??null,
-          cn_quimica:f.pctAsig?.cn_quimica??null, cn_fisica:f.pctAsig?.cn_fisica??null,
-          cn_biologia:f.pctAsig?.cn_biologia??null, cn_cts:f.pctAsig?.cn_cts??null,
-          sociales:f.pctAsig?.sociales??null, ciudadanas:f.pctAsig?.ciudadanas??null,
-          lectura_critica:f.pctAsig?.lectura_critica??null, ingles:f.pctAsig?.ingles??null,
-          detalle:f.detalle, cargado_via:preview.via||'optico',
-        }, { onConflict:'estudiante_id,prueba_id' })
-        if (err) { errores++ } else {
-          guardados++
-          const compRows = Object.values(f.porComp || {})
-            .filter(c => c.asignatura && c.competencia)
-            .map(c => ({
-              estudiante_id: f.estudiante.id,
-              prueba_id: pruebaId,
-              materia: c.asignatura,
-              competencia: c.competencia,
-              nota: c.total > 0 ? Math.round((c.correctas / c.total) * 100) : 0,
-              preguntas: c.total,
-            }))
-          if (compRows.length) {
-            await supabase.from('notas_competencia')
-              .upsert(compRows, { onConflict: 'estudiante_id,prueba_id,materia,competencia' })
-          }
-          const compNRows = Object.values(f.porCompN || {})
-            .filter(c => c.asignatura && c.componente)
-            .map(c => ({
-              estudiante_id: f.estudiante.id,
-              prueba_id: pruebaId,
-              materia: c.asignatura,
-              componente: c.componente,
-              nota: c.total > 0 ? Math.round((c.correctas / c.total) * 100) : 0,
-              preguntas: c.total,
-            }))
-          if (compNRows.length) {
-            await supabase.from('notas_componente')
-              .upsert(compNRows, { onConflict: 'estudiante_id,prueba_id,materia,componente' })
-          }
+
+      // Construir todos los arrays de una vez
+      const resultadosRows = filasValidas.map(f => ({
+        estudiante_id: f.estudiante.id,
+        prueba_id: pruebaId,
+        colegio_id: preview.masivo ? f.estudiante.colegio_id : colegioId,
+        respuestas: f.respuestas, correctas: f.correctas, total: f.total,
+        desempeno_pct: f.porcentaje, puntaje_global: f.puntaje,
+        mat_cuantitativo: f.pctAsig?.mat_cuantitativo??null, mat_especifico: f.pctAsig?.mat_especifico??null,
+        cn_quimica: f.pctAsig?.cn_quimica??null, cn_fisica: f.pctAsig?.cn_fisica??null,
+        cn_biologia: f.pctAsig?.cn_biologia??null, cn_cts: f.pctAsig?.cn_cts??null,
+        sociales: f.pctAsig?.sociales??null, ciudadanas: f.pctAsig?.ciudadanas??null,
+        lectura_critica: f.pctAsig?.lectura_critica??null, ingles: f.pctAsig?.ingles??null,
+        detalle: f.detalle, cargado_via: preview.via||'optico',
+      }))
+
+      const compRows = filasValidas.flatMap(f =>
+        Object.values(f.porComp || {}).filter(c => c.asignatura && c.competencia).map(c => ({
+          estudiante_id: f.estudiante.id, prueba_id: pruebaId,
+          materia: c.asignatura, competencia: c.competencia,
+          nota: c.total > 0 ? Math.round((c.correctas / c.total) * 100) : 0, preguntas: c.total,
+        }))
+      )
+
+      const compNRows = filasValidas.flatMap(f =>
+        Object.values(f.porCompN || {}).filter(c => c.asignatura && c.componente).map(c => ({
+          estudiante_id: f.estudiante.id, prueba_id: pruebaId,
+          materia: c.asignatura, componente: c.componente,
+          nota: c.total > 0 ? Math.round((c.correctas / c.total) * 100) : 0, preguntas: c.total,
+        }))
+      )
+
+      // 1 bulk upsert por tabla (en chunks de 500 por límites de PostgREST)
+      const CHUNK = 500
+      async function bulkUpsert(table, rows, conflict) {
+        for (let i = 0; i < rows.length; i += CHUNK) {
+          const { error } = await supabase.from(table).upsert(rows.slice(i, i + CHUNK), { onConflict: conflict })
+          if (error) throw new Error(`${table}: ${error.message}`)
         }
       }
+
+      await bulkUpsert('resultados_estudiante', resultadosRows, 'estudiante_id,prueba_id')
+      await Promise.all([
+        compRows.length  ? bulkUpsert('notas_competencia', compRows,  'estudiante_id,prueba_id,materia,competencia') : Promise.resolve(),
+        compNRows.length ? bulkUpsert('notas_componente',  compNRows, 'estudiante_id,prueba_id,materia,componente')  : Promise.resolve(),
+      ])
+
+      const guardados = resultadosRows.length
       const noEncontrados = preview.filas.filter(f=>!f.encontrado).length
-      setResultado({ guardados, errores, noEncontrados, total:preview.filas.length, masivo:!!preview.masivo })
+      setResultado({ guardados, errores:0, noEncontrados, total:preview.filas.length, masivo:!!preview.masivo })
       setPreview(null)
       if (onUpdate) onUpdate()
-      // Calibrar IRT en background (no bloqueante)
       if (guardados > 0) {
         const kd = getClave()
         if (kd) calibrarIRT(pruebaId, kd).catch(() => {})
@@ -713,12 +714,11 @@ export default function AdminResultados({ onUpdate }) {
       return { id, puntaje_irt: { ...porArea, global } }
     })
 
-    // ── 8. Guardar θ normalizados en resultados_estudiante ──
-    for (const { id, puntaje_irt } of updates) {
-      supabase.from('resultados_estudiante')
-        .update({ puntaje_irt })
-        .eq('id', id)
-        .then(null, () => {})
+    // ── 8. Guardar θ normalizados en resultados_estudiante (parallel en lotes de 50) ──
+    for (let i = 0; i < updates.length; i += 50) {
+      Promise.all(updates.slice(i, i + 50).map(({ id, puntaje_irt }) =>
+        supabase.from('resultados_estudiante').update({ puntaje_irt }).eq('id', id)
+      )).catch(() => {})
     }
 
     // ── 9. Guardar b_i + estadísticos de normalización en parametros_irt ──
