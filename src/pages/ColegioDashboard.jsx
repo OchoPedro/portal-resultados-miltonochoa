@@ -741,6 +741,7 @@ export default function ColegioDashboard({session, onLogout}) {
   const [compMejoraSort, setCompMejoraSort] = useState({col:'pctDebajo', dir:'desc'})
   const [compNAsigFilter, setCompNAsigFilter] = useState('Todas')
   const [equilibrioMateria, setEquilibrioMateria] = useState('')
+  const [consolidadoArea, setConsolidadoArea] = useState('Todas')
   const [desviacionView, setDesviacionView] = useState('bars')
   const [mejoraView, setMejoraView] = useState('table')
   const [compDesviacionView, setCompDesviacionView] = useState('bars')
@@ -891,6 +892,7 @@ export default function ColegioDashboard({session, onLogout}) {
     // Reset all derived filters when prueba changes
     setCompNAsigFilter('Todas')
     setEquilibrioMateria('')
+    setConsolidadoArea('Todas')
     setMejoraView('table')
     setCompMejoraView('table')
     setDesviacionView('bars')
@@ -4095,8 +4097,7 @@ export default function ColegioDashboard({session, onLogout}) {
 
           // Filtro por área
           const areas = ['Todas', ...new Set(filas.map(f => f.area).filter(Boolean))]
-          const [areaFil, setAreaFil] = React.useState('Todas')
-          const filasFil = areaFil === 'Todas' ? filas : filas.filter(f => f.area === areaFil)
+          const filasFil = consolidadoArea === 'Todas' ? filas : filas.filter(f => f.area === consolidadoArea)
 
           if (!filas.length) return (
             <Card><EmptyState msg="Los resultados no tienen detalle de respuestas por pregunta."/></Card>
@@ -4122,11 +4123,11 @@ export default function ColegioDashboard({session, onLogout}) {
                   <span style={{fontSize:11, fontWeight:600, color:C.gray, fontFamily:'Inter',
                     textTransform:'uppercase', letterSpacing:'0.06em'}}>Área:</span>
                   {areas.map(a => (
-                    <button key={a} onClick={() => setAreaFil(a)}
+                    <button key={a} onClick={() => setConsolidadoArea(a)}
                       style={{padding:'4px 12px', borderRadius:20, border:'none', cursor:'pointer',
                         fontFamily:'Inter', fontSize:12, fontWeight:600,
-                        background: areaFil===a ? C.navy : C.bg2,
-                        color: areaFil===a ? C.white : C.text}}>
+                        background: consolidadoArea===a ? C.navy : C.bg2,
+                        color: consolidadoArea===a ? C.white : C.text}}>
                       {a}
                     </button>
                   ))}
