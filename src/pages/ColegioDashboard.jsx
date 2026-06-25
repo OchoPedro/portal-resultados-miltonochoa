@@ -740,6 +740,7 @@ export default function ColegioDashboard({session, onLogout}) {
   const [compMejoraArea, setCompMejoraArea] = useState('Todas')
   const [compMejoraSort, setCompMejoraSort] = useState({col:'pctDebajo', dir:'desc'})
   const [compNAsigFilter, setCompNAsigFilter] = useState('Todas')
+  const [equilibrioMateria, setEquilibrioMateria] = useState('')
   const [desviacionView, setDesviacionView] = useState('bars')
   const [mejoraView, setMejoraView] = useState('table')
   const [compDesviacionView, setCompDesviacionView] = useState('bars')
@@ -889,6 +890,7 @@ export default function ColegioDashboard({session, onLogout}) {
     setLoading(true)
     // Reset all derived filters when prueba changes
     setCompNAsigFilter('Todas')
+    setEquilibrioMateria('')
     setMejoraView('table')
     setCompMejoraView('table')
     setDesviacionView('bars')
@@ -4040,7 +4042,7 @@ export default function ColegioDashboard({session, onLogout}) {
         })()}
 
         {/* ══ PRÓXIMAMENTE ══════════════════════════════════════ */}
-        {['comp_comparativo','comp_comp2','consolidado','equilibrio'].includes(tab) && (
+        {['comp_comparativo','comp_comp2','consolidado'].includes(tab) && (
           <Card>
             <div style={{textAlign:'center', padding:60, display:'flex', flexDirection:'column', alignItems:'center', gap:16}}>
               <div style={{fontSize:48}}>🚧</div>
@@ -4051,6 +4053,188 @@ export default function ColegioDashboard({session, onLogout}) {
             </div>
           </Card>
         )}
+
+        {/* ══ EQUILIBRIO DE LA PRUEBA ══════════════════════════ */}
+        {tab==='equilibrio' && (() => {
+          if (!detallePreguntas.length) return (
+            <Card><EmptyState msg="No hay análisis de preguntas cargado para esta prueba."/></Card>
+          )
+
+          const NIVELES = ['Bajo','Básico','Alto','Superior']
+          const difColor = {'Bajo':'#2563EB','Básico':'#D97706','Alto':'#DC2626','Superior':'#7C3AED'}
+          const difBg    = {'Bajo':'#EFF6FF','Básico':'#FFFBEB','Alto':'#FEF2F2','Superior':'#F5F3FF'}
+          const difLabel = d => d==='Superior'?'Nivel 4': d==='Alto'?'Nivel 3': d==='Básico'?'Nivel 2': d==='Bajo'?'Nivel 1': d
+
+          const materias = [...new Set(detallePreguntas.map(q => q.materia).filter(Boolean))].sort()
+          const matActual = materias.includes(equilibrioMateria) ? equilibrioMateria : (materias[0] || '')
+
+          const qFil = matActual
+            ? detallePreguntas.filter(q => q.materia === matActual)
+            : detallePreguntas
+
+          const competencias = [...new Set(qFil.map(q => q.competencia).filter(Boolean))].sort()
+          const componentes  = [...new Set(qFil.map(q => q.componente).filter(Boolean))].sort()
+          const nivelesPres  = NIVELES.filter(d => qFil.some(q => q.dificultad === d))
+
+          // Matriz componente → competencia → nivel → count
+          const matriz = {}
+          componentes.forEach(comp => {
+            matriz[comp] = {}
+            competencias.forEach(c => {
+              matriz[comp][c] = {}
+              nivelesPres.forEach(d => { matriz[comp][c][d] = 0 })
+            })
+          })
+          qFil.forEach(q => {
+            if (q.componente && q.competencia && q.dificultad && matriz[q.componente]?.[q.competencia]) {
+              matriz[q.componente][q.competencia][q.dificultad] = (matriz[q.componente][q.competencia][q.dificultad] || 0) + 1
+            }
+          })
+
+          const totalFila   = comp => competencias.reduce((s1,c) => s1 + nivelesPres.reduce((s2,d) => s2 + (matriz[comp]?.[c]?.[d]||0), 0), 0)
+          const totalGlobal = componentes.reduce((s, comp) => s + totalFila(comp), 0)
+          const totalesCol  = competencias.reduce((acc,c) => {
+            acc[c] = {}
+            nivelesPres.forEach(d => { acc[c][d] = componentes.reduce((s,comp) => s + (matriz[comp]?.[c]?.[d]||0), 0) })
+            return acc
+          }, {})
+
+          const thBase = {padding:'10px 8px', background:C.navy, color:C.white, fontSize:11,
+            fontWeight:700, textAlign:'center', fontFamily:'Inter'}
+
+          return (
+            <Card>
+              <CardTitle sub={`${qFil.length} preguntas · ${prueba?.codigo||'—'}`}>
+                Equilibrio de la Prueba
+              </CardTitle>
+
+              {/* Filtro materia */}
+              {materias.length > 1 && (
+                <div style={{display:'flex', gap:8, marginBottom:20, flexWrap:'wrap', alignItems:'center'}}>
+                  <span style={{fontSize:11, fontWeight:600, color:C.gray, fontFamily:'Inter',
+                    textTransform:'uppercase', letterSpacing:'0.06em'}}>Materia:</span>
+                  {materias.map(m => (
+                    <button key={m} onClick={() => setEquilibrioMateria(m)}
+                      style={{padding:'5px 14px', borderRadius:20, border:'none', cursor:'pointer',
+                        fontFamily:'Inter', fontSize:12, fontWeight:600, transition:'all 0.15s',
+                        background: matActual===m ? C.navy : C.bg2,
+                        color: matActual===m ? C.white : C.text}}>
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Leyenda */}
+              <div style={{display:'flex', gap:12, marginBottom:20, flexWrap:'wrap', alignItems:'center'}}>
+                {nivelesPres.map(d => (
+                  <div key={d} style={{display:'flex', alignItems:'center', gap:6,
+                    background:difBg[d], borderRadius:20, padding:'4px 12px',
+                    border:`1px solid ${difColor[d]}`}}>
+                    <div style={{width:8, height:8, borderRadius:'50%', background:difColor[d]}}/>
+                    <span style={{fontSize:12, fontWeight:600, color:difColor[d], fontFamily:'Inter'}}>{difLabel(d)}</span>
+                  </div>
+                ))}
+                <div style={{marginLeft:'auto', fontSize:12, color:C.gray, fontFamily:'Inter'}}>
+                  Total: <strong style={{color:C.navy, marginLeft:4}}>{totalGlobal} preguntas</strong>
+                </div>
+              </div>
+
+              {/* Tabla matriz */}
+              <div style={{borderRadius:12, overflowX:'auto', border:`1px solid ${C.grayLt}`,
+                boxShadow:'0 2px 12px rgba(0,0,0,0.06)'}}>
+                <table style={{width:'100%', borderCollapse:'collapse', fontSize:12, fontFamily:'Inter'}}>
+                  <thead>
+                    {/* Fila 1: competencias agrupadas */}
+                    <tr>
+                      <th rowSpan={2} style={{...thBase, textAlign:'left', padding:'14px 16px',
+                        minWidth:180, borderRight:'2px solid rgba(255,255,255,0.2)', verticalAlign:'middle'}}>
+                        Componente
+                      </th>
+                      {competencias.map(c => (
+                        <th key={c} colSpan={nivelesPres.length}
+                          style={{...thBase, background:'#1E3A5F',
+                            borderRight:'2px solid rgba(255,255,255,0.15)',
+                            borderBottom:'1px solid rgba(255,255,255,0.2)'}}>
+                          <div style={{maxWidth:nivelesPres.length*70, overflow:'hidden',
+                            textOverflow:'ellipsis', whiteSpace:'nowrap', margin:'0 auto'}} title={c}>
+                            {c}
+                          </div>
+                        </th>
+                      ))}
+                      <th style={{...thBase, background:'#0F2A45', minWidth:60}}>Total</th>
+                    </tr>
+                    {/* Fila 2: niveles por competencia */}
+                    <tr>
+                      {competencias.map(c => nivelesPres.map(d => (
+                        <th key={`${c}-${d}`} style={{padding:'7px 6px', textAlign:'center',
+                          background:difBg[d], color:difColor[d], fontSize:10, fontWeight:700,
+                          borderRight:'1px solid #E5E7EB', borderBottom:'2px solid #D1D5DB', minWidth:52}}>
+                          {difLabel(d)}
+                        </th>
+                      )))}
+                      <th style={{padding:'7px 6px', background:'#F1F5F9', fontSize:10,
+                        fontWeight:700, color:C.gray, textAlign:'center', borderBottom:'2px solid #D1D5DB'}}/>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {componentes.map((comp, ri) => {
+                      const tf = totalFila(comp)
+                      return (
+                        <tr key={comp} style={{background: ri%2===0 ? C.white : '#F8FAFC'}}>
+                          <td style={{padding:'11px 16px', fontWeight:600, color:C.navy,
+                            borderRight:'2px solid #E5E7EB', borderBottom:'1px solid #F1F5F9',
+                            background: ri%2===0 ? '#F8FAFC' : '#EEF2F7'}}>
+                            {comp}
+                          </td>
+                          {competencias.map(c => nivelesPres.map(d => {
+                            const val = matriz[comp]?.[c]?.[d] || 0
+                            return (
+                              <td key={`${c}-${d}`} style={{padding:'11px 6px', textAlign:'center',
+                                borderRight:'1px solid #F1F5F9', borderBottom:'1px solid #F1F5F9',
+                                fontWeight: val>0 ? 700 : 400,
+                                color: val>0 ? difColor[d] : '#CBD5E1',
+                                fontSize: val>0 ? 14 : 12}}>
+                                {val>0 ? val : '·'}
+                              </td>
+                            )
+                          }))}
+                          <td style={{padding:'11px 8px', textAlign:'center', fontWeight:700,
+                            color: tf>0 ? C.navy : C.gray, fontSize:13,
+                            background: ri%2===0 ? '#EEF2F7' : '#E4EAF2',
+                            borderBottom:'1px solid #F1F5F9', borderLeft:'2px solid #E5E7EB'}}>
+                            {tf || '·'}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                    {/* Fila total */}
+                    <tr style={{background:'#1E3A5F'}}>
+                      <td style={{padding:'12px 16px', fontWeight:700, color:C.white,
+                        fontSize:12, borderRight:'2px solid rgba(255,255,255,0.2)'}}>
+                        Total General
+                      </td>
+                      {competencias.map(c => nivelesPres.map(d => {
+                        const val = totalesCol[c]?.[d] || 0
+                        return (
+                          <td key={`tot-${c}-${d}`} style={{padding:'11px 6px', textAlign:'center',
+                            fontWeight:700, color: val>0 ? difBg[d] : 'rgba(255,255,255,0.3)',
+                            fontSize: val>0 ? 14 : 12}}>
+                            {val>0 ? val : '·'}
+                          </td>
+                        )
+                      }))}
+                      <td style={{padding:'12px 8px', textAlign:'center', fontWeight:800,
+                        color:C.white, fontSize:15, borderLeft:'2px solid rgba(255,255,255,0.2)'}}>
+                        {totalGlobal}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )
+        })()}
 
         {/* ══ CARTA DE BIENVENIDA ══════════════════════════════ */}
         {tab==='carta' && (
