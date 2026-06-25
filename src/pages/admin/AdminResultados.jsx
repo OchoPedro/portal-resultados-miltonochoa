@@ -593,6 +593,7 @@ export default function AdminResultados({ onUpdate }) {
       if (guardados > 0) {
         const kd = getClave()
         if (kd) calibrarIRT(pruebaId, kd).catch(() => {})
+        supabase.rpc('calcular_analisis_preguntas', { p_prueba_id: pruebaId }).catch(() => {})
       }
     } catch(e) { setError('Error guardando: ' + e.message) }
     finally { setGuardando(false) }

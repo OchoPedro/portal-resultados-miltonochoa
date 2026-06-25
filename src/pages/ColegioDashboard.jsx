@@ -3022,6 +3022,7 @@ export default function ColegioDashboard({session, onLogout}) {
           const tdDP = {padding:'6px 8px', fontSize:11, verticalAlign:'middle', borderBottom:`1px solid ${C.bg2}`}
 
           const difColor = d => d==='Superior'?'#DC2626': d==='Alto'?'#D97706': d==='Básico'?'#2563EB': d==='Bajo'?'#16A34A': C.gray
+          const difLabel = d => d==='Superior'?'Nivel 4': d==='Alto'?'Nivel 3': d==='Básico'?'Nivel 2': d==='Bajo'?'Nivel 1': d||'—'
           const pctColor = v => v >= 70 ? '#16A34A' : v >= 45 ? '#D97706' : '#DC2626'
 
           return students.length === 0 ? <EmptyState/> : (
@@ -3080,7 +3081,7 @@ export default function ColegioDashboard({session, onLogout}) {
                                 ? <span style={{display:'inline-block', padding:'2px 8px', borderRadius:20,
                                     fontSize:10, fontWeight:700, color:'#fff',
                                     background:difColor(q.dificultad)}}>
-                                    {q.dificultad}
+                                    {difLabel(q.dificultad)}
                                   </span>
                                 : <span style={{color:C.grayLt}}>—</span>}
                             </td>
@@ -4209,16 +4210,26 @@ export default function ColegioDashboard({session, onLogout}) {
                 </div>
               ) : (() => {
                 const rawRows = selectedPrueba?.estructura_excel?.raw || []
-                const questions = rawRows.slice(2).map(f => ({
-                  sesion:      (f[0] || '').toString().trim(),
-                  nro:         (f[1] || '').toString().trim(),
-                  area:        (f[2] || '').toString().trim(),
-                  materia:     (f[3] || '').toString().trim(),
-                  competencia: (f[6] || '').toString().trim(),
-                  componente:  (f[7] || '').toString().trim(),
-                  tarea:       (f[8] || '').toString().trim(),
-                  rta:         (f[9] || '').toString().trim(),
-                }))
+                // Detect column indices from header row
+                const rawHeader = rawRows[0] || []
+                const hIdx = k => rawHeader.findIndex(h => typeof h === 'string' && h.toLowerCase().trim().startsWith(k))
+                const iSesion = 0, iNro = 1, iArea = 2, iMateria = 3
+                const iEstandar    = hIdx('estándar') >= 0 ? hIdx('estándar') : hIdx('estandar')
+                const iCompetencia = hIdx('competencia')
+                const iComponente  = hIdx('componente')
+                const iTarea       = hIdx('tarea')
+                const iRta         = rawHeader.findIndex(h => typeof h === 'string' && ['rta','respuesta correcta','resp. correcta','resp correcta','respuesta'].includes(h.toLowerCase().trim()))
+                const questions = rawRows.slice(1).map(f => ({
+                  sesion:      (f[iSesion]    || '').toString().trim(),
+                  nro:         (f[iNro]       || '').toString().trim(),
+                  area:        (f[iArea]      || '').toString().trim(),
+                  materia:     (f[iMateria]   || '').toString().trim(),
+                  estandar:    iEstandar    >= 0 ? (f[iEstandar]    || '').toString().trim() : '',
+                  competencia: iCompetencia >= 0 ? (f[iCompetencia] || '').toString().trim() : '',
+                  componente:  iComponente  >= 0 ? (f[iComponente]  || '').toString().trim() : '',
+                  tarea:       iTarea       >= 0 ? (f[iTarea]       || '').toString().trim() : '',
+                  rta:         iRta         >= 0 ? (f[iRta]         || '').toString().trim() : '',
+                })).filter(q => q.nro && !isNaN(Number(q.nro)))
 
                 // Build a map from pregunta number → detalle entry
                 const detalleMap = {}
