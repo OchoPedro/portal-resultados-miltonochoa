@@ -3043,8 +3043,8 @@ export default function ColegioDashboard({session, onLogout}) {
           }
           const tdDP = {padding:'6px 8px', fontSize:11, verticalAlign:'middle', borderBottom:`1px solid ${C.bg2}`}
 
-          const difColor = d => d==='Superior'?'#16A34A': d==='Alto'?'#F59E0B': d==='Básico'?'#F97316': d==='Bajo'?'#DC2626': C.gray
-          const difLabel = d => d==='Superior'?'Nivel 4': d==='Alto'?'Nivel 3': d==='Básico'?'Nivel 2': d==='Bajo'?'Nivel 1': d||'—'
+          const difColor = d => d==='Superior'?'#7C3AED': d==='Alto'?'#2563EB': d==='Básico'?'#0891B2': d==='Bajo'?'#6B7280': C.gray
+          const difLabel = d => d||'—'
           const pctColor = v => v >= 70 ? '#16A34A' : v >= 45 ? '#D97706' : '#DC2626'
 
           return students.length === 0 ? <EmptyState/> : (
