@@ -759,7 +759,6 @@ export default function ColegioDashboard({session, onLogout}) {
   const [convMin, setConvMin] = useState(0)
   const [convMax, setConvMax] = useState(5)
   const [convAprobacion, setConvAprobacion] = useState(3.5)
-  const [convUmbral, setConvUmbral] = useState(45)
   const [oportunidades, setOportunidades] = useState([])
   const [detallePreguntas, setDetallePreguntas] = useState([])
   const [allPruebasPromedio, setAllPruebasPromedio] = useState([])
@@ -3326,24 +3325,26 @@ export default function ColegioDashboard({session, onLogout}) {
 
         {/* ══ CONVERTIDOR DE NOTAS ══════════════════════════════════ */}
         {tab==='convertidor_notas' && (() => {
-          const convertir = pct => {
-            if (pct == null) return null
-            const u = convUmbral, mn = convMin, mx = convMax, ap = convAprobacion
-            let nota
-            if (u <= 0) nota = mn
-            else if (pct >= u) nota = ap + (pct - u) / (100 - u) * (mx - ap)
-            else nota = mn + (pct / u) * (ap - mn)
+          const nacRow = tableroComp.find(r => r.tipo === 'nacional') || {}
+
+          const convertir = (pct, u) => {
+            if (pct == null || u == null) return null
+            const mn = convMin, mx = convMax, ap = convAprobacion
+            if (u <= 0) return mn
+            const nota = pct >= u
+              ? ap + (pct - u) / (100 - u) * (mx - ap)
+              : mn + (pct / u) * (ap - mn)
             return Math.min(mx, Math.max(mn, nota))
           }
 
           const sorted = [...students].sort((a,b) => (b.puntaje_global||0) - (a.puntaje_global||0))
 
           const AREAS_CONV = [
-            {label:'Matemáticas',   cols:[['mat_cuantitativo','Cuant.'],['mat_especifico','Espec.']]},
-            {label:'Cs. Naturales', cols:[['cn_quimica','Quím.'],['cn_fisica','Fís.'],['cn_biologia','Bio.'],['cn_cts','CTS']]},
-            {label:'Soc. y Ciu.',   cols:[['sociales','Soc.'],['ciudadanas','Ciud.']]},
-            {label:'L. Crítica',    cols:[['lectura_critica','L.C.']]},
-            {label:'Inglés',        cols:[['ingles','Ing.']]},
+            {label:'Matemáticas',   nacKey:'matematicas',         cols:[['mat_cuantitativo','Cuant.'],['mat_especifico','Espec.']]},
+            {label:'Cs. Naturales', nacKey:'ciencias_naturales',  cols:[['cn_quimica','Quím.'],['cn_fisica','Fís.'],['cn_biologia','Bio.'],['cn_cts','CTS']]},
+            {label:'Soc. y Ciu.',   nacKey:'sociales_ciudadanas', cols:[['sociales','Soc.'],['ciudadanas','Ciud.']]},
+            {label:'L. Crítica',    nacKey:'lectura_critica',     cols:[['lectura_critica','L.C.']]},
+            {label:'Inglés',        nacKey:'ingles',              cols:[['ingles','Ing.']]},
           ]
 
           const thBase = {padding:'4px 3px', textAlign:'center', color:'#fff', background:C.navy,
@@ -3388,23 +3389,22 @@ export default function ColegioDashboard({session, onLogout}) {
                   <input type="number" step="0.1" min="0" max="10"
                     value={convAprobacion} onChange={e=>setConvAprobacion(+e.target.value)} style={inputStyle}/>
                 </div>
-                <div style={{display:'flex', flexDirection:'column', gap:4}}>
-                  <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Umbral de aprobación (%)</span>
-                  <div style={{display:'flex', alignItems:'center', gap:8}}>
-                    <input type="range" min="1" max="99" value={convUmbral}
-                      onChange={e=>setConvUmbral(+e.target.value)}
-                      style={{width:120, accentColor:C.navy}}/>
-                    <span style={{fontSize:13, fontWeight:700, color:C.navy, fontFamily:'Inter', minWidth:36}}>
-                      {convUmbral}%
-                    </span>
-                  </div>
-                </div>
+                {/* Umbrales automáticos por área */}
                 <div style={{display:'flex', flexDirection:'column', gap:4,
                   padding:'8px 14px', background:C.white, borderRadius:8,
-                  border:`1px solid ${C.grayLt}`, fontSize:12, fontFamily:'Inter', color:C.gray, lineHeight:1.7}}>
-                  <span><strong style={{color:C.navy}}>{convUmbral}%</strong> correcto → <strong style={{color:'#16A34A'}}>{convAprobacion.toFixed(1)}</strong></span>
-                  <span><strong style={{color:C.navy}}>100%</strong> correcto → <strong style={{color:'#16A34A'}}>{convMax.toFixed(1)}</strong></span>
-                  <span><strong style={{color:C.navy}}>0%</strong> correcto → <strong style={{color:'#DC2626'}}>{convMin.toFixed(1)}</strong></span>
+                  border:`1px solid ${C.grayLt}`, fontSize:11, fontFamily:'Inter', color:C.gray}}>
+                  <span style={{fontSize:10, fontWeight:700, color:C.navy, marginBottom:2, letterSpacing:.4, textTransform:'uppercase'}}>
+                    Umbral automático (promedio nacional)
+                  </span>
+                  {AREAS_CONV.map(a => {
+                    const u = nacRow[a.nacKey]
+                    return (
+                      <span key={a.nacKey}>
+                        <strong style={{color:C.text}}>{a.label}:</strong>{' '}
+                        {u != null ? <><strong style={{color:C.navy}}>{Math.round(u)}%</strong> → <strong style={{color:'#16A34A'}}>{convAprobacion.toFixed(1)}</strong></> : <span style={{color:C.grayLt}}>sin datos</span>}
+                      </span>
+                    )
+                  })}
                 </div>
               </div>
 
@@ -3450,7 +3450,7 @@ export default function ColegioDashboard({session, onLogout}) {
                   </thead>
                   <tbody>
                     {sorted.map((s, i) => {
-                      const defNota = convertir(s.desempeno_pct != null ? +s.desempeno_pct : null)
+                      const defNota = convertir(s.desempeno_pct != null ? +s.desempeno_pct : null, nacRow.definitiva)
                       return (
                         <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`}}>
                           <td style={{...tdBase, color:C.dark, fontWeight:600, fontSize:11,
@@ -3460,14 +3460,17 @@ export default function ColegioDashboard({session, onLogout}) {
                             overflow:'hidden', textOverflow:'ellipsis'}}>
                             {s.estudiantes?.nombre}
                           </td>
-                          {AREAS_CONV.flatMap(a => a.cols.map(([col]) => {
-                            const nota = convertir(s[col])
-                            return (
-                              <td key={col} style={{...tdBase, color:notaColor(nota), fontWeight:700}}>
-                                {nota != null ? nota.toFixed(1) : '—'}
-                              </td>
-                            )
-                          }))}
+                          {AREAS_CONV.flatMap(a => {
+                            const u = nacRow[a.nacKey]
+                            return a.cols.map(([col]) => {
+                              const nota = convertir(s[col], u)
+                              return (
+                                <td key={col} style={{...tdBase, color:notaColor(nota), fontWeight:700}}>
+                                  {nota != null ? nota.toFixed(1) : '—'}
+                                </td>
+                              )
+                            })
+                          })}
                           <td style={{...tdBase, fontWeight:700, fontSize:12,
                             color: notaColor(defNota), fontFamily:'Playfair Display, serif',
                             background: defNota != null && defNota >= convAprobacion
