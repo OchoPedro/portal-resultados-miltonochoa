@@ -709,6 +709,7 @@ export default function ColegioDashboard({session, onLogout}) {
 
   // Filter states
   const [allPruebas, setAllPruebas] = useState([])
+  const [pruebasDisponibles, setPruebasDisponibles] = useState([])
   const [selectedPrueba, setSelectedPrueba] = useState(null)
   const [selectedGrado, setSelectedGrado] = useState('Todos')
   const [selectedSalon, setSelectedSalon] = useState('Todos')
@@ -844,6 +845,10 @@ export default function ColegioDashboard({session, onLogout}) {
         .from('resultados_estudiante')
         .select('prueba_id, puntaje_global, mat_cuantitativo, mat_especifico, cn_quimica, cn_fisica, cn_biologia, cn_cts, sociales, ciudadanas, lectura_critica, ingles')
         .eq('colegio_id', session.id)
+      if (pruebasData?.length) {
+        const idsConResultados = new Set((todosRes || []).map(r => r.prueba_id))
+        setPruebasDisponibles(pruebasData.filter(p => idsConResultados.has(p.id)))
+      }
       if (todosRes && pruebasData?.length) {
         const byPrueba = {}
         todosRes.forEach(r => {
@@ -1347,10 +1352,10 @@ export default function ColegioDashboard({session, onLogout}) {
                         label="Prueba"
                         value={selectedPrueba?.tipo || ''}
                         onChange={val => {
-                          const p = allPruebas.find(p => p.tipo === val)
+                          const p = pruebasDisponibles.find(p => p.tipo === val)
                           if (p) setSelectedPrueba(p)
                         }}
-                        options={[...new Set(allPruebas.map(p => p.tipo))].map(t => ({
+                        options={[...new Set(pruebasDisponibles.map(p => p.tipo))].map(t => ({
                           value: t, label: t.charAt(0).toUpperCase() + t.slice(1)
                         }))}
                       />
@@ -1358,10 +1363,11 @@ export default function ColegioDashboard({session, onLogout}) {
                         label="Referencia"
                         value={selectedPrueba?.codigo || ''}
                         onChange={val => {
-                          const p = allPruebas.find(p => p.codigo === val)
+                          const p = pruebasDisponibles.find(p => p.codigo === val)
                           if (p) setSelectedPrueba(p)
                         }}
-                        options={allPruebas
+                        options={pruebasDisponibles
+                          .filter(p => p.tipo === selectedPrueba?.tipo)
                           .map(p => ({value: p.codigo, label: p.codigo}))}
                       />
                       <FilterSelect
@@ -1547,10 +1553,10 @@ export default function ColegioDashboard({session, onLogout}) {
                         label="Prueba"
                         value={selectedPrueba?.tipo || ''}
                         onChange={val => {
-                          const p = allPruebas.find(p => p.tipo === val)
+                          const p = pruebasDisponibles.find(p => p.tipo === val)
                           if (p) setSelectedPrueba(p)
                         }}
-                        options={[...new Set(allPruebas.map(p => p.tipo))].map(t => ({
+                        options={[...new Set(pruebasDisponibles.map(p => p.tipo))].map(t => ({
                           value: t, label: t.charAt(0).toUpperCase() + t.slice(1)
                         }))}
                       />
@@ -1558,10 +1564,11 @@ export default function ColegioDashboard({session, onLogout}) {
                         label="Referencia"
                         value={selectedPrueba?.codigo || ''}
                         onChange={val => {
-                          const p = allPruebas.find(p => p.codigo === val)
+                          const p = pruebasDisponibles.find(p => p.codigo === val)
                           if (p) setSelectedPrueba(p)
                         }}
-                        options={allPruebas
+                        options={pruebasDisponibles
+                          .filter(p => p.tipo === selectedPrueba?.tipo)
                           .map(p => ({value: p.codigo, label: p.codigo}))}
                       />
                       <FilterSelect
