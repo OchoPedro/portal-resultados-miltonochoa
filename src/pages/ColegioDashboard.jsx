@@ -729,6 +729,7 @@ export default function ColegioDashboard({session, onLogout}) {
   const [compAsigFilter, setCompAsigFilter] = useState('Todas')
   const [notasComp, setNotasComp] = useState([])
   const [notasCompAsig, setNotasCompAsig] = useState('Todas')
+  const [notasCompEst, setNotasCompEst] = useState('Todas')
   const [notasCompN, setNotasCompN] = useState([])
   const [notasCompNAsig, setNotasCompNAsig] = useState('Todas')
   const [compNGestion, setCompNGestion] = useState([])
@@ -2170,7 +2171,7 @@ export default function ColegioDashboard({session, onLogout}) {
                           <th rowSpan={2} style={{padding:'10px 14px', background:C.navy, color:'white',
                             fontSize:11, fontWeight:700, textAlign:'left', minWidth:140,
                             borderRight:'2px solid rgba(255,255,255,0.2)', verticalAlign:'middle'}}>
-                            Materia
+                            Asignatura
                           </th>
                           <th rowSpan={2} style={{padding:'10px 14px', background:C.navy, color:'white',
                             fontSize:11, fontWeight:700, textAlign:'left', minWidth:200,
@@ -2590,6 +2591,7 @@ export default function ColegioDashboard({session, onLogout}) {
           allStudents.forEach(s => { if (s.estudiantes) estMap[s.estudiante_id] = s.estudiantes })
 
           const asignaturas = ['Todas', ...new Set(notasComp.map(r => r.materia))]
+          const estudiantes = ['Todas', ...Object.values(estMap).map(e => e.nombre).filter(Boolean).sort()]
 
           const filasBase = notasComp.filter(r => {
             const est = estMap[r.estudiante_id]
@@ -2597,6 +2599,7 @@ export default function ColegioDashboard({session, onLogout}) {
             if (selectedGrado !== 'Todos' && String(est.grado) !== selectedGrado) return false
             if (selectedSalon !== 'Todos' && String(est.salon) !== selectedSalon) return false
             if (notasCompAsig !== 'Todas' && r.materia !== notasCompAsig) return false
+            if (notasCompEst !== 'Todas' && (estMap[r.estudiante_id]?.nombre||'') !== notasCompEst) return false
             return true
           })
           const handleSortComp = col => setNotasCompSort(s => ({col, dir: s.col===col && s.dir==='asc' ? 'desc' : 'asc'}))
@@ -2623,14 +2626,25 @@ export default function ColegioDashboard({session, onLogout}) {
                 <CardTitle sub={`${filas.length} registros`}>
                   Notas Estudiantes por Competencias
                 </CardTitle>
-                <div style={{display:'flex', alignItems:'center', gap:8}}>
-                  <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Materia:</span>
-                  <select value={notasCompAsig} onChange={e => setNotasCompAsig(e.target.value)}
-                    style={{padding:'6px 10px', border:`1px solid ${C.grayLt}`, borderRadius:6,
-                      fontFamily:'Inter', fontSize:12, color:C.text, background:C.white,
-                      outline:'none', cursor:'pointer'}}>
-                    {asignaturas.map(a => <option key={a} value={a}>{a}</option>)}
-                  </select>
+                <div style={{display:'flex', alignItems:'center', gap:16, flexWrap:'wrap'}}>
+                  <div style={{display:'flex', alignItems:'center', gap:8}}>
+                    <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Asignatura:</span>
+                    <select value={notasCompAsig} onChange={e => setNotasCompAsig(e.target.value)}
+                      style={{padding:'6px 10px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+                        fontFamily:'Inter', fontSize:12, color:C.text, background:C.white,
+                        outline:'none', cursor:'pointer'}}>
+                      {asignaturas.map(a => <option key={a} value={a}>{a}</option>)}
+                    </select>
+                  </div>
+                  <div style={{display:'flex', alignItems:'center', gap:8}}>
+                    <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Estudiante:</span>
+                    <select value={notasCompEst} onChange={e => setNotasCompEst(e.target.value)}
+                      style={{padding:'6px 10px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+                        fontFamily:'Inter', fontSize:12, color:C.text, background:C.white,
+                        outline:'none', cursor:'pointer', maxWidth:220}}>
+                      {estudiantes.map(e => <option key={e} value={e}>{e}</option>)}
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -2646,7 +2660,7 @@ export default function ColegioDashboard({session, onLogout}) {
                         <th style={thSt} onClick={() => handleSortComp('nombre')}>Estudiante{arrowComp('nombre')}</th>
                         <th style={thNum} onClick={() => handleSortComp('grado')}>Grado{arrowComp('grado')}</th>
                         <th style={thNum} onClick={() => handleSortComp('salon')}>Salón{arrowComp('salon')}</th>
-                        <th style={thSt} onClick={() => handleSortComp('materia')}>Materia{arrowComp('materia')}</th>
+                        <th style={thSt} onClick={() => handleSortComp('materia')}>Asignatura{arrowComp('materia')}</th>
                         <th style={thSt} onClick={() => handleSortComp('competencia')}>Competencia{arrowComp('competencia')}</th>
                         <th style={thNum} onClick={() => handleSortComp('nota')}>Nota{arrowComp('nota')}</th>
                         <th style={thNum} onClick={() => handleSortComp('preguntas')}>Preguntas{arrowComp('preguntas')}</th>
@@ -3682,7 +3696,7 @@ export default function ColegioDashboard({session, onLogout}) {
                     <table style={{width:'100%',borderCollapse:'collapse',fontFamily:'Inter',fontSize:12}}>
                       <thead>
                         <tr>
-                          <th rowSpan={2} style={{padding:'8px 10px',textAlign:'left',background:'#1E3A5F',color:'white',fontSize:11,fontWeight:700,borderRight:'1px solid rgba(255,255,255,0.1)'}}>Materia</th>
+                          <th rowSpan={2} style={{padding:'8px 10px',textAlign:'left',background:'#1E3A5F',color:'white',fontSize:11,fontWeight:700,borderRight:'1px solid rgba(255,255,255,0.1)'}}>Asignatura</th>
                           <th rowSpan={2} style={{padding:'8px 10px',textAlign:'left',background:'#1E3A5F',color:'white',fontSize:11,fontWeight:700,borderRight:'2px solid rgba(255,255,255,0.2)'}}>Componente</th>
                           <ColHeader label="Colombia"/>
                           <ColHeader label="Región"/>
@@ -3760,7 +3774,7 @@ export default function ColegioDashboard({session, onLogout}) {
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:12,marginBottom:20}}>
                 <CardTitle sub={`${filas.length} registros`}>Notas Estudiantes por Componentes</CardTitle>
                 <div style={{display:'flex',alignItems:'center',gap:8}}>
-                  <span style={{fontSize:11,color:C.gray,fontFamily:'Inter'}}>Materia:</span>
+                  <span style={{fontSize:11,color:C.gray,fontFamily:'Inter'}}>Asignatura:</span>
                   <select value={notasCompNAsig} onChange={e=>setNotasCompNAsig(e.target.value)}
                     style={{padding:'6px 10px',border:`1px solid ${C.grayLt}`,borderRadius:6,fontFamily:'Inter',fontSize:12,color:C.text,background:C.white,outline:'none',cursor:'pointer'}}>
                     {asignaturas.map(a=><option key={a} value={a}>{a}</option>)}
@@ -3777,7 +3791,7 @@ export default function ColegioDashboard({session, onLogout}) {
                         <th style={thSt} onClick={() => handleSortCompN('nombre')}>Estudiante{arrowCompN('nombre')}</th>
                         <th style={thNum} onClick={() => handleSortCompN('grado')}>Grado{arrowCompN('grado')}</th>
                         <th style={thNum} onClick={() => handleSortCompN('salon')}>Salón{arrowCompN('salon')}</th>
-                        <th style={thSt} onClick={() => handleSortCompN('materia')}>Materia{arrowCompN('materia')}</th>
+                        <th style={thSt} onClick={() => handleSortCompN('materia')}>Asignatura{arrowCompN('materia')}</th>
                         <th style={thSt} onClick={() => handleSortCompN('componente')}>Componente{arrowCompN('componente')}</th>
                         <th style={thNum} onClick={() => handleSortCompN('nota')}>Nota{arrowCompN('nota')}</th>
                         <th style={thNum} onClick={() => handleSortCompN('preguntas')}>Preguntas{arrowCompN('preguntas')}</th>
@@ -4158,12 +4172,12 @@ export default function ColegioDashboard({session, onLogout}) {
                 <table style={{width:'100%', borderCollapse:'collapse', fontSize:11, fontFamily:'Inter'}}>
                   <thead>
                     <tr>
-                      {['Ses.','Nro','Área','Materia','Correcta',
+                      {['Ses.','Nro','Área','Asignatura','Correcta',
                         'A','B','C','D','E','F','G','H','X',
                         'Evaluados','% Acierto','% Desacierto','% Mal Marc.'].map(h => (
                         <th key={h} style={{...thS,
-                          textAlign: ['Área','Materia'].includes(h) ? 'left' : 'center',
-                          paddingLeft: ['Área','Materia'].includes(h) ? 10 : undefined}}>
+                          textAlign: ['Área','Asignatura'].includes(h) ? 'left' : 'center',
+                          paddingLeft: ['Área','Asignatura'].includes(h) ? 10 : undefined}}>
                           {h}
                         </th>
                       ))}
@@ -4293,7 +4307,7 @@ export default function ColegioDashboard({session, onLogout}) {
               {materias.length > 1 && (
                 <div style={{display:'flex', gap:8, marginBottom:20, flexWrap:'wrap', alignItems:'center'}}>
                   <span style={{fontSize:11, fontWeight:600, color:C.gray, fontFamily:'Inter',
-                    textTransform:'uppercase', letterSpacing:'0.06em'}}>Materia:</span>
+                    textTransform:'uppercase', letterSpacing:'0.06em'}}>Asignatura:</span>
                   {materias.map(m => (
                     <button key={m} onClick={() => setEquilibrioMateria(m)}
                       style={{padding:'5px 14px', borderRadius:20, border:'none', cursor:'pointer',
