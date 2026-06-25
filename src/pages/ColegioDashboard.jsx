@@ -1187,8 +1187,9 @@ export default function ColegioDashboard({session, onLogout}) {
     {id:'comp_comp2',       label:'Comparativo Componentes'},
     {id:'comp_notas',       label:'Notas Estudiantes por Componentes'},
     {id:'comp_mejora',      label:'Oportunidad de Mejoramiento (Componentes)'},
-    {id:'listado_notas',    label:'Listado de Notas'},
-    {id:'detalle_prueba',   label:'Detalle de Prueba'},
+    {id:'listado_notas',       label:'Listado de Notas'},
+    {id:'convertidor_notas',   label:'Convertidor de Notas'},
+    {id:'detalle_prueba',      label:'Detalle de Prueba'},
     {id:'consolidado',      label:'Consolidado de Respuestas'},
     {id:'equilibrio',       label:'Equilibrio de la Prueba'},
   ]
@@ -1309,8 +1310,9 @@ export default function ColegioDashboard({session, onLogout}) {
                     {id:'comp_mejora',     label:'Oportunidad de Mejoramiento'},
                   ]
                 },
-                {id:'listado_notas',    label:'Listado de Notas'},
-                {id:'notas_acumuladas', label:'Notas Acumuladas'},
+                {id:'listado_notas',      label:'Listado de Notas'},
+                {id:'convertidor_notas',  label:'Convertidor de Notas'},
+                {id:'notas_acumuladas',   label:'Notas Acumuladas'},
                 {
                   id:'grp_detalle', label:'Detalle de Prueba', isGroup: true,
                   children: [
@@ -1510,8 +1512,9 @@ export default function ColegioDashboard({session, onLogout}) {
                     {id:'comp_mejora',     label:'Oportunidad de Mejoramiento'},
                   ]
                 },
-                {id:'listado_notas',    label:'Listado de Notas'},
-                {id:'notas_acumuladas', label:'Notas Acumuladas'},
+                {id:'listado_notas',      label:'Listado de Notas'},
+                {id:'convertidor_notas',  label:'Convertidor de Notas'},
+                {id:'notas_acumuladas',   label:'Notas Acumuladas'},
                 {
                   id:'grp_detalle', label:'Detalle de Prueba', isGroup: true,
                   children: [
@@ -1669,7 +1672,7 @@ export default function ColegioDashboard({session, onLogout}) {
               timeZone:'America/Bogota'
             })}
           </div>
-          {['tablero','niveles','desv_materias','desv_area','desviacion','comp_comparativo','competencias','mejora','comp_desviacion','comp_comp2','comp_notas','comp_mejora','listado_notas','detalle_prueba','consolidado','equilibrio'].includes(tab) && (
+          {['tablero','niveles','desv_materias','desv_area','desviacion','comp_comparativo','competencias','mejora','comp_desviacion','comp_comp2','comp_notas','comp_mejora','listado_notas','convertidor_notas','detalle_prueba','consolidado','equilibrio'].includes(tab) && (
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:12}}>
               <div>
                 <h1 style={{fontSize:26, fontFamily:'Playfair Display, serif', color:C.navy, marginBottom:4}}>
@@ -3143,7 +3146,6 @@ export default function ColegioDashboard({session, onLogout}) {
           ]
 
           return students.length === 0 ? <EmptyState/> : (
-            <div style={{display:'grid', gap:16}}>
             <Card>
               <div style={{overflowX:'auto'}}>
                 <table style={{borderCollapse:'collapse', fontFamily:'Inter', fontSize:11, width:'100%', tableLayout:'fixed'}}>
@@ -3240,164 +3242,167 @@ export default function ColegioDashboard({session, onLogout}) {
               </div>
               <LeyendaNiveles/>
             </Card>
+          )
+        })()}
 
-            {/* ── CONVERTIDOR DE NOTAS ─────────────────────────────── */}
-            {(() => {
-              const convertir = pct => {
-                if (pct == null) return null
-                const u = convUmbral, mn = convMin, mx = convMax, ap = convAprobacion
-                let nota
-                if (u <= 0) nota = mn
-                else if (pct >= u) nota = ap + (pct - u) / (100 - u) * (mx - ap)
-                else nota = mn + (pct / u) * (ap - mn)
-                return Math.min(mx, Math.max(mn, nota))
-              }
+        {/* ══ CONVERTIDOR DE NOTAS ══════════════════════════════════ */}
+        {tab==='convertidor_notas' && (() => {
+          const convertir = pct => {
+            if (pct == null) return null
+            const u = convUmbral, mn = convMin, mx = convMax, ap = convAprobacion
+            let nota
+            if (u <= 0) nota = mn
+            else if (pct >= u) nota = ap + (pct - u) / (100 - u) * (mx - ap)
+            else nota = mn + (pct / u) * (ap - mn)
+            return Math.min(mx, Math.max(mn, nota))
+          }
 
-              const AREAS_CONV = [
-                {label:'Matemáticas',   cols:[['mat_cuantitativo','Cuant.'],['mat_especifico','Espec.']]},
-                {label:'Cs. Naturales', cols:[['cn_quimica','Quím.'],['cn_fisica','Fís.'],['cn_biologia','Bio.'],['cn_cts','CTS']]},
-                {label:'Soc. y Ciu.',   cols:[['sociales','Soc.'],['ciudadanas','Ciud.']]},
-                {label:'L. Crítica',    cols:[['lectura_critica','L.C.']]},
-                {label:'Inglés',        cols:[['ingles','Ing.']]},
-              ]
+          const sorted = [...students].sort((a,b) => (b.puntaje_global||0) - (a.puntaje_global||0))
 
-              const notaColor = nota => {
-                if (nota == null) return C.grayLt
-                if (nota >= convAprobacion) return '#16A34A'
-                if (nota >= convAprobacion * 0.8) return '#D97706'
-                return '#DC2626'
-              }
+          const AREAS_CONV = [
+            {label:'Matemáticas',   cols:[['mat_cuantitativo','Cuant.'],['mat_especifico','Espec.']]},
+            {label:'Cs. Naturales', cols:[['cn_quimica','Quím.'],['cn_fisica','Fís.'],['cn_biologia','Bio.'],['cn_cts','CTS']]},
+            {label:'Soc. y Ciu.',   cols:[['sociales','Soc.'],['ciudadanas','Ciud.']]},
+            {label:'L. Crítica',    cols:[['lectura_critica','L.C.']]},
+            {label:'Inglés',        cols:[['ingles','Ing.']]},
+          ]
 
-              const inputStyle = {
-                width: 64, padding: '5px 8px', border: `1px solid ${C.grayLt}`,
-                borderRadius: 6, fontFamily: 'Inter', fontSize: 13, color: C.text,
-                background: C.white, outline: 'none', textAlign: 'center',
-              }
+          const thBase = {padding:'4px 3px', textAlign:'center', color:'#fff', background:C.navy,
+            fontSize:10, fontWeight:700, whiteSpace:'nowrap',
+            borderRight:'1px solid rgba(255,255,255,0.12)', cursor:'default', userSelect:'none'}
+          const tdBase = {padding:'4px 3px', textAlign:'center', fontSize:11, background:C.white}
 
-              return (
-                <Card style={{marginTop: 8}}>
-                  <CardTitle sub="Convierte los porcentajes del simulacro a la escala de tu institución">
-                    Convertidor de Notas
-                  </CardTitle>
+          const notaColor = nota => {
+            if (nota == null) return C.grayLt
+            if (nota >= convAprobacion) return '#16A34A'
+            if (nota >= convAprobacion * 0.8) return '#D97706'
+            return '#DC2626'
+          }
 
-                  {/* Config row */}
-                  <div style={{display:'flex', flexWrap:'wrap', gap:20, alignItems:'flex-end',
-                    background:C.bg2, borderRadius:10, padding:'14px 20px', marginBottom:20}}>
-                    <div style={{display:'flex', flexDirection:'column', gap:4}}>
-                      <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Nota mínima</span>
-                      <input type="number" step="0.1" min="0" max="10"
-                        value={convMin} onChange={e=>setConvMin(+e.target.value)} style={inputStyle}/>
-                    </div>
-                    <div style={{display:'flex', flexDirection:'column', gap:4}}>
-                      <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Nota máxima</span>
-                      <input type="number" step="0.1" min="1" max="10"
-                        value={convMax} onChange={e=>setConvMax(+e.target.value)} style={inputStyle}/>
-                    </div>
-                    <div style={{display:'flex', flexDirection:'column', gap:4}}>
-                      <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Nota aprobación</span>
-                      <input type="number" step="0.1" min="0" max="10"
-                        value={convAprobacion} onChange={e=>setConvAprobacion(+e.target.value)} style={inputStyle}/>
-                    </div>
-                    <div style={{display:'flex', flexDirection:'column', gap:4}}>
-                      <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Umbral de aprobación (%)</span>
-                      <div style={{display:'flex', alignItems:'center', gap:8}}>
-                        <input type="range" min="1" max="99" value={convUmbral}
-                          onChange={e=>setConvUmbral(+e.target.value)}
-                          style={{width:120, accentColor:C.navy}}/>
-                        <span style={{fontSize:13, fontWeight:700, color:C.navy, fontFamily:'Inter', minWidth:36}}>
-                          {convUmbral}%
-                        </span>
-                      </div>
-                    </div>
-                    <div style={{display:'flex', flexDirection:'column', gap:4,
-                      padding:'8px 14px', background:C.white, borderRadius:8,
-                      border:`1px solid ${C.grayLt}`, fontSize:12, fontFamily:'Inter', color:C.gray, lineHeight:1.7}}>
-                      <span><strong style={{color:C.navy}}>{convUmbral}%</strong> correcto → <strong style={{color:'#16A34A'}}>{convAprobacion.toFixed(1)}</strong></span>
-                      <span><strong style={{color:C.navy}}>100%</strong> correcto → <strong style={{color:'#16A34A'}}>{convMax.toFixed(1)}</strong></span>
-                      <span><strong style={{color:C.navy}}>0%</strong> correcto → <strong style={{color:'#DC2626'}}>{convMin.toFixed(1)}</strong></span>
-                    </div>
+          const inputStyle = {
+            width: 64, padding: '5px 8px', border: `1px solid ${C.grayLt}`,
+            borderRadius: 6, fontFamily: 'Inter', fontSize: 13, color: C.text,
+            background: C.white, outline: 'none', textAlign: 'center',
+          }
+
+          return students.length === 0 ? <EmptyState/> : (
+            <Card>
+              <CardTitle sub="Convierte los porcentajes del simulacro a la escala de tu institución">
+                Convertidor de Notas
+              </CardTitle>
+
+              {/* Config row */}
+              <div style={{display:'flex', flexWrap:'wrap', gap:20, alignItems:'flex-end',
+                background:C.bg2, borderRadius:10, padding:'14px 20px', marginBottom:20}}>
+                <div style={{display:'flex', flexDirection:'column', gap:4}}>
+                  <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Nota mínima</span>
+                  <input type="number" step="0.1" min="0" max="10"
+                    value={convMin} onChange={e=>setConvMin(+e.target.value)} style={inputStyle}/>
+                </div>
+                <div style={{display:'flex', flexDirection:'column', gap:4}}>
+                  <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Nota máxima</span>
+                  <input type="number" step="0.1" min="1" max="10"
+                    value={convMax} onChange={e=>setConvMax(+e.target.value)} style={inputStyle}/>
+                </div>
+                <div style={{display:'flex', flexDirection:'column', gap:4}}>
+                  <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Nota aprobación</span>
+                  <input type="number" step="0.1" min="0" max="10"
+                    value={convAprobacion} onChange={e=>setConvAprobacion(+e.target.value)} style={inputStyle}/>
+                </div>
+                <div style={{display:'flex', flexDirection:'column', gap:4}}>
+                  <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Umbral de aprobación (%)</span>
+                  <div style={{display:'flex', alignItems:'center', gap:8}}>
+                    <input type="range" min="1" max="99" value={convUmbral}
+                      onChange={e=>setConvUmbral(+e.target.value)}
+                      style={{width:120, accentColor:C.navy}}/>
+                    <span style={{fontSize:13, fontWeight:700, color:C.navy, fontFamily:'Inter', minWidth:36}}>
+                      {convUmbral}%
+                    </span>
                   </div>
+                </div>
+                <div style={{display:'flex', flexDirection:'column', gap:4,
+                  padding:'8px 14px', background:C.white, borderRadius:8,
+                  border:`1px solid ${C.grayLt}`, fontSize:12, fontFamily:'Inter', color:C.gray, lineHeight:1.7}}>
+                  <span><strong style={{color:C.navy}}>{convUmbral}%</strong> correcto → <strong style={{color:'#16A34A'}}>{convAprobacion.toFixed(1)}</strong></span>
+                  <span><strong style={{color:C.navy}}>100%</strong> correcto → <strong style={{color:'#16A34A'}}>{convMax.toFixed(1)}</strong></span>
+                  <span><strong style={{color:C.navy}}>0%</strong> correcto → <strong style={{color:'#DC2626'}}>{convMin.toFixed(1)}</strong></span>
+                </div>
+              </div>
 
-                  {/* Table */}
-                  <div style={{overflowX:'auto'}}>
-                    <table style={{borderCollapse:'collapse', fontFamily:'Inter', fontSize:11,
-                      width:'100%', tableLayout:'fixed'}}>
-                      <colgroup>
-                        <col style={{width:28}}/>
-                        <col style={{width:nombreColWidth}}/>
-                        {AREAS_CONV.flatMap(a => a.cols.map(([col]) => <col key={col} style={{width:52}}/>))}
-                        <col style={{width:58}}/>
-                      </colgroup>
-                      <thead>
-                        <tr>
-                          <th rowSpan={2} style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)',
-                            cursor:'default', padding:'4px 4px'}}>#</th>
-                          <th rowSpan={2} style={{...thBase, textAlign:'left',
-                            borderBottom:'1px solid rgba(255,255,255,0.15)', padding:'4px 8px'}}>
-                            Nombre Estudiante
-                          </th>
-                          {AREAS_CONV.map(a => (
-                            <th key={a.label} colSpan={a.cols.length}
-                              style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)',
-                                cursor:'default', padding:'4px 2px'}}>
-                              {a.label}
-                            </th>
-                          ))}
-                          <th rowSpan={2} style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)',
-                            cursor:'default', padding:'4px 2px', background:'#0A2F1F'}}>
-                            Definitiva
-                            <span style={{display:'block', fontSize:8, fontWeight:700,
-                              color:'#86efac', letterSpacing:.3}}>{convMin}–{convMax}</span>
-                          </th>
-                        </tr>
-                        <tr>
-                          {AREAS_CONV.flatMap(a => a.cols.map(([col,h]) => (
-                            <th key={col} style={{...thBase, fontSize:9,
-                              borderTop:'1px solid rgba(255,255,255,0.15)', padding:'3px 2px'}}>
-                              {h}
-                            </th>
-                          )))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {ranked.map((s, i) => {
-                          const defNota = convertir(s.desempeno_pct != null ? +s.desempeno_pct : null)
-                          return (
-                            <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`}}>
-                              <td style={{...tdBase, color:C.dark, fontWeight:600, fontSize:11,
-                                padding:'4px 4px'}}>{i+1}</td>
-                              <td style={{...tdBase, textAlign:'left', padding:'4px 8px',
-                                color:C.dark, fontWeight:500, whiteSpace:'nowrap',
-                                overflow:'hidden', textOverflow:'ellipsis'}}>
-                                {s.estudiantes?.nombre}
+              {/* Table */}
+              <div style={{overflowX:'auto'}}>
+                <table style={{borderCollapse:'collapse', fontFamily:'Inter', fontSize:11,
+                  width:'100%', tableLayout:'fixed'}}>
+                  <colgroup>
+                    <col style={{width:28}}/>
+                    <col style={{width:175}}/>
+                    {AREAS_CONV.flatMap(a => a.cols.map(([col]) => <col key={col} style={{width:52}}/>))}
+                    <col style={{width:58}}/>
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th rowSpan={2} style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)',
+                        padding:'4px 4px'}}>#</th>
+                      <th rowSpan={2} style={{...thBase, textAlign:'left',
+                        borderBottom:'1px solid rgba(255,255,255,0.15)', padding:'4px 8px'}}>
+                        Nombre Estudiante
+                      </th>
+                      {AREAS_CONV.map(a => (
+                        <th key={a.label} colSpan={a.cols.length}
+                          style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)', padding:'4px 2px'}}>
+                          {a.label}
+                        </th>
+                      ))}
+                      <th rowSpan={2} style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)',
+                        padding:'4px 2px', background:'#0A2F1F'}}>
+                        Definitiva
+                        <span style={{display:'block', fontSize:8, fontWeight:700,
+                          color:'#86efac', letterSpacing:.3}}>{convMin}–{convMax}</span>
+                      </th>
+                    </tr>
+                    <tr>
+                      {AREAS_CONV.flatMap(a => a.cols.map(([col,h]) => (
+                        <th key={col} style={{...thBase, fontSize:9,
+                          borderTop:'1px solid rgba(255,255,255,0.15)', padding:'3px 2px'}}>
+                          {h}
+                        </th>
+                      )))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sorted.map((s, i) => {
+                      const defNota = convertir(s.desempeno_pct != null ? +s.desempeno_pct : null)
+                      return (
+                        <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`}}>
+                          <td style={{...tdBase, color:C.dark, fontWeight:600, fontSize:11,
+                            padding:'4px 4px'}}>{i+1}</td>
+                          <td style={{...tdBase, textAlign:'left', padding:'4px 8px',
+                            color:C.dark, fontWeight:500, whiteSpace:'nowrap',
+                            overflow:'hidden', textOverflow:'ellipsis'}}>
+                            {s.estudiantes?.nombre}
+                          </td>
+                          {AREAS_CONV.flatMap(a => a.cols.map(([col]) => {
+                            const nota = convertir(s[col])
+                            return (
+                              <td key={col} style={{...tdBase, color:notaColor(nota), fontWeight:700}}>
+                                {nota != null ? nota.toFixed(1) : '—'}
                               </td>
-                              {AREAS_CONV.flatMap(a => a.cols.map(([col]) => {
-                                const nota = convertir(s[col])
-                                return (
-                                  <td key={col} style={{...tdBase,
-                                    color: notaColor(nota), fontWeight:700}}>
-                                    {nota != null ? nota.toFixed(1) : '—'}
-                                  </td>
-                                )
-                              }))}
-                              <td style={{...tdBase, fontWeight:700, fontSize:12,
-                                color: notaColor(defNota),
-                                fontFamily:'Playfair Display, serif',
-                                background: defNota != null && defNota >= convAprobacion
-                                  ? '#F0FDF4' : defNota != null ? '#FFF7F7' : C.white}}>
-                                {defNota != null ? defNota.toFixed(1) : '—'}
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </Card>
-              )
-            })()}
-          </div>
-        )
+                            )
+                          }))}
+                          <td style={{...tdBase, fontWeight:700, fontSize:12,
+                            color: notaColor(defNota), fontFamily:'Playfair Display, serif',
+                            background: defNota != null && defNota >= convAprobacion
+                              ? '#F0FDF4' : defNota != null ? '#FFF7F7' : C.white}}>
+                            {defNota != null ? defNota.toFixed(1) : '—'}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )
         })()}
 
         {/* ══ NOTAS ACUMULADAS ═══════════════════════════════════ */}
