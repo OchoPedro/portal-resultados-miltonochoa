@@ -1326,7 +1326,7 @@ export default function ColegioDashboard({session, onLogout}) {
                   id:'grp_detalle', label:'Detalle de Prueba', isGroup: true,
                   children: [
                     {id:'detalle_prueba', label:'Detalle de Prueba'},
-                    {id:'consolidado',    label:'Consolidado de Respuestas', soon:true},
+                    {id:'consolidado',    label:'Consolidado de Respuestas'},
                     {id:'equilibrio',     label:'Equilibrio de la Prueba'},
                   ]
                 },
@@ -1528,7 +1528,7 @@ export default function ColegioDashboard({session, onLogout}) {
                   id:'grp_detalle', label:'Detalle de Prueba', isGroup: true,
                   children: [
                     {id:'detalle_prueba', label:'Detalle de Prueba'},
-                    {id:'consolidado',    label:'Consolidado de Respuestas', soon:true},
+                    {id:'consolidado',    label:'Consolidado de Respuestas'},
                     {id:'equilibrio',     label:'Equilibrio de la Prueba'},
                   ]
                 },
@@ -4042,7 +4042,7 @@ export default function ColegioDashboard({session, onLogout}) {
         })()}
 
         {/* ══ PRÓXIMAMENTE ══════════════════════════════════════ */}
-        {['comp_comparativo','comp_comp2','consolidado'].includes(tab) && (
+        {['comp_comparativo','comp_comp2'].includes(tab) && (
           <Card>
             <div style={{textAlign:'center', padding:60, display:'flex', flexDirection:'column', alignItems:'center', gap:16}}>
               <div style={{fontSize:48}}>🚧</div>
@@ -4053,6 +4053,167 @@ export default function ColegioDashboard({session, onLogout}) {
             </div>
           </Card>
         )}
+
+        {/* ══ CONSOLIDADO DE RESPUESTAS ════════════════════════ */}
+        {tab==='consolidado' && (() => {
+          if (!students.length) return (
+            <Card><EmptyState msg="No hay resultados cargados para esta prueba."/></Card>
+          )
+
+          // Lookup sesión por nro_pregunta desde analisis_preguntas
+          const sesionMap = {}
+          detallePreguntas.forEach(q => { sesionMap[q.nro_pregunta] = q.sesion })
+
+          // Agregar respuestas por pregunta desde detalle de cada estudiante
+          const OPTS = ['A','B','C','D','E','F','G','H']
+          const byQ = {}
+          students.forEach(s => {
+            if (!s.detalle || !Array.isArray(s.detalle)) return
+            s.detalle.forEach(d => {
+              const nro = d.pregunta
+              if (!byQ[nro]) {
+                byQ[nro] = {
+                  nro,
+                  sesion: sesionMap[nro] ?? '—',
+                  area: d.area || '',
+                  materia: d.asignatura || '',
+                  correcta: (d.correcta || '').toUpperCase().trim(),
+                  counts: {A:0,B:0,C:0,D:0,E:0,F:0,G:0,H:0},
+                  x: 0, evaluados: 0, aciertos: 0,
+                }
+              }
+              const marcada = (d.marcada || '').toUpperCase().trim()
+              byQ[nro].evaluados++
+              if (d.correcto) byQ[nro].aciertos++
+              if (OPTS.includes(marcada)) byQ[nro].counts[marcada]++
+              else byQ[nro].x++
+            })
+          })
+
+          const filas = Object.values(byQ)
+            .sort((a,b) => a.sesion - b.sesion || a.nro - b.nro)
+
+          // Filtro por área
+          const areas = ['Todas', ...new Set(filas.map(f => f.area).filter(Boolean))]
+          const [areaFil, setAreaFil] = React.useState('Todas')
+          const filasFil = areaFil === 'Todas' ? filas : filas.filter(f => f.area === areaFil)
+
+          if (!filas.length) return (
+            <Card><EmptyState msg="Los resultados no tienen detalle de respuestas por pregunta."/></Card>
+          )
+
+          const thS = {padding:'7px 6px', background:C.navy, color:C.white, fontSize:10,
+            fontWeight:700, textAlign:'center', fontFamily:'Inter', whiteSpace:'nowrap',
+            borderRight:'1px solid rgba(255,255,255,0.12)'}
+          const tdS = (bg) => ({padding:'6px 5px', fontSize:11, textAlign:'center',
+            borderBottom:`1px solid ${C.bg2}`, background: bg || 'transparent',
+            fontFamily:'Inter'})
+          const pctColor = v => v >= 70 ? '#16A34A' : v >= 45 ? '#D97706' : '#DC2626'
+
+          return (
+            <Card>
+              <CardTitle sub={`${filasFil.length} preguntas · ${students.length} estudiante(s)`}>
+                Consolidado de Respuestas
+              </CardTitle>
+
+              {/* Filtro área */}
+              {areas.length > 2 && (
+                <div style={{display:'flex', gap:8, marginBottom:16, flexWrap:'wrap', alignItems:'center'}}>
+                  <span style={{fontSize:11, fontWeight:600, color:C.gray, fontFamily:'Inter',
+                    textTransform:'uppercase', letterSpacing:'0.06em'}}>Área:</span>
+                  {areas.map(a => (
+                    <button key={a} onClick={() => setAreaFil(a)}
+                      style={{padding:'4px 12px', borderRadius:20, border:'none', cursor:'pointer',
+                        fontFamily:'Inter', fontSize:12, fontWeight:600,
+                        background: areaFil===a ? C.navy : C.bg2,
+                        color: areaFil===a ? C.white : C.text}}>
+                      {a}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div style={{overflowX:'auto', borderRadius:10, border:`1px solid ${C.grayLt}`,
+                boxShadow:'0 2px 8px rgba(0,0,0,0.05)'}}>
+                <table style={{width:'100%', borderCollapse:'collapse', fontSize:11, fontFamily:'Inter'}}>
+                  <thead>
+                    <tr>
+                      {['Ses.','Nro','Área','Materia','Correcta',
+                        'A','B','C','D','E','F','G','H','X',
+                        'Evaluados','% Acierto','% Desacierto','% Mal Marc.'].map(h => (
+                        <th key={h} style={{...thS,
+                          textAlign: ['Área','Materia'].includes(h) ? 'left' : 'center',
+                          paddingLeft: ['Área','Materia'].includes(h) ? 10 : undefined}}>
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filasFil.map((f, i) => {
+                      const rowBg = i%2===0 ? C.white : '#F8FAFC'
+                      const pctAc = f.evaluados ? Math.round(f.aciertos/f.evaluados*100) : 0
+                      const pctDes = 100 - pctAc
+                      const pctMal = f.evaluados ? Math.round(f.x/f.evaluados*100) : 0
+                      return (
+                        <tr key={f.nro}>
+                          <td style={tdS(rowBg)}>{f.sesion}</td>
+                          <td style={{...tdS(rowBg), fontWeight:700, color:C.navy}}>{f.nro}</td>
+                          <td style={{...tdS(rowBg), textAlign:'left', paddingLeft:10,
+                            whiteSpace:'nowrap', maxWidth:140, overflow:'hidden',
+                            textOverflow:'ellipsis'}}>{f.area}</td>
+                          <td style={{...tdS(rowBg), textAlign:'left', paddingLeft:10,
+                            whiteSpace:'nowrap', maxWidth:160, overflow:'hidden',
+                            textOverflow:'ellipsis'}}>{f.materia}</td>
+                          {/* Correcta */}
+                          <td style={{...tdS('#DCFCE7'), fontWeight:800, color:'#16A34A',
+                            fontSize:13}}>{f.correcta||'—'}</td>
+                          {/* A-H counts — resalta la correcta */}
+                          {OPTS.map(op => {
+                            const cnt = f.counts[op] || 0
+                            const isCorrect = op === f.correcta
+                            return (
+                              <td key={op} style={{...tdS(isCorrect ? '#DCFCE7' : rowBg),
+                                fontWeight: cnt>0 ? 700 : 400,
+                                color: isCorrect ? '#16A34A' : cnt>0 ? C.dark : '#CBD5E1'}}>
+                                {cnt > 0 ? cnt : '·'}
+                              </td>
+                            )
+                          })}
+                          {/* X */}
+                          <td style={{...tdS(rowBg),
+                            color: f.x>0 ? '#DC2626' : '#CBD5E1',
+                            fontWeight: f.x>0 ? 700 : 400}}>
+                            {f.x>0 ? f.x : '·'}
+                          </td>
+                          {/* Evaluados */}
+                          <td style={{...tdS(rowBg), fontWeight:600, color:C.navy}}>
+                            {f.evaluados}
+                          </td>
+                          {/* % Acierto */}
+                          <td style={{...tdS(rowBg), fontWeight:700, color:pctColor(pctAc)}}>
+                            {pctAc}%
+                          </td>
+                          {/* % Desacierto */}
+                          <td style={{...tdS(rowBg), fontWeight:700,
+                            color:pctColor(100-pctDes)}}>
+                            {pctDes}%
+                          </td>
+                          {/* % Mal Marcadas */}
+                          <td style={{...tdS(rowBg),
+                            color: pctMal>0 ? '#DC2626' : '#CBD5E1',
+                            fontWeight: pctMal>0 ? 700 : 400}}>
+                            {pctMal>0 ? `${pctMal}%` : '·'}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )
+        })()}
 
         {/* ══ EQUILIBRIO DE LA PRUEBA ══════════════════════════ */}
         {tab==='equilibrio' && (() => {
