@@ -1013,7 +1013,8 @@ export default function ColegioDashboard({session, onLogout}) {
 
       // Detalle Prueba — todas las preguntas
       const { data: detalle } = await supabase
-        .from('analisis_preguntas').select('id, nro_pregunta, sesion, area, asignatura, competencia, pct_colegio, pct_nacional, oportunidad_mejora')
+        .from('analisis_preguntas')
+        .select('id, sesion, nro_pregunta, materia, estandar, competencia, componente, tarea, respuesta_correcta, pct_nacional, pct_colegio, dificultad, oportunidad_mejora')
         .eq('colegio_id', cid).eq('prueba_id', pid)
         .order('sesion').order('nro_pregunta')
       setDetallePreguntas(detalle || [])
@@ -3005,78 +3006,105 @@ export default function ColegioDashboard({session, onLogout}) {
           const arrowDP = col => detallePruebaSort.col===col ? (detallePruebaSort.dir==='asc' ? ' ▲' : ' ▼') : ' ⇅'
           const dpSorted = [...detallePreguntas].sort((a, b) => {
             const v = detallePruebaSort.col
-            const av = v==='brecha' ? ((a.pct_colegio||0)-(a.pct_nacional||0)) : v==='materia'||v==='componente'||v==='dificultad' ? (a[v]||'') : (a[v]||0)
-            const bv = v==='brecha' ? ((b.pct_colegio||0)-(b.pct_nacional||0)) : v==='materia'||v==='componente'||v==='dificultad' ? (b[v]||'') : (b[v]||0)
+            const strCols = ['materia','estandar','competencia','componente','tarea','respuesta_correcta','dificultad']
+            const av = strCols.includes(v) ? (a[v]||'') : (a[v]||0)
+            const bv = strCols.includes(v) ? (b[v]||'') : (b[v]||0)
             const cmp = typeof av==='string' ? av.localeCompare(bv) : av - bv
             return detallePruebaSort.dir==='asc' ? cmp : -cmp
           })
-          const thDP = {padding:'8px 10px', fontSize:11, color:C.white, fontWeight:600,
+
+          const thDP = {
+            padding:'6px 8px', fontSize:10, color:C.white, fontWeight:700,
             textAlign:'center', whiteSpace:'nowrap', background:C.navy,
-            cursor:'pointer', userSelect:'none'}
+            borderRight:'1px solid rgba(255,255,255,0.1)',
+            cursor:'pointer', userSelect:'none', verticalAlign:'middle',
+          }
+          const tdDP = {padding:'6px 8px', fontSize:11, verticalAlign:'middle', borderBottom:`1px solid ${C.bg2}`}
+
+          const difColor = d => d==='Superior'?'#DC2626': d==='Alto'?'#D97706': d==='Básico'?'#2563EB': d==='Bajo'?'#16A34A': C.gray
+          const pctColor = v => v >= 70 ? '#16A34A' : v >= 45 ? '#D97706' : '#DC2626'
+
           return students.length === 0 ? <EmptyState/> : (
-          <Card>
-            <CardTitle sub={`${detallePreguntas.length} preguntas — ${prueba?.codigo||'—'}`}>
-              Detalle de la Prueba por Pregunta
-            </CardTitle>
-            {detallePreguntas.length === 0 ? (
-              <EmptyState msg="No hay análisis de preguntas cargado para esta prueba."/>
-            ) : (
-              <div style={{overflowX:'auto'}}>
-                <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter'}}>
-                  <thead>
-                    <tr style={{background:C.navy}}>
-                      <th style={thDP} onClick={() => handleSortDP('sesion')}>Ses.{arrowDP('sesion')}</th>
-                      <th style={thDP} onClick={() => handleSortDP('nro_pregunta')}>Nro{arrowDP('nro_pregunta')}</th>
-                      <th style={{...thDP, textAlign:'left'}} onClick={() => handleSortDP('materia')}>Materia{arrowDP('materia')}</th>
-                      <th style={{...thDP, textAlign:'left'}} onClick={() => handleSortDP('componente')}>Componente{arrowDP('componente')}</th>
-                      <th style={thDP} onClick={() => handleSortDP('pct_colegio')}>% Colegio{arrowDP('pct_colegio')}</th>
-                      <th style={thDP} onClick={() => handleSortDP('pct_nacional')}>% Nac.{arrowDP('pct_nacional')}</th>
-                      <th style={thDP} onClick={() => handleSortDP('brecha')}>Brecha{arrowDP('brecha')}</th>
-                      <th style={thDP} onClick={() => handleSortDP('dificultad')}>Nivel{arrowDP('dificultad')}</th>
-                      <th style={thDP}>Mejora</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dpSorted.map((q,i) => {
-                      const brecha = (q.pct_colegio||0) - (q.pct_nacional||0)
-                      return (
-                        <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`,
-                          background: q.oportunidad_mejora ? `${C.red}08` : i%2===0?`${C.bg}60`:'transparent'}}>
-                          <td style={{padding:'8px 10px', textAlign:'center', fontSize:12, color:C.gray}}>{q.sesion}</td>
-                          <td style={{padding:'8px 10px', textAlign:'center', fontSize:14, fontWeight:700,
-                            color:C.navy, fontFamily:'Playfair Display, serif'}}>{q.nro_pregunta}</td>
-                          <td style={{padding:'8px 10px', fontSize:12, color:C.text, fontWeight:500}}>{q.materia}</td>
-                          <td style={{padding:'8px 10px', fontSize:11, color:C.gray}}>{q.componente}</td>
-                          <td style={{padding:'8px 10px', textAlign:'center'}}>
-                            <Badge color={semaforoColor(q.pct_colegio)}>{q.pct_colegio}%</Badge>
-                          </td>
-                          <td style={{padding:'8px 10px', textAlign:'center', fontSize:12, color:C.gray}}>{q.pct_nacional}%</td>
-                          <td style={{padding:'8px 10px', textAlign:'center'}}>
-                            <Badge color={brecha<0?C.red:C.green}>{brecha>=0?'+':''}{brecha}%</Badge>
-                          </td>
-                          <td style={{padding:'8px 10px', textAlign:'center'}}>
-                            <Badge color={q.dificultad==='Superior'?C.red:q.dificultad==='Alto'?'#F59E0B':q.dificultad==='Básico'?C.blue:C.green}>
-                              {q.dificultad||'—'}
-                            </Badge>
-                          </td>
-                          <td style={{padding:'8px 10px', textAlign:'center', fontSize:13}}>
-                            {q.oportunidad_mejora ? '⚠️' : ''}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-                <div style={{marginTop:12, display:'flex', gap:16, flexWrap:'wrap'}}>
-                  <div style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>
-                    ⚠️ = Oportunidad de mejora &nbsp;|&nbsp;
-                    Brecha positiva = mejor que el nacional &nbsp;|&nbsp;
-                    Brecha negativa = por debajo del nacional
+            <Card>
+              <CardTitle sub={`${detallePreguntas.length} preguntas · ${prueba?.codigo||'—'}`}>
+                Detalle de la Prueba por Pregunta
+              </CardTitle>
+              {detallePreguntas.length === 0 ? (
+                <EmptyState msg="No hay análisis de preguntas cargado para esta prueba."/>
+              ) : (
+                <div style={{overflowX:'auto'}}>
+                  <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter', fontSize:11}}>
+                    <thead>
+                      <tr>
+                        <th style={{...thDP, width:40}} onClick={()=>handleSortDP('sesion')}>Ses.{arrowDP('sesion')}</th>
+                        <th style={{...thDP, width:40}} onClick={()=>handleSortDP('nro_pregunta')}>Nro{arrowDP('nro_pregunta')}</th>
+                        <th style={{...thDP, textAlign:'left', width:220}} onClick={()=>handleSortDP('estandar')}>Estándar{arrowDP('estandar')}</th>
+                        <th style={{...thDP, textAlign:'left', width:130}} onClick={()=>handleSortDP('componente')}>Componente{arrowDP('componente')}</th>
+                        <th style={{...thDP, textAlign:'left', width:130}} onClick={()=>handleSortDP('competencia')}>Competencia{arrowDP('competencia')}</th>
+                        <th style={{...thDP, textAlign:'left', width:180}} onClick={()=>handleSortDP('tarea')}>Tarea{arrowDP('tarea')}</th>
+                        <th style={{...thDP, width:44}} onClick={()=>handleSortDP('respuesta_correcta')}>RTA{arrowDP('respuesta_correcta')}</th>
+                        <th style={{...thDP, width:52}} onClick={()=>handleSortDP('pct_nacional')}>% Nac{arrowDP('pct_nacional')}</th>
+                        <th style={{...thDP, width:52}} onClick={()=>handleSortDP('pct_colegio')}>% Plan{arrowDP('pct_colegio')}</th>
+                        <th style={{...thDP, width:70}} onClick={()=>handleSortDP('dificultad')}>Dificultad{arrowDP('dificultad')}</th>
+                        <th style={{...thDP, width:60, cursor:'default'}}>Opor.<br/>Mejora</th>
+                        <th style={{...thDP, width:60, cursor:'default', color:'rgba(255,255,255,0.45)'}}>% Rta</th>
+                        <th style={{...thDP, width:80, cursor:'default', color:'rgba(255,255,255,0.45)'}}>Explicación</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dpSorted.map((q, i) => {
+                        const mejora = q.oportunidad_mejora || (q.pct_colegio != null && q.pct_nacional != null && q.pct_colegio < q.pct_nacional)
+                        return (
+                          <tr key={i} style={{background: mejora ? '#FFF7F7' : i%2===0 ? `${C.bg}80` : C.white}}>
+                            <td style={{...tdDP, textAlign:'center', color:C.gray}}>{q.sesion??'—'}</td>
+                            <td style={{...tdDP, textAlign:'center', fontWeight:700, fontSize:13,
+                              color:C.navy, fontFamily:'Playfair Display, serif'}}>{q.nro_pregunta}</td>
+                            <td style={{...tdDP, color:C.text, lineHeight:1.4}}>{q.estandar||'—'}</td>
+                            <td style={{...tdDP, color:C.gray}}>{q.componente||'—'}</td>
+                            <td style={{...tdDP, color:C.gray}}>{q.competencia||'—'}</td>
+                            <td style={{...tdDP, color:C.text}}>{q.tarea||'—'}</td>
+                            <td style={{...tdDP, textAlign:'center', fontWeight:700, fontSize:13,
+                              color:C.navy}}>{q.respuesta_correcta||'—'}</td>
+                            <td style={{...tdDP, textAlign:'center'}}>
+                              {q.pct_nacional != null
+                                ? <span style={{fontWeight:700, color:pctColor(q.pct_nacional)}}>{q.pct_nacional}</span>
+                                : <span style={{color:C.grayLt}}>—</span>}
+                            </td>
+                            <td style={{...tdDP, textAlign:'center'}}>
+                              {q.pct_colegio != null
+                                ? <span style={{fontWeight:700, color:pctColor(q.pct_colegio)}}>{q.pct_colegio}</span>
+                                : <span style={{color:C.grayLt}}>—</span>}
+                            </td>
+                            <td style={{...tdDP, textAlign:'center'}}>
+                              {q.dificultad
+                                ? <span style={{display:'inline-block', padding:'2px 8px', borderRadius:20,
+                                    fontSize:10, fontWeight:700, color:'#fff',
+                                    background:difColor(q.dificultad)}}>
+                                    {q.dificultad}
+                                  </span>
+                                : <span style={{color:C.grayLt}}>—</span>}
+                            </td>
+                            <td style={{...tdDP, textAlign:'center'}}>
+                              {mejora
+                                ? <span style={{fontWeight:700, color:'#DC2626', fontSize:12}}>Sí</span>
+                                : <span style={{fontWeight:700, color:'#16A34A', fontSize:12}}>No</span>}
+                            </td>
+                            <td style={{...tdDP, textAlign:'center', color:C.grayLt, fontSize:10}}>—</td>
+                            <td style={{...tdDP, textAlign:'center', color:C.grayLt, fontSize:10}}>—</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                  <div style={{marginTop:12, fontSize:11, color:C.gray, fontFamily:'Inter'}}>
+                    <strong style={{color:'#DC2626'}}>Sí</strong> = % Plantel inferior al % Nacional &nbsp;|&nbsp;
+                    Colores: <strong style={{color:'#16A34A'}}>≥70%</strong> &nbsp;
+                    <strong style={{color:'#D97706'}}>45–69%</strong> &nbsp;
+                    <strong style={{color:'#DC2626'}}>&lt;45%</strong>
                   </div>
                 </div>
-              </div>
-            )}
-          </Card>
+              )}
+            </Card>
           )
         })()}
 
