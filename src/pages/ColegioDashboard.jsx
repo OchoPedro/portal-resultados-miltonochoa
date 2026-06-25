@@ -4716,8 +4716,8 @@ export default function ColegioDashboard({session, onLogout}) {
 
                 const OPTS = ['A','B','C','D','E','F','G','H']
                 const OPT_COLORS = {
-                  A:'#3B82F6', B:'#F97316', C:'#10B981', D:'#EF4444',
-                  E:'#8B5CF6', F:'#F59E0B', G:'#06B6D4', H:'#EC4899', X:'#9CA3AF'
+                  A:'#3B82F6', B:'#8B5CF6', C:'#06B6D4', D:'#EC4899',
+                  E:'#14B8A6', F:'#6366F1', G:'#D946EF', H:'#0EA5E9', X:'#94A3B8'
                 }
 
                 const makeChartData = (scope) => {
