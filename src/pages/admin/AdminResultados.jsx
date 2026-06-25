@@ -59,11 +59,11 @@ function calcularResultado(respuestasEstudiante, clave, areas, asignaturas, comp
     sumaPonderada += pct * d.peso; sumaPesos += d.peso
   }
   const correctas = detalle.filter(d => d.correcto).length
-  const porcentaje = sumaPesos > 0 ? Math.round((sumaPonderada / sumaPesos) * 100) : 0
+  const porcentaje = sumaPesos > 0 ? +((sumaPonderada / sumaPesos) * 100).toFixed(3) : 0
   const pctAsig = {}
   for (const [asig, d] of Object.entries(porAsig)) {
     const col = ASIG_COLUMNA[asig]
-    if (col) pctAsig[col] = d.total > 0 ? Math.round((d.correctas / d.total) * 100) : 0
+    if (col) pctAsig[col] = d.total > 0 ? +((d.correctas / d.total) * 100).toFixed(3) : 0
   }
   return { correctas, total:clave.length, puntaje:Math.round(porcentaje * 5), porcentaje, detalle, porArea, pctAsig, porComp, porCompN }
 }

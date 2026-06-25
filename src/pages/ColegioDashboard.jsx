@@ -3091,14 +3091,8 @@ export default function ColegioDashboard({session, onLogout}) {
             document.addEventListener('mouseup', onUp)
           }
 
-          // IRT disponible si al menos un estudiante tiene puntaje_irt calibrado
-          const hasIRT = students.some(s => s.puntaje_irt?.global != null)
-          const getGlobal = s => hasIRT
-            ? (s.puntaje_irt?.global ?? null)
-            : (calcDef(s) != null ? Math.round(calcDef(s) * 5) : null)
-          const getDef = s => hasIRT
-            ? (s.puntaje_irt?.global != null ? +(s.puntaje_irt.global / 5).toFixed(2) : null)
-            : calcDef(s)
+          const getGlobal = s => s.puntaje_global ?? null
+          const getDef = s => s.desempeno_pct != null ? +parseFloat(s.desempeno_pct).toFixed(3) : null
 
           const withDef = [...students].map(s => ({...s, _def: getDef(s), _global: getGlobal(s)}))
           const byDef = [...withDef].sort((a,b) => (b._global||0) - (a._global||0))
@@ -3120,11 +3114,11 @@ export default function ColegioDashboard({session, onLogout}) {
 
           // Col de nota con color en el número según área
           const notaTd = (val, area) => {
-            const v = val != null ? Math.round(val*100)/100 : null
+            const v = val != null ? Math.round(val*1000)/1000 : null
             return {
               style: {...tdBase, color: v != null ? semaforoColor(v, area) : C.grayLt,
                 fontWeight: v != null ? 700 : 400},
-              text:  v != null ? v.toFixed(2) : '—'
+              text:  v != null ? v.toFixed(3) : '—'
             }
           }
 
@@ -3172,12 +3166,11 @@ export default function ColegioDashboard({session, onLogout}) {
                       <th rowSpan={2} style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)', padding:'4px 2px'}}
                         onClick={() => handleSortLN('_def')}>
                         Def.{arrowLN('_def')}
-                        {hasIRT && <span style={{display:'block',fontSize:8,fontWeight:700,color:'#86efac',letterSpacing:.3}}>IRT</span>}
                       </th>
                       <th rowSpan={2} style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)', padding:'4px 2px'}}
                         onClick={() => handleSortLN('global')}>
                         Global{arrowLN('global')}
-                        {hasIRT && <span style={{display:'block',fontSize:8,fontWeight:700,color:'#86efac',letterSpacing:.3}}>0–500</span>}
+                        <span style={{display:'block',fontSize:8,fontWeight:700,color:'#86efac',letterSpacing:.3}}>0–500</span>
                       </th>
                       <th rowSpan={2} style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)',
                         cursor:'default', padding:'4px 2px'}}>Pctil</th>
@@ -3209,7 +3202,7 @@ export default function ColegioDashboard({session, onLogout}) {
                             return <td key={col} style={style}>{text}</td>
                           }))}
                           <td style={{...tdBase, color: s._def != null ? semaforoColor(s._def, '_') : C.grayLt, fontWeight:700, fontSize:10}}>
-                            {s._def != null ? s._def.toFixed(2) : '—'}
+                            {s._def != null ? s._def.toFixed(3) : '—'}
                           </td>
                           <td style={{...tdBase, fontWeight:700, color:C.navy, fontSize:12,
                             fontFamily:'Playfair Display, serif'}}>
