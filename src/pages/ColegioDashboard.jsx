@@ -872,9 +872,9 @@ export default function ColegioDashboard({session, onLogout}) {
             label: p.codigo || p.nombre,
             prueba: p,
             global: Math.round(avgNull(arr.map(r=>r.puntaje_global))),
-            mat:    Math.round(avgNull(arr.flatMap(r=>[r.mat_cuantitativo,r.mat_especifico]))),
-            cn:     Math.round(avgNull(arr.flatMap(r=>[r.cn_quimica,r.cn_fisica,r.cn_biologia,r.cn_cts]))),
-            soc:    Math.round(avgNull(arr.flatMap(r=>[r.sociales,r.ciudadanas]))),
+            mat:    Math.round(avgNull(arr.map(r=>r.mat_cuantitativo!=null&&r.mat_especifico!=null ? (r.mat_cuantitativo*2+r.mat_especifico)/3 : null))),
+            cn:     Math.round(avgNull(arr.map(r=>[r.cn_quimica,r.cn_fisica,r.cn_biologia,r.cn_cts].every(v=>v!=null) ? (r.cn_quimica*0.9+r.cn_fisica*0.9+r.cn_biologia*0.9+r.cn_cts*0.3)/3 : null))),
+            soc:    Math.round(avgNull(arr.map(r=>r.sociales!=null&&r.ciudadanas!=null ? (r.sociales*1.2+r.ciudadanas*1.8)/3 : null))),
             lc:     Math.round(avgNull(arr.map(r=>r.lectura_critica))),
             ing:    Math.round(avgNull(arr.map(r=>r.ingles))),
             n: arr.length,
@@ -1047,9 +1047,9 @@ export default function ColegioDashboard({session, onLogout}) {
 
   // Áreas para radar
   const radarData = [
-    {area:'Matemáticas',    plantel: Math.round(avgArr(students.map(s=>s.mat_cuantitativo != null && s.mat_especifico != null ? (s.mat_cuantitativo+s.mat_especifico)/2 : null).filter(v => v != null && !isNaN(v))))},
-    {area:'Cs. Naturales',  plantel: Math.round(avgArr(students.map(s=>s.cn_quimica != null && s.cn_fisica != null && s.cn_biologia != null && s.cn_cts != null ? (s.cn_quimica+s.cn_fisica+s.cn_biologia+s.cn_cts)/4 : null).filter(v => v != null && !isNaN(v))))},
-    {area:'Soc. y Ciudad.', plantel: Math.round(avgArr(students.map(s=>s.sociales != null && s.ciudadanas != null ? (s.sociales+s.ciudadanas)/2 : null).filter(v => v != null && !isNaN(v))))},
+    {area:'Matemáticas',    plantel: Math.round(avgArr(students.map(s=>s.mat_cuantitativo != null && s.mat_especifico != null ? (s.mat_cuantitativo*2+s.mat_especifico)/3 : null).filter(v => v != null && !isNaN(v))))},
+    {area:'Cs. Naturales',  plantel: Math.round(avgArr(students.map(s=>s.cn_quimica != null && s.cn_fisica != null && s.cn_biologia != null && s.cn_cts != null ? (s.cn_quimica*0.9+s.cn_fisica*0.9+s.cn_biologia*0.9+s.cn_cts*0.3)/3 : null).filter(v => v != null && !isNaN(v))))},
+    {area:'Soc. y Ciudad.', plantel: Math.round(avgArr(students.map(s=>s.sociales != null && s.ciudadanas != null ? (s.sociales*1.2+s.ciudadanas*1.8)/3 : null).filter(v => v != null && !isNaN(v))))},
     {area:'Lect. Crítica',  plantel: Math.round(avgArr(students.map(s=>s.lectura_critica).filter(v => v != null && !isNaN(v))))},
     {area:'Inglés',         plantel: Math.round(avgArr(students.map(s=>s.ingles).filter(v => v != null && !isNaN(v))))},
   ]
@@ -1123,7 +1123,7 @@ export default function ColegioDashboard({session, onLogout}) {
       const q=s.cn_quimica, f=s.cn_fisica, b=s.cn_biologia, cts=s.cn_cts
       const soc=s.sociales, ciu=s.ciudadanas, lc=s.lectura_critica, ing=s.ingles
       if ([gen,nogen,q,f,b,cts,soc,ciu,lc,ing].some(x=>x==null)) return null
-      return (((gen+nogen)/2)*3 + ((q+f+b+cts)/4)*3 + ((soc+ciu)/2)*3 + lc*3 + ing) / 13
+      return ((gen*2+nogen)/3*3 + (q*0.9+f*0.9+b*0.9+cts*0.3)/3*3 + (soc*1.2+ciu*1.8)/3*3 + lc*3 + ing) / 13
     })},
   ].map(({asig, akey, vals}) => ({ asig, akey, ...calcBoxStats(vals) }))
 
@@ -1131,15 +1131,15 @@ export default function ColegioDashboard({session, onLogout}) {
   const desvAreaData = [
     {area:'Matemáticas',          akey:'mat', vals: students.map(s => {
       if (s.mat_cuantitativo == null || s.mat_especifico == null) return null
-      return (s.mat_cuantitativo + s.mat_especifico) / 2
+      return (s.mat_cuantitativo*2 + s.mat_especifico) / 3
     })},
     {area:'Ciencias Naturales',   akey:'cn',  vals: students.map(s => {
       if ([s.cn_quimica,s.cn_fisica,s.cn_biologia,s.cn_cts].some(x=>x==null)) return null
-      return (s.cn_quimica + s.cn_fisica + s.cn_biologia + s.cn_cts) / 4
+      return (s.cn_quimica*0.9 + s.cn_fisica*0.9 + s.cn_biologia*0.9 + s.cn_cts*0.3) / 3
     })},
     {area:'Soc. y Ciudadanas',    akey:'soc', vals: students.map(s => {
       if (s.sociales == null || s.ciudadanas == null) return null
-      return (s.sociales + s.ciudadanas) / 2
+      return (s.sociales*1.2 + s.ciudadanas*1.8) / 3
     })},
     {area:'Lectura Crítica',      akey:'lc',  vals: students.map(s => s.lectura_critica)},
     {area:'Inglés',               akey:'ing', vals: students.map(s => s.ingles)},
@@ -1148,7 +1148,7 @@ export default function ColegioDashboard({session, onLogout}) {
       const q=s.cn_quimica, f=s.cn_fisica, b=s.cn_biologia, cts=s.cn_cts
       const soc=s.sociales, ciu=s.ciudadanas, lc=s.lectura_critica, ing=s.ingles
       if ([gen,nogen,q,f,b,cts,soc,ciu,lc,ing].some(x=>x==null)) return null
-      return (((gen+nogen)/2)*3 + ((q+f+b+cts)/4)*3 + ((soc+ciu)/2)*3 + lc*3 + ing) / 13
+      return ((gen*2+nogen)/3*3 + (q*0.9+f*0.9+b*0.9+cts*0.3)/3*3 + (soc*1.2+ciu*1.8)/3*3 + lc*3 + ing) / 13
     })},
   ].map(({area, akey, vals}) => ({ area, akey, ...calcBoxStats(vals) }))
 
@@ -2951,7 +2951,7 @@ export default function ColegioDashboard({session, onLogout}) {
             const b=s.cn_biologia, cts=s.cn_cts, sc=s.sociales, ciu=s.ciudadanas
             const lc=s.lectura_critica, ing=s.ingles
             if ([mc,me,q,f,b,cts,sc,ciu,lc,ing].every(v => v == null)) return null
-            return (((mc||0)+(me||0))/2*3 + ((q||0)+(f||0)+(b||0)+(cts||0))/4*3 + ((sc||0)+(ciu||0))/2*3 + (lc||0)*3 + (ing||0)) / 13
+            return (((mc||0)*2+(me||0))/3*3 + ((q||0)*0.9+(f||0)*0.9+(b||0)*0.9+(cts||0)*0.3)/3*3 + ((sc||0)*1.2+(ciu||0)*1.8)/3*3 + (lc||0)*3 + (ing||0)) / 13
           }
           const RANK_COLS = [
             {key:'nombre', label:'Estudiante'}, {key:'puntaje_global', label:'Global'},
@@ -3155,7 +3155,7 @@ export default function ColegioDashboard({session, onLogout}) {
             const sc = s.sociales,         ciu= s.ciudadanas
             const lc = s.lectura_critica,  ing= s.ingles
             if ([mc,me,q,f,b,cts,sc,ciu,lc,ing].every(v => v == null)) return null
-            return (((mc||0)+(me||0))/2*3 + ((q||0)+(f||0)+(b||0)+(cts||0))/4*3 + ((sc||0)+(ciu||0))/2*3 + (lc||0)*3 + (ing||0)) / 13
+            return (((mc||0)*2+(me||0))/3*3 + ((q||0)*0.9+(f||0)*0.9+(b||0)*0.9+(cts||0)*0.3)/3*3 + ((sc||0)*1.2+(ciu||0)*1.8)/3*3 + (lc||0)*3 + (ing||0)) / 13
           }
 
           const handleSortLN = col => setListadoNotasSort(s => ({col, dir: s.col===col && s.dir==='asc' ? 'desc' : 'asc'}))
