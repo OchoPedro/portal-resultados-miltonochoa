@@ -963,12 +963,14 @@ export default function ColegioDashboard({session, onLogout}) {
         })).sort((a,b) => b.prom - a.prom)
         setCompetencias(compArr)
       }
+      if (isCancelled()) return
 
       // Desviación competencias (comparativo geográfico)
       const { data: cgData } = await supabase.rpc('get_competencias_gestion', {
         p_prueba_id: pid,
         p_colegio_id: cid,
       })
+      if (isCancelled()) return
       setCompGestion(cgData || [])
       // Seleccionar automáticamente la primera asignatura disponible
       const firstMat = cgData?.length ? cgData[0].materia : 'Todas'
@@ -982,6 +984,7 @@ export default function ColegioDashboard({session, onLogout}) {
         .in('estudiante_id', (res||[]).map(r => r.estudiante_id))
         .eq('prueba_id', pid)
         .order('materia').order('competencia').order('nota')
+      if (isCancelled()) return
       setNotasComp(nc || [])
       setNotasCompAsig('Todas')
 
@@ -1000,6 +1003,7 @@ export default function ColegioDashboard({session, onLogout}) {
       const { data: cgnData } = await supabase.rpc('get_componentes_gestion', {
         p_prueba_id: pid, p_colegio_id: cid,
       })
+      if (isCancelled()) return
       setCompNGestion(cgnData || [])
       const firstMatN = cgnData?.length ? cgnData[0].materia : 'Todas'
       setCompNAsigFilter(firstMatN)
@@ -1009,6 +1013,7 @@ export default function ColegioDashboard({session, onLogout}) {
         .from('analisis_preguntas').select('id, nro_pregunta, sesion, area, asignatura, competencia, pct_colegio, pct_nacional, oportunidad_mejora')
         .eq('colegio_id', cid).eq('prueba_id', pid)
         .eq('oportunidad_mejora', true).order('pct_colegio')
+      if (isCancelled()) return
       setOportunidades(opor || [])
 
       // Detalle Prueba — todas las preguntas
@@ -1017,6 +1022,7 @@ export default function ColegioDashboard({session, onLogout}) {
         .select('id, sesion, nro_pregunta, materia, estandar, competencia, componente, tarea, respuesta_correcta, pct_nacional, pct_colegio, dificultad, oportunidad_mejora')
         .eq('colegio_id', cid).eq('prueba_id', pid)
         .order('sesion').order('nro_pregunta')
+      if (isCancelled()) return
       setDetallePreguntas(detalle || [])
 
     } catch(e) {
@@ -2679,12 +2685,19 @@ export default function ColegioDashboard({session, onLogout}) {
 
         {/* ══ OPORTUNIDADES ════════════════════════════════════ */}
         {tab==='mejora' && (() => {
-          // Mapeo materia → área desde el Excel de la prueba (f[2]=Área, f[3]=Asignatura)
+          // Mapeo materia → área desde el Excel de la prueba (detección dinámica de columnas)
           const matAreaMap = {}
           const rawRows = selectedPrueba?.estructura_excel?.raw || []
-          rawRows.slice(2).forEach(f => {
-            const area = (f[2] || '').toString().trim()
-            const mat  = (f[3] || '').toString().trim()
+          const rawHdr0 = rawRows[0] || []
+          const hFind0 = k => rawHdr0.findIndex(h => typeof h === 'string' && h.toLowerCase().trim().startsWith(k))
+          const iAreaCol  = hFind0('área') >= 0 ? hFind0('área') : hFind0('area') >= 0 ? hFind0('area') : 2
+          const iMatCol   = hFind0('asignatura') >= 0 ? hFind0('asignatura') : hFind0('materia') >= 0 ? hFind0('materia') : 3
+          rawRows.slice(1).forEach(f => {
+            if (!f || !Array.isArray(f)) return
+            const nro = f[1]
+            if (nro === '' || nro === null || nro === undefined || isNaN(Number(nro))) return
+            const area = (f[iAreaCol] || '').toString().trim()
+            const mat  = (f[iMatCol]  || '').toString().trim()
             if (area && mat) matAreaMap[mat] = area
           })
 
@@ -3779,12 +3792,19 @@ export default function ColegioDashboard({session, onLogout}) {
 
         {/* ══ COMP OPORTUNIDADES ═══════════════════════════════ */}
         {tab==='comp_mejora' && (() => {
-          // Mapeo materia → área desde el Excel (f[2]=Área, f[3]=Asignatura)
+          // Mapeo materia → área desde el Excel (detección dinámica de columnas)
           const matAreaMap = {}
           const rawRows = selectedPrueba?.estructura_excel?.raw || []
-          rawRows.slice(2).forEach(f => {
-            const area = (f[2] || '').toString().trim()
-            const mat  = (f[3] || '').toString().trim()
+          const rawHdr0 = rawRows[0] || []
+          const hFind0 = k => rawHdr0.findIndex(h => typeof h === 'string' && h.toLowerCase().trim().startsWith(k))
+          const iAreaCol  = hFind0('área') >= 0 ? hFind0('área') : hFind0('area') >= 0 ? hFind0('area') : 2
+          const iMatCol   = hFind0('asignatura') >= 0 ? hFind0('asignatura') : hFind0('materia') >= 0 ? hFind0('materia') : 3
+          rawRows.slice(1).forEach(f => {
+            if (!f || !Array.isArray(f)) return
+            const nro = f[1]
+            if (nro === '' || nro === null || nro === undefined || isNaN(Number(nro))) return
+            const area = (f[iAreaCol] || '').toString().trim()
+            const mat  = (f[iMatCol]  || '').toString().trim()
             if (area && mat) matAreaMap[mat] = area
           })
 

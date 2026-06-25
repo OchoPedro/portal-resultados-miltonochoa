@@ -89,7 +89,8 @@ export default function EstudianteDashboard({ session, onLogout }) {
     </div>
   )
 
-  const r = todos[selectedIdx] || todos[0]
+  const r = todos[Math.min(selectedIdx, todos.length - 1)] || todos[0]
+  if (!r) return null
   const prueba = r.pruebas
   const promColegio = compañeros.length
     ? Math.round(avg(compañeros.map(c => c.puntaje_global)))

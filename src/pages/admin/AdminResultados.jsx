@@ -356,7 +356,7 @@ export default function AdminResultados({ onUpdate }) {
 
     // Si no encontró encabezados reconocidos, usar índices del formato anterior
     // Filtrar filas vacías (sobrantes de Excel)
-    const allRows = (i_rta >= 0) ? raw.slice(1) : raw.slice(2)
+    const allRows = raw.slice(1)
     const dataRows = allRows.filter(f => f.some(v => v !== '' && v !== null && v !== undefined))
     const get = (f, iDyn, iLeg) => (iDyn >= 0 ? f[iDyn] : f[iLeg] || '')
 

@@ -35,12 +35,18 @@ export default function AdminEstudiantes({ onUpdate }) {
 
         // Fila 1: ["Código Colegio", codigoColegio]
         const codigoColegio = rows[0]?.[1]
-        // Fila 2: headers, Fila 3+: datos
-        const estudiantes = rows.slice(2).filter(r => r[0]).map(r => ({
-          nombre:    String(r[0]||'').trim(),
-          documento: String(r[1]||'').trim(),
-          grado:     String(r[2]||'').trim(),
-          salon:     String(r[3]||'').trim(),
+        // Fila 2: headers, Fila 3+: datos — detectar columnas dinámicamente
+        const headerRow = rows[1] || []
+        const hIdx = k => headerRow.findIndex(h => typeof h === 'string' && h.toLowerCase().trim().includes(k))
+        const iNombre = hIdx('nombre') >= 0 ? hIdx('nombre') : 0
+        const iDoc    = hIdx('documento') >= 0 ? hIdx('documento') : hIdx('doc') >= 0 ? hIdx('doc') : 1
+        const iGrado  = hIdx('grado') >= 0 ? hIdx('grado') : 2
+        const iSalon  = hIdx('salón') >= 0 ? hIdx('salón') : hIdx('salon') >= 0 ? hIdx('salon') : 3
+        const estudiantes = rows.slice(2).filter(r => r[iNombre]).map(r => ({
+          nombre:    String(r[iNombre]||'').trim(),
+          documento: String(r[iDoc]   ||'').trim(),
+          grado:     String(r[iGrado] ||'').trim(),
+          salon:     String(r[iSalon] ||'').trim(),
         }))
 
         // Buscar colegio por usuario (ej: ANME0001) o por código numérico

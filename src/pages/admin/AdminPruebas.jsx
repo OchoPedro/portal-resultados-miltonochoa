@@ -520,27 +520,28 @@ function ModalEquilibrio({ referencia, onClose }) {
   const headers = excel.headers || []
   const allRows = excel.rows || []
 
-  // Índices de columnas clave
-  const idx = (name) => headers.findIndex(h => String(h).trim() === name)
-  const iArea       = idx('Área')
+  // Índices de columnas clave — guarda contra findIndex retornando -1
+  const idx = (name) => headers.findIndex(h => String(h).trim().toLowerCase() === name.toLowerCase())
+  const iArea        = idx('Área') >= 0 ? idx('Área') : idx('Area')
   const iCompetencia = idx('Competencia')
   const iComponente  = idx('Componente')
   const iDificultad  = idx('Dificultad')
+  const safeGet = (row, i) => i >= 0 ? String(row[i] ?? '') : ''
 
   // Áreas disponibles
-  const areas = [...new Set(allRows.map(r => String(r[iArea] ?? '')).filter(Boolean))].sort()
+  const areas = [...new Set(allRows.map(r => safeGet(r, iArea)).filter(Boolean))].sort()
   const [areaSelec, setAreaSelec] = useState(areas[0] || '')
 
   // Filtrar por área
   const rowsFiltradas = areaSelec
-    ? allRows.filter(r => String(r[iArea] ?? '') === areaSelec)
+    ? allRows.filter(r => safeGet(r, iArea) === areaSelec)
     : allRows
 
   // Valores únicos de competencia, componente y dificultad
-  const competencias = [...new Set(rowsFiltradas.map(r => String(r[iCompetencia] ?? '')).filter(Boolean))].sort()
-  const componentes  = [...new Set(rowsFiltradas.map(r => String(r[iComponente] ?? '')).filter(Boolean))].sort()
+  const competencias = [...new Set(rowsFiltradas.map(r => safeGet(r, iCompetencia)).filter(Boolean))].sort()
+  const componentes  = [...new Set(rowsFiltradas.map(r => safeGet(r, iComponente)).filter(Boolean))].sort()
   const dificultades = ['Bajo', 'Básico', 'Alto', 'Superior'].filter(d =>
-    rowsFiltradas.some(r => String(r[iDificultad] ?? '') === d)
+    rowsFiltradas.some(r => safeGet(r, iDificultad) === d)
   )
 
   // Construir matriz: componente → competencia → dificultad → count
@@ -553,9 +554,9 @@ function ModalEquilibrio({ referencia, onClose }) {
     })
   })
   rowsFiltradas.forEach(row => {
-    const comp = String(row[iComponente] ?? '')
-    const competencia = String(row[iCompetencia] ?? '')
-    const dif = String(row[iDificultad] ?? '')
+    const comp       = safeGet(row, iComponente)
+    const competencia = safeGet(row, iCompetencia)
+    const dif        = safeGet(row, iDificultad)
     if (matriz[comp]?.[competencia]?.[dif] !== undefined) {
       matriz[comp][competencia][dif]++
     }
