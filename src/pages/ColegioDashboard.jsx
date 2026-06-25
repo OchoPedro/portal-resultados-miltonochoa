@@ -4814,11 +4814,10 @@ export default function ColegioDashboard({session, onLogout}) {
                         fontSize:12, fontFamily:'Inter'}}>
                         <tbody>
                           {[
-                            ['Estándar',      q.estandar || '—'],
-                            ['Afirmación',    (iAfirm >= 0 && rawRow) ? String(rawRow[iAfirm]||'—') : '—'],
-                            ['Evidencia',     (iEvid  >= 0 && rawRow) ? String(rawRow[iEvid] ||'—') : '—'],
-                            ['Tarea',         q.tarea || '—'],
-                            ['Recomendación', '—'],
+                            ['Estándar',   q.estandar || '—'],
+                            ['Afirmación', (iAfirm >= 0 && rawRow) ? String(rawRow[iAfirm]||'—') : '—'],
+                            ['Evidencia',  (iEvid  >= 0 && rawRow) ? String(rawRow[iEvid] ||'—') : '—'],
+                            ['Tarea',      q.tarea || '—'],
                           ].map(([label, value], i) => (
                             <tr key={label} style={{background: i%2===0 ? C.bg : C.white}}>
                               <td style={{padding:'9px 14px', fontWeight:700, color:C.navy,
