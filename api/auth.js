@@ -46,27 +46,15 @@ async function isTrustedDevice(req, adminId) {
 
 // Rate limiting persistente en Supabase — sobrevive cold starts de Vercel
 async function _srvBlocked(ip) {
-  const { data } = await adminSupabase
-    .from('login_attempts')
-    .select('bloqueado_hasta')
-    .eq('ip', ip)
-    .single()
-  if (!data || !data.bloqueado_hasta) return false
-  if (new Date(data.bloqueado_hasta) > new Date()) return true
-  await adminSupabase.from('login_attempts').update({ intentos: 0, bloqueado_hasta: null }).eq('ip', ip)
-  return false
+  try {
+    const { data } = await adminSupabase.rpc('rl_check', { p_key: ip })
+    return data === true
+  } catch { return false }
 }
 async function _srvFail(ip) {
-  const { data } = await adminSupabase
-    .from('login_attempts')
-    .select('intentos')
-    .eq('ip', ip)
-    .single()
-  const intentos = (data?.intentos || 0) + 1
-  const bloqueado_hasta = intentos >= 10
-    ? new Date(Date.now() + 15 * 60 * 1000).toISOString()
-    : null
-  await adminSupabase.from('login_attempts').upsert({ ip, intentos: bloqueado_hasta ? 0 : intentos, bloqueado_hasta })
+  try {
+    await adminSupabase.rpc('rl_fail', { p_key: ip, p_max: 10, p_window_min: 15 })
+  } catch {}
 }
 
 const ALLOWED_ORIGINS = [

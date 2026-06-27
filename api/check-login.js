@@ -16,23 +16,6 @@ const ALLOWED_ORIGINS = [
 
 const MAX_INTENTOS = 5
 
-async function getIntentos(ip) {
-  const { data } = await adminSupabase
-    .from('login_attempts')
-    .select('intentos, bloqueado_hasta')
-    .eq('ip', ip)
-    .single()
-  return data || { intentos: 0, bloqueado_hasta: null }
-}
-
-async function registrarFallo(ip, intentosActuales) {
-  const nuevos = intentosActuales + 1
-  const bloqueado_hasta = nuevos >= MAX_INTENTOS
-    ? new Date(Date.now() + 15 * 60 * 1000).toISOString()
-    : null
-  await adminSupabase.from('login_attempts').upsert({ ip, intentos: nuevos, bloqueado_hasta })
-}
-
 async function limpiarIntentos(ip) {
   await adminSupabase.from('login_attempts').upsert({ ip, intentos: 0, bloqueado_hasta: null })
 }
@@ -75,8 +58,8 @@ export default async function handler(req, res) {
     || req.headers['x-forwarded-for']?.split(',').pop()?.trim()
     || req.socket?.remoteAddress || 'unknown'
 
-  const estado = await getIntentos(ip)
-  if (estado.bloqueado_hasta && new Date(estado.bloqueado_hasta) > new Date()) {
+  const { data: bloqueadoAhora } = await adminSupabase.rpc('rl_check', { p_key: ip })
+  if (bloqueadoAhora === true) {
     return res.status(200).json({ ok: false, blocked: true })
   }
 
@@ -104,13 +87,13 @@ export default async function handler(req, res) {
     }
   }
 
-  await registrarFallo(ip, estado.intentos || 0)
-  const intentosRestantes = MAX_INTENTOS - (estado.intentos || 0) - 1
-  const bloqueado = intentosRestantes <= 0
+  // Conteo atómico vía RPC; rl_fail devuelve el nº de intentos acumulado
+  const { data: intentos } = await adminSupabase.rpc('rl_fail', { p_key: ip, p_max: MAX_INTENTOS, p_window_min: 15 })
+  const restantes = Math.max(0, MAX_INTENTOS - (intentos || MAX_INTENTOS))
 
   return res.status(200).json({
     ok: false,
-    blocked: bloqueado,
-    intentosRestantes: bloqueado ? 0 : intentosRestantes,
+    blocked: restantes <= 0,
+    intentosRestantes: restantes,
   })
 }
