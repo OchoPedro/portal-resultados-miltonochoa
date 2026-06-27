@@ -60,8 +60,11 @@ export default async function handler(req, res) {
 
   const { usuario, password } = req.body || {}
   if (!usuario || !password) return res.status(400).json({ ok: false })
+  if (password.length > 128) return res.status(400).json({ ok: false })
 
-  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown'
+  const ip = req.headers['x-real-ip']
+    || req.headers['x-forwarded-for']?.split(',').pop()?.trim()
+    || req.socket?.remoteAddress || 'unknown'
 
   // Verificar si la IP está bloqueada
   const estado = await getIntentos(ip)
