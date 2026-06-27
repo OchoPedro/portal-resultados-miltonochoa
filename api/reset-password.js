@@ -16,20 +16,16 @@ const ALLOWED_ORIGINS = [
 const isAllowed = (o) => ALLOWED_ORIGINS.includes(o)
 
 // Rate limiting del intento de adivinar el código (brute-force del OTP de 6 dígitos).
-// Se cuenta por usuario: 5 intentos fallidos → bloqueo 1 hora.
+// Se cuenta por usuario: 5 intentos fallidos → bloqueo 1 hora. Conteo atómico vía RPC.
 async function _rpBlocked(key) {
   try {
-    const { data } = await adminSupabase.from('login_attempts').select('bloqueado_hasta').eq('ip', `rp:${key}`).single()
-    if (!data?.bloqueado_hasta) return false
-    return new Date(data.bloqueado_hasta) > new Date()
+    const { data } = await adminSupabase.rpc('rl_check', { p_key: `rp:${key}` })
+    return data === true
   } catch { return false }
 }
 async function _rpFail(key) {
   try {
-    const { data } = await adminSupabase.from('login_attempts').select('intentos').eq('ip', `rp:${key}`).single()
-    const intentos = (data?.intentos || 0) + 1
-    const bloqueado_hasta = intentos >= 5 ? new Date(Date.now() + 60 * 60 * 1000).toISOString() : null
-    await adminSupabase.from('login_attempts').upsert({ ip: `rp:${key}`, intentos: bloqueado_hasta ? 0 : intentos, bloqueado_hasta })
+    await adminSupabase.rpc('rl_fail', { p_key: `rp:${key}`, p_max: 5, p_window_min: 60 })
   } catch {}
 }
 

@@ -19,24 +19,14 @@ const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
 
 async function _otpBlocked(adminId) {
   try {
-    const { data } = await adminSupabase
-      .from('login_attempts')
-      .select('bloqueado_hasta')
-      .eq('ip', `otp:${adminId}`)
-      .single()
-    if (!data?.bloqueado_hasta) return false
-    if (new Date(data.bloqueado_hasta) > new Date()) return true
-    await adminSupabase.from('login_attempts').update({ intentos: 0, bloqueado_hasta: null }).eq('ip', `otp:${adminId}`)
-    return false
+    const { data } = await adminSupabase.rpc('rl_check', { p_key: `otp:${adminId}` })
+    return data === true
   } catch { return false }
 }
 
 async function _otpFail(adminId) {
   try {
-    const { data } = await adminSupabase.from('login_attempts').select('intentos').eq('ip', `otp:${adminId}`).single()
-    const intentos = (data?.intentos || 0) + 1
-    const bloqueado_hasta = intentos >= 5 ? new Date(Date.now() + 10 * 60 * 1000).toISOString() : null
-    await adminSupabase.from('login_attempts').upsert({ ip: `otp:${adminId}`, intentos: bloqueado_hasta ? 0 : intentos, bloqueado_hasta })
+    await adminSupabase.rpc('rl_fail', { p_key: `otp:${adminId}`, p_max: 5, p_window_min: 10 })
   } catch {}
 }
 

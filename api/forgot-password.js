@@ -10,18 +10,13 @@ const adminSupabase = createClient(
 
 async function _fpBlocked(ip) {
   try {
-    const { data } = await adminSupabase.from('login_attempts').select('intentos, bloqueado_hasta').eq('ip', `fp:${ip}`).single()
-    if (!data) return false
-    if (data.bloqueado_hasta && new Date(data.bloqueado_hasta) > new Date()) return true
-    return false
+    const { data } = await adminSupabase.rpc('rl_check', { p_key: `fp:${ip}` })
+    return data === true
   } catch { return false }
 }
 async function _fpFail(ip) {
   try {
-    const { data } = await adminSupabase.from('login_attempts').select('intentos').eq('ip', `fp:${ip}`).single()
-    const intentos = (data?.intentos || 0) + 1
-    const bloqueado_hasta = intentos >= 5 ? new Date(Date.now() + 60 * 60 * 1000).toISOString() : null
-    await adminSupabase.from('login_attempts').upsert({ ip: `fp:${ip}`, intentos: bloqueado_hasta ? 0 : intentos, bloqueado_hasta })
+    await adminSupabase.rpc('rl_fail', { p_key: `fp:${ip}`, p_max: 5, p_window_min: 60 })
   } catch {}
 }
 
