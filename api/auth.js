@@ -198,7 +198,7 @@ export default async function handler(req, res) {
           await adminSupabase.from('admin_otp').delete().eq('admin_id', adminId)
           await adminSupabase.from('admin_otp').insert({
             admin_id: adminId,
-            code: otp,
+            code: createHash('sha256').update(otp).digest('hex'),
             expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
             used: false,
           })

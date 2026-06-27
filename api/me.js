@@ -12,9 +12,7 @@ const ALLOWED_ORIGINS = [
   'https://portal-resultados-miltonochoa.vercel.app',
   'https://resultados.aamocolombia.com',
 ]
-const isAllowed = (o) =>
-  ALLOWED_ORIGINS.includes(o) ||
-  /^https:\/\/portal-resultados-miltonochoa-[a-z0-9-]+\.vercel\.app$/.test(o)
+const isAllowed = (o) => ALLOWED_ORIGINS.includes(o)
 
 function parseCookie(str, name) {
   const m = str.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`))

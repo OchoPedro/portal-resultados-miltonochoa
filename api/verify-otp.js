@@ -13,9 +13,7 @@ const ALLOWED_ORIGINS = [
   'https://portal-resultados-miltonochoa.vercel.app',
   'https://resultados.aamocolombia.com',
 ]
-const isAllowed = (o) =>
-  ALLOWED_ORIGINS.includes(o) ||
-  /^https:\/\/portal-resultados-miltonochoa-[a-z0-9-]+\.vercel\.app$/.test(o)
+const isAllowed = (o) => ALLOWED_ORIGINS.includes(o)
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
 
@@ -63,12 +61,13 @@ export default async function handler(req, res) {
     if (await _otpBlocked(adminId))
       return res.status(429).json({ error: 'Demasiados intentos. Espera 10 minutos.' })
 
-    // Buscar OTP válido
+    // Buscar OTP válido (code almacenado como SHA-256)
+    const codeHash = createHash('sha256').update(code.trim()).digest('hex')
     const { data: otp, error } = await adminSupabase
       .from('admin_otp')
       .select('*')
       .eq('admin_id', adminId)
-      .eq('code', code.trim())
+      .eq('code', codeHash)
       .eq('used', false)
       .gt('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false })

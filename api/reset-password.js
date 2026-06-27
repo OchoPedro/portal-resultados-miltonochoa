@@ -13,9 +13,7 @@ const ALLOWED_ORIGINS = [
   'https://portal-resultados-miltonochoa.vercel.app',
   'https://resultados.aamocolombia.com',
 ]
-const isAllowed = (o) =>
-  ALLOWED_ORIGINS.includes(o) ||
-  /^https:\/\/portal-resultados-miltonochoa-[a-z0-9-]+\.vercel\.app$/.test(o)
+const isAllowed = (o) => ALLOWED_ORIGINS.includes(o)
 
 export default async function handler(req, res) {
   const origin = req.headers['origin'] || ''
@@ -38,22 +36,24 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres.' })
 
   try {
-    // Buscar reset válido
     const tokenHash = createHash('sha256').update(codigo.trim()).digest('hex')
-    const { data: reset, error } = await adminSupabase
+
+    // UPDATE atómico: consumir el token y devolver datos en una sola operación
+    const { data: consumed, error } = await adminSupabase
       .from('password_resets')
-      .select('id, usuario, tabla, expires_at, used')
+      .update({ used: true })
       .eq('usuario', usuario.trim().toLowerCase())
       .eq('token', tokenHash)
       .eq('used', false)
       .gt('expires_at', new Date().toISOString())
+      .select('tabla, usuario')
       .order('created_at', { ascending: false })
       .limit(1)
-      .single()
 
-    if (error || !reset)
+    if (error || !consumed || consumed.length === 0)
       return res.status(400).json({ error: 'Código inválido o expirado.' })
 
+    const reset = consumed[0]
     if (!['administradores', 'colegios'].includes(reset.tabla))
       return res.status(400).json({ error: 'Solicitud inválida' })
 
@@ -65,12 +65,6 @@ export default async function handler(req, res) {
       .from(reset.tabla)
       .update({ password_hash })
       .eq('usuario', reset.usuario)
-
-    // Marcar reset como usado
-    await adminSupabase
-      .from('password_resets')
-      .update({ used: true })
-      .eq('id', reset.id)
 
     return res.status(200).json({ ok: true })
   } catch (e) {

@@ -7,7 +7,17 @@ const adminSupabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
+const ALLOWED_ORIGINS = [
+  'https://aamocolombia.com',
+  'https://www.aamocolombia.com',
+  'https://miltonochoa-web.vercel.app',
+]
+
 export default async function handler(req, res) {
+  const origin = req.headers['origin'] || ''
+  if (origin && !ALLOWED_ORIGINS.includes(origin))
+    return res.redirect(302, '/?error=forbidden')
+
   // Solo POST — nunca GET para evitar que el token quede en URLs, logs y cabeceras Referer
   if (req.method !== 'POST') return res.redirect(302, '/?error=method_not_allowed')
 
