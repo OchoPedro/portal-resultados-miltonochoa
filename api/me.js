@@ -29,6 +29,7 @@ export default async function handler(req, res) {
   res.setHeader('Vary', 'Origin')
 
   if (req.method === 'OPTIONS') return res.status(204).end()
+  if (!allowed) return res.status(403).json({ error: 'Forbidden' })
   if (req.method !== 'GET') return res.status(405).end()
 
   const sessionToken = parseCookie(req.headers.cookie || '', 'mo_session')
