@@ -29,7 +29,10 @@ export default async function handler(req, res) {
   res.setHeader('Vary', 'Origin')
 
   if (req.method === 'OPTIONS') return res.status(204).end()
-  if (!allowed) return res.status(403).json({ error: 'Forbidden' })
+  // GET same-origin no envía header Origin → permitir Origin ausente.
+  // Solo se bloquea un Origin PRESENTE y no permitido (cross-origin malicioso).
+  // La cookie es SameSite=Strict, así que no viaja cross-site de todos modos.
+  if (origin && !allowed) return res.status(403).json({ error: 'Forbidden' })
   if (req.method !== 'GET') return res.status(405).end()
 
   const sessionToken = parseCookie(req.headers.cookie || '', 'mo_session')
