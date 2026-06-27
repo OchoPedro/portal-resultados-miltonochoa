@@ -34,6 +34,8 @@ export default async function handler(req, res) {
 
   if (nueva_password.length < 8)
     return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres.' })
+  if (nueva_password.length > 128)
+    return res.status(400).json({ error: 'La contraseña no puede superar 128 caracteres.' })
 
   try {
     const tokenHash = createHash('sha256').update(codigo.trim()).digest('hex')

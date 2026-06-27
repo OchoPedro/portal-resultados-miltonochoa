@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { createHash } from 'crypto'
 import { verifyJWT } from './_jwt.js'
 
 export const config = { maxDuration: 5 }
@@ -47,6 +48,13 @@ export default async function handler(req, res) {
       }).then(null, () => {})
     }
   } catch {}
+
+  // Invalidar trusted_device en DB para que el token físico ya no sirva (no bloqueante)
+  const rawTrusted = parseCookie(req.headers.cookie || '', 'mo_trusted_device')
+  if (rawTrusted) {
+    const tokenHash = createHash('sha256').update(rawTrusted).digest('hex')
+    adminSupabase.from('trusted_devices').delete().eq('token_hash', tokenHash).then(null, () => {})
+  }
 
   res.setHeader('Set-Cookie', [
     'mo_session=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0',

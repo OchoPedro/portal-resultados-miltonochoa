@@ -61,28 +61,23 @@ export default async function handler(req, res) {
     if (await _otpBlocked(adminId))
       return res.status(429).json({ error: 'Demasiados intentos. Espera 10 minutos.' })
 
-    // Buscar OTP válido (code almacenado como SHA-256)
+    // Consumir OTP en un UPDATE atómico (code almacenado como SHA-256)
     const codeHash = createHash('sha256').update(code.trim()).digest('hex')
-    const { data: otp, error } = await adminSupabase
+    const { data: consumed, error } = await adminSupabase
       .from('admin_otp')
-      .select('*')
+      .update({ used: true })
       .eq('admin_id', adminId)
       .eq('code', codeHash)
       .eq('used', false)
       .gt('expires_at', new Date().toISOString())
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single()
+      .select('id')
 
-    if (error || !otp) {
+    if (error || !consumed || consumed.length === 0) {
       await _otpFail(adminId)
       return res.status(401).json({ error: 'Código incorrecto o expirado.' })
     }
 
     adminSupabase.from('login_attempts').delete().eq('ip', `otp:${adminId}`).then(null, () => {})
-
-    // Marcar OTP como usado
-    await adminSupabase.from('admin_otp').update({ used: true }).eq('id', otp.id)
 
     // Obtener datos del admin
     const { data: admin } = await adminSupabase
