@@ -52,9 +52,11 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).end()
   if (!allowed) return res.status(403).json({ error: 'Forbidden' })
   if (req.method !== 'POST') return res.status(405).end()
+  if (req.headers['content-type']?.split(';')[0]?.trim() !== 'application/json')
+    return res.status(415).json({ error: 'Content-Type debe ser application/json' })
 
   const { adminId, code } = req.body || {}
-  if (!adminId || !code)
+  if (typeof adminId !== 'string' || typeof code !== 'string' || !adminId || !code)
     return res.status(400).json({ error: 'Faltan datos requeridos.' })
 
   try {

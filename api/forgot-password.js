@@ -53,7 +53,7 @@ export default async function handler(req, res) {
     return res.status(429).json({ error: 'Demasiadas solicitudes. Espera una hora.' })
 
   const { usuario } = req.body || {}
-  if (!usuario)
+  if (typeof usuario !== 'string' || !usuario.trim())
     return res.status(400).json({ error: 'Ingresa tu usuario.' })
 
   try {
@@ -95,6 +95,13 @@ export default async function handler(req, res) {
       // No revelar si el usuario existe o no — siempre 200 con mismo mensaje
       return res.status(200).json({ ok: true, hint: null })
     }
+
+    // Invalidar cualquier código de reset previo no usado: solo 1 código válido
+    // a la vez reduce la superficie de brute-force (#12).
+    await adminSupabase.from('password_resets')
+      .update({ used: true })
+      .eq('usuario', usuario.trim().toLowerCase())
+      .eq('used', false)
 
     // OTP criptográficamente seguro
     const codigo = randomInt(100000, 1000000).toString()

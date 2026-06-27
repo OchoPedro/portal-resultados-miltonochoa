@@ -7,7 +7,14 @@ import { SignJWT, jwtVerify } from 'jose'
  */
 export async function verifyJWT(token) {
   const secret = new TextEncoder().encode(process.env.SUPABASE_JWT_SECRET)
-  const { payload } = await jwtVerify(token, secret)
+  // Pinning explícito: algoritmo HS256, issuer y audience propios. Evita
+  // alg-confusion y que un token de otro tipo (p.ej. login-redirect, que
+  // comparte secreto) sea aceptado como sesión.
+  const { payload } = await jwtVerify(token, secret, {
+    algorithms: ['HS256'],
+    issuer: 'https://bmspwsbhsjkamjywvvde.supabase.co/auth/v1',
+    audience: 'authenticated',
+  })
   return payload
 }
 
