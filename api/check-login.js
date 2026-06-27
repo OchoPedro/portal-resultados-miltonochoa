@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import bcrypt from 'bcryptjs'
 import { SignJWT } from 'jose'
+import { randomUUID } from 'crypto'
 
 const adminSupabase = createClient(
   process.env.SUPABASE_URL,
@@ -36,14 +37,20 @@ async function limpiarIntentos(ip) {
   await adminSupabase.from('login_attempts').upsert({ ip, intentos: 0, bloqueado_hasta: null })
 }
 
-// Token de un solo uso — válido 60 segundos, solo para colegio/estudiante
+// Token de un solo uso — válido 60 segundos, registrado en DB para invalidación tras primer uso
 async function generarLoginToken(userId, role) {
+  const jti = randomUUID()
+  const expiresAt = new Date(Date.now() + 70 * 1000).toISOString() // 10s de gracia sobre el TTL del JWT
   const secret = new TextEncoder().encode(process.env.SUPABASE_JWT_SECRET)
-  return new SignJWT({ sub: userId, role, aud: 'login-redirect' })
+  const token = await new SignJWT({ sub: userId, role, aud: 'login-redirect', jti })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('60s')
     .sign(secret)
+
+  await adminSupabase.from('login_tokens').insert({ jti, expires_at: expiresAt })
+
+  return token
 }
 
 export default async function handler(req, res) {
@@ -66,13 +73,11 @@ export default async function handler(req, res) {
     || req.headers['x-forwarded-for']?.split(',').pop()?.trim()
     || req.socket?.remoteAddress || 'unknown'
 
-  // Verificar si la IP está bloqueada
   const estado = await getIntentos(ip)
   if (estado.bloqueado_hasta && new Date(estado.bloqueado_hasta) > new Date()) {
     return res.status(200).json({ ok: false, blocked: true })
   }
 
-  // Buscar en colegios y estudiantes (no admins — ellos tienen 2FA)
   const tablas = [
     { nombre: 'colegios',    role: 'colegio'     },
     { nombre: 'estudiantes', role: 'estudiante'  },
@@ -97,7 +102,6 @@ export default async function handler(req, res) {
     }
   }
 
-  // Credenciales incorrectas — registrar fallo
   await registrarFallo(ip, estado.intentos || 0)
   const intentosRestantes = MAX_INTENTOS - (estado.intentos || 0) - 1
   const bloqueado = intentosRestantes <= 0

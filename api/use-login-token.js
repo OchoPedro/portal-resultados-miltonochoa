@@ -8,19 +8,29 @@ const adminSupabase = createClient(
 )
 
 export default async function handler(req, res) {
-  if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).end()
+  // Solo POST — nunca GET para evitar que el token quede en URLs, logs y cabeceras Referer
+  if (req.method !== 'POST') return res.redirect(302, '/?error=method_not_allowed')
 
-  const token = req.method === 'POST' ? req.body?.t : req.query.t
+  const token = req.body?.t
   if (!token) return res.redirect(302, '/?error=token_missing')
 
   try {
     const secret = new TextEncoder().encode(process.env.SUPABASE_JWT_SECRET)
     const { payload } = await jwtVerify(token, secret, { audience: 'login-redirect' })
 
-    const { sub: userId, role } = payload
-    if (!userId || !role) return res.redirect(302, '/?error=token_invalid')
+    const { sub: userId, role, jti } = payload
+    if (!userId || !role || !jti) return res.redirect(302, '/?error=token_invalid')
 
-    // Obtener datos frescos del usuario desde la BD
+    // Consumir el token — DELETE atómico garantiza uso único
+    const { count } = await adminSupabase
+      .from('login_tokens')
+      .delete({ count: 'exact' })
+      .eq('jti', jti)
+      .gt('expires_at', new Date().toISOString())
+
+    if (!count || count === 0) return res.redirect(302, '/?error=token_already_used')
+
+    // Obtener datos frescos del usuario
     let userResult = null
 
     if (role === 'colegio') {
@@ -43,10 +53,8 @@ export default async function handler(req, res) {
 
     if (!userResult) return res.redirect(302, '/?error=user_not_found')
 
-    // Crear sesión completa
     const sessionJwt = await signUserJWT(userResult)
 
-    // Actualizar ultima_sesion
     const tabla = role === 'colegio' ? 'colegios' : 'estudiantes'
     await adminSupabase.from(tabla).update({ ultima_sesion: new Date().toISOString() }).eq('id', userId)
 
