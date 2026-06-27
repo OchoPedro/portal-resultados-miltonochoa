@@ -64,6 +64,8 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).end()
   if (!allowed) return res.status(403).json({ ok: false })
   if (req.method !== 'POST') return res.status(405).json({ ok: false })
+  if (req.headers['content-type']?.split(';')[0]?.trim() !== 'application/json')
+    return res.status(415).json({ ok: false })
 
   const { usuario, password } = req.body || {}
   if (!usuario || !password) return res.status(400).json({ ok: false })

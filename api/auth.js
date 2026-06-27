@@ -87,6 +87,8 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).end()
   if (!allowed) return res.status(403).json({ error: 'Forbidden' })
   if (req.method !== 'POST') return res.status(405).end()
+  if (req.headers['content-type']?.split(';')[0]?.trim() !== 'application/json')
+    return res.status(415).json({ error: 'Content-Type debe ser application/json' })
 
   // Rate limiting por IP real (no confiar en el primer valor de X-Forwarded-For)
   const ip = req.headers['x-real-ip']
