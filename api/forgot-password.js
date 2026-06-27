@@ -101,6 +101,7 @@ export default async function handler(req, res) {
     await adminSupabase.from('password_resets')
       .update({ used: true })
       .eq('usuario', usuario.trim().toLowerCase())
+      .eq('tabla', tabla)
       .eq('used', false)
 
     // OTP criptográficamente seguro
