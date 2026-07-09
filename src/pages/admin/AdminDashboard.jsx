@@ -54,8 +54,8 @@ export default function AdminDashboard({ session, onLogout }) {
 
   const loadStats = async () => {
     const [{ count: c }, { count: e }, { count: p }] = await Promise.all([
-      supabase.from('colegios').select('*', { count: 'exact', head: true }),
-      supabase.from('estudiantes').select('*', { count: 'exact', head: true }),
+      supabase.from('colegios').select('id', { count: 'exact', head: true }),
+      supabase.from('estudiantes').select('id', { count: 'exact', head: true }),
       supabase.from('pruebas').select('*', { count: 'exact', head: true }),
     ])
     setStats({ colegios: c || 0, estudiantes: e || 0, pruebas: p || 0 })

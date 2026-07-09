@@ -1285,8 +1285,10 @@ export default function AdminColegios({ onUpdate }) {
   const loadColegios = async () => {
     setLoading(true)
     const offset = (pagina - 1) * POR_PAG
+    // Columnas explícitas, no '*': las de credenciales están revocadas para el
+    // navegador y un select('*') sobre colegios devuelve 42501.
     let q = supabase.from('colegios')
-      .select('*', { count: 'exact' })
+      .select('id, nombre, ciudad, departamento, rector, usuario, activo, created_at, ultima_sesion, departamento_nombre, municipio, direccion, barrio, contacto_nombre, contacto_telefono, contacto_email, contactos, calendario, naturaleza, jornada, "años_activos", dane, telefono, correo, estado_dane, tipo_establecimiento, zona, genero_estudiantes, caracter, niveles, estrato_socioeconomico', { count: 'exact' })
       .order('departamento_nombre', { ascending: true, nullsFirst: false })
       .order('municipio',           { ascending: true, nullsFirst: false })
       .order('nombre',              { ascending: true })
