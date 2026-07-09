@@ -1,3 +1,6 @@
+// ⚠️ OBSOLETO: la columna password_plain ya no existe y las claves se guardan
+// cifradas (AES-256-GCM). Para cambiar claves usa api/colegio-reset-clave.js,
+// que hashea y cifra en el servidor. Este script ya NO deja la clave recuperable.
 import { createClient } from '@supabase/supabase-js'
 
 const SUPABASE_URL  = 'https://bmspwsbhsjkamjywvvde.supabase.co'
@@ -46,7 +49,7 @@ async function main() {
 
     const { error: updErr } = await supabase
       .from('colegios')
-      .update({ password_hash: hashed, password_plain: plain })
+      .update({ password_hash: hashed })  // password_plain fue eliminada: la clave va cifrada, y solo la escribe api/colegio-reset-clave.js
       .eq('id', c.id)
 
     if (updErr) {

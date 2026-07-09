@@ -45,7 +45,6 @@ export default async function handler(req, res) {
   const { error } = await supabase.from('colegios').update({
     password_hash: await bcrypt.hash(nueva, 10),
     password_cifrada: cifrar(nueva),
-    password_plain: null,
   }).eq('id', id)
   if (error) {
     console.error('[colegio-reset-clave]', error.message)

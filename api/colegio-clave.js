@@ -40,7 +40,7 @@ export default async function handler(req, res) {
   if (!UUID.test(id)) return res.status(400).json({ error: 'Colegio inválido' })
 
   const { data, error } = await supabase.from('colegios')
-    .select('usuario, password_cifrada, password_plain').eq('id', id).maybeSingle()
+    .select('usuario, password_cifrada').eq('id', id).maybeSingle()
   if (error) {
     console.error('[colegio-clave]', error.message)
     return res.status(500).json({ error: 'No pude consultar la clave' })
@@ -49,7 +49,7 @@ export default async function handler(req, res) {
 
   let clave = null
   try {
-    clave = data.password_cifrada ? descifrar(data.password_cifrada) : (data.password_plain || null)
+    clave = data.password_cifrada ? descifrar(data.password_cifrada) : null
   } catch (e) {
     console.error('[colegio-clave] no pude descifrar', id, e.message)
     return res.status(500).json({ error: 'La clave guardada no se pudo descifrar' })
