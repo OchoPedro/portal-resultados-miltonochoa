@@ -129,12 +129,10 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
     if (err) { setError(err); return }
     setSaving(true)
     try {
-      let clavePayload = {}
-      if (!colegio) {
-        const clavePlain = generarClave(form.usuario)
-        const { data: hashed } = await supabase.rpc('hashear_password', { p_password: clavePlain })
-        clavePayload = { password_plain: clavePlain, password_hash: hashed }
-      }
+      // La clave ya no se escribe desde el navegador: se inserta el colegio sin
+      // credenciales y el servidor se las asigna (hasheadas y cifradas).
+      let clavePlainNueva = null
+      if (!colegio) clavePlainNueva = generarClave(form.usuario)
       const payload = {
         nombre: form.nombre,
         departamento_nombre: form.departamento_nombre,
@@ -150,13 +148,18 @@ const ModalColegio = ({ colegio, onClose, onSave }) => {
         contacto_telefono: form.contactos?.[0]?.telefono,
         contacto_email: form.contactos?.[0]?.email,
         usuario: form.usuario,
-        ...clavePayload,
+
         ...(!colegio ? { activo: false } : {}),
       }
-      const { error: err } = colegio
-        ? await supabase.from('colegios').update(payload).eq('id', colegio.id)
-        : await supabase.from('colegios').insert(payload)
-      if (err) { setError(err.message); return }
+      if (colegio) {
+        const { error: err } = await supabase.from('colegios').update(payload).eq('id', colegio.id)
+        if (err) { setError(err.message); return }
+      } else {
+        const { data: creado, error: err } = await supabase.from('colegios').insert(payload).select('id').single()
+        if (err) { setError(err.message); return }
+        try { await asignarClaveServidor(creado.id, clavePlainNueva) }
+        catch (e) { setError('El colegio se creó, pero no pude asignarle la clave: ' + e.message); return }
+      }
       onSave(); onClose()
     } finally { setSaving(false) }
   }
@@ -670,8 +673,7 @@ const ModalImportarColegios = ({ onClose, onSave }) => {
       if (!row.nombre || !row.departamento_nombre || !row.municipio) { omitidos++; continue }
       const usuario = await generarUsuario(row.departamento_nombre, row.municipio)
       const clavePlain = generarClave(usuario)
-      const { data: hashed } = await supabase.rpc('hashear_password', { p_password: clavePlain })
-      const { error } = await supabase.from('colegios').insert({
+      const { data: creado, error } = await supabase.from('colegios').insert({
         nombre:              row.nombre,
         departamento_nombre: row.departamento_nombre,
         municipio:           row.municipio,
@@ -691,11 +693,11 @@ const ModalImportarColegios = ({ onClose, onSave }) => {
           email:    row.contacto_email    || '',
         }],
         usuario,
-        password_plain: clavePlain,
-        password_hash: hashed,
         activo: false,
-      })
-      if (error) omitidos++; else creados++
+      }).select('id').single()
+      if (error) { omitidos++; continue }
+      try { await asignarClaveServidor(creado.id, clavePlain); creados++ }
+      catch { omitidos++ }
     }
     setMsg(`✅ ${creados} colegios importados.${omitidos > 0 ? ` ${omitidos} omitidos (datos incompletos o duplicados).` : ''}`)
     setMode('lista'); onSave(); setUploading(false)
@@ -1242,8 +1244,24 @@ const ModalBorrarResultados = ({ colegio, onClose, onDone }) => {
 const POR_PAG = 50
 
 // ── MAIN ─────────────────────────────────────────────────────
+// El navegador nunca escribe ni lee las credenciales de un colegio: se las pide o
+// se las asigna al servidor, que hashea, cifra y descifra con una llave que solo
+// él tiene.
+async function asignarClaveServidor(id, clave) {
+  const r = await fetch('/api/colegio-reset-clave', {
+    method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, clave }),
+  })
+  if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d?.error || 'No pude asignar la clave') }
+}
+
 export default function AdminColegios({ onUpdate }) {
   const [colegios, setColegios]         = useState([])
+  // Las claves ya no llegan con la lista: se piden de a una a un endpoint que
+  // verifica la sesión en el servidor y descifra. Se cachean por sesión.
+  const [claves, setClaves]             = useState({})
+  const [claveCargando, setClaveCargando] = useState(null)
   const [total, setTotal]               = useState(0)
   const [pagina, setPagina]             = useState(1)
   const [loading, setLoading]           = useState(true)
@@ -1266,14 +1284,38 @@ export default function AdminColegios({ onUpdate }) {
     setModalReset({ colegio, nuevaClave: nueva, guardada: false })
   }
 
+  const pedirClave = async (colegioId) => {
+    if (claves[colegioId] !== undefined) return claves[colegioId]
+    setClaveCargando(colegioId)
+    try {
+      const r = await fetch(`/api/colegio-clave?id=${colegioId}`, { credentials: 'include' })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d?.error || 'No pude obtener la clave')
+      const clave = d.clave || '—'
+      setClaves(prev => ({ ...prev, [colegioId]: clave }))
+      return clave
+    } catch (e) {
+      setMsg('⚠️ ' + e.message)
+      return null
+    } finally { setClaveCargando(null) }
+  }
+
   const confirmarReset = async () => {
     if (!modalReset) return
     setReseteando(true)
-    const { data: hashed } = await supabase.rpc('hashear_password', { p_password: modalReset.nuevaClave })
-    await supabase.from('colegios').update({
-      password_plain: modalReset.nuevaClave,
-      password_hash: hashed,
-    }).eq('id', modalReset.colegio.id)
+    // El servidor hashea y cifra: el navegador ya no toca esas columnas.
+    const resp = await fetch('/api/colegio-reset-clave', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: modalReset.colegio.id, clave: modalReset.nuevaClave }),
+    })
+    if (!resp.ok) {
+      const d = await resp.json().catch(() => ({}))
+      setMsg('❌ No pude cambiar la clave: ' + (d?.error || 'error del servidor'))
+      setReseteando(false)
+      return
+    }
+    setClaves(prev => { const n = { ...prev }; delete n[modalReset.colegio.id]; return n })
     setModalReset(r => ({ ...r, guardada: true }))
     await loadColegios()
     setReseteando(false)
@@ -1456,17 +1498,28 @@ export default function AdminColegios({ onUpdate }) {
                         <span style={{ fontFamily:'monospace', fontSize:12, color:C.text,
                           background:C.bg, border:`1px solid ${C.grayLt}`,
                           borderRadius:4, padding:'2px 8px', letterSpacing:'0.04em' }}>
-                          {copiado === c.id + '_show' ? c.password_plain || '—' : '••••••••'}
+                          {copiado === c.id + '_show' ? (claves[c.id] ?? '········') : '••••••••'}
                         </span>
                         <button
                           title={copiado === c.id + '_show' ? 'Ocultar' : 'Ver clave'}
-                          onClick={() => setCopiado(copiado === c.id + '_show' ? null : c.id + '_show')}
+                          disabled={claveCargando === c.id}
+                          onClick={async () => {
+                            if (copiado === c.id + '_show') { setCopiado(null); return }
+                            const clave = await pedirClave(c.id)
+                            if (clave !== null) setCopiado(c.id + '_show')
+                          }}
                           style={{ background:'none', border:'none', cursor:'pointer', fontSize:13, padding:2, color:C.gray }}>
                           {copiado === c.id + '_show' ? '🙈' : '👁'}
                         </button>
                         <button
                           title="Copiar clave"
-                          onClick={() => { navigator.clipboard.writeText(c.password_plain || ''); setCopiado(c.id + '_copy'); setTimeout(()=>setCopiado(null),1500) }}
+                          disabled={claveCargando === c.id}
+                          onClick={async () => {
+                            const clave = await pedirClave(c.id)
+                            if (clave === null) return
+                            navigator.clipboard.writeText(clave)
+                            setCopiado(c.id + '_copy'); setTimeout(()=>setCopiado(null),1500)
+                          }}
                           style={{ background:'none', border:'none', cursor:'pointer', fontSize:13, padding:2,
                             color: copiado === c.id + '_copy' ? C.green : C.gray }}>
                           {copiado === c.id + '_copy' ? '✓' : '⧉'}
