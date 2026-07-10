@@ -57,6 +57,24 @@ async function _srvFail(ip) {
   } catch {}
 }
 
+// Contador por CUENTA (llave login:<usuario>). Complementa el de IP: frena un ataque
+// distribuido (muchas IPs) contra un mismo usuario, que el límite por IP no detiene.
+// Límite: 5 intentos fallidos → bloqueo 15 min. Fail-open: si la RPC falla, no bloquea.
+async function _cuentaBlocked(key) {
+  try {
+    const { data } = await adminSupabase.rpc('rl_check', { p_key: key })
+    return data === true
+  } catch { return false }
+}
+async function _cuentaFail(key) {
+  try {
+    await adminSupabase.rpc('rl_fail', { p_key: key, p_max: 5, p_window_min: 15 })
+  } catch {}
+}
+async function _cuentaClear(key) {
+  try { await adminSupabase.from('login_attempts').delete().eq('ip', key) } catch {}
+}
+
 const ALLOWED_ORIGINS = [
   'https://portal-resultados-miltonochoa.vercel.app',
   'https://resultados.aamocolombia.com',
@@ -90,6 +108,11 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Contraseña inválida' })
   if (!usuario || !password)
     return res.status(400).json({ error: 'Faltan credenciales' })
+
+  // Rate limiting por CUENTA (además del de IP): 5 intentos fallidos → bloqueo 15 min.
+  const cuentaKey = `login:${String(usuario).trim().toLowerCase()}`
+  if (await _cuentaBlocked(cuentaKey))
+    return res.status(429).json({ error: 'Demasiados intentos con esta cuenta. Espera 15 minutos.' })
 
   try {
     // ── Paso 1: validar credenciales ────────────────────────────────────────
@@ -154,8 +177,13 @@ export default async function handler(req, res) {
 
     if (!userResult) {
       await _srvFail(ip)
+      await _cuentaFail(cuentaKey)
       return res.status(401).json({ error: 'Credenciales incorrectas' })
     }
+
+    // Credenciales correctas → limpiar el contador por cuenta (no penalizar los
+    // intentos fallidos previos de un usuario legítimo que al fin acertó).
+    await _cuentaClear(cuentaKey)
 
     // Validar que el portal coincida con el rol
     if (portal === 'admin' && userResult.role !== 'admin')
