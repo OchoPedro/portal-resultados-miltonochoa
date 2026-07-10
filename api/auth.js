@@ -175,6 +175,37 @@ export default async function handler(req, res) {
       }
     }
 
+    // Puerta temporal: credenciales de un contrato (p. ej. Gobernación de Santander)
+    // que caducan por fecha. NO es una identidad nueva: es un usuario/clave alterno que
+    // apunta al MISMO colegio o estudiante, así que los resultados son idénticos y viven
+    // en la cuenta real. Al vencer, se borra la credencial y la cuenta real sigue intacta.
+    if (!userResult) {
+      const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
+      const { data: temp } = await adminSupabase
+        .from('credenciales_temporales')
+        .select('colegio_id, estudiante_id, password_hash')
+        .eq('usuario_temp', usuario.trim())
+        .eq('activo', true)
+        .lte('vigente_desde', hoy)
+        .gte('vigente_hasta', hoy)
+        .maybeSingle()
+      if (temp && !isPlaintextHash(temp.password_hash) && await checkPassword(temp.password_hash, password)) {
+        if (temp.colegio_id) {
+          const { data: colegio } = await adminSupabase
+            .from('colegios')
+            .select('id, nombre, usuario, ciudad, municipio, departamento_nombre, contactos, ultima_sesion')
+            .eq('id', temp.colegio_id).eq('activo', true).single()
+          if (colegio) userResult = { role: 'colegio', data: colegio }
+        } else if (temp.estudiante_id) {
+          const { data: est } = await adminSupabase
+            .from('estudiantes')
+            .select('id, nombre, usuario, activo, grado, salon, colegio_id, ultima_sesion, colegios(nombre, ciudad)')
+            .eq('id', temp.estudiante_id).eq('activo', true).single()
+          if (est) userResult = { role: 'estudiante', data: est }
+        }
+      }
+    }
+
     if (!userResult) {
       await _srvFail(ip)
       await _cuentaFail(cuentaKey)
