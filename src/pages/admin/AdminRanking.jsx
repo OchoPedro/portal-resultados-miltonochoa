@@ -1831,6 +1831,277 @@ function ClasificacionICFES({ session }) {
 }
 
 // ─── Componente principal ────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// RANKING ICFES — mismo patrón que el Ranking (puntaje global), pero ordenando por
+// el ÍNDICE TOTAL del ICFES (clasificacion_icfes.puntaje_global, escala 0–1) y
+// mostrando la clasificación oficial A+/A/B/C/D + los índices por área. Fija
+// periodo=1 y grado=11 (Saber 11 estándar, único disponible) para comparación justa.
+// ═══════════════════════════════════════════════════════════════════════════════
+const ANIOS_RANK_ICFES = [2025, 2024, 2023, 2022]
+const POR_PAG_ICFES = 100
+
+// Muestra un índice ICFES (0–1) con 3 decimales, coloreado por nivel.
+const IdxScore = ({ val, fuerte }) => {
+  const n = parseFloat(val)
+  if (isNaN(n)) return <span style={{ color:C.gray }}>—</span>
+  const color = n >= 0.65 ? C.green : n >= 0.55 ? C.navy : n >= 0.45 ? C.amber : C.red
+  return <span style={{ fontWeight: fuerte ? 700 : 500, color }}>{n.toFixed(3)}</span>
+}
+
+const TrendIcfes = ({ diff }) => {
+  if (diff == null) return <span style={{ color:C.grayLt, fontSize:11 }}>—</span>
+  if (diff > 0) return <span style={{ color:C.green, fontWeight:700, fontSize:16 }} title={`Subió ${diff} posiciones`}>↑</span>
+  if (diff < 0) return <span style={{ color:C.red, fontWeight:700, fontSize:16 }} title={`Bajó ${-diff} posiciones`}>↓</span>
+  return <span style={{ color:C.gray, fontSize:12 }} title="Se mantuvo">=</span>
+}
+
+function RankingICFES() {
+  const [anio, setAnio]           = useState(ANIOS_RANK_ICFES[0])
+  const [vista, setVista]         = useState('colegios')  // colegios | regiones | departamentos | municipios
+  const [buscar, setBuscar]       = useState('')
+  const [filtroDepto, setFiltroDepto]   = useState('')
+  const [filtroSector, setFiltroSector] = useState('')
+  const [pagina, setPagina]       = useState(1)
+
+  const [data, setData]           = useState([])
+  const [total, setTotal]         = useState(0)
+  const [loading, setLoading]     = useState(false)
+  const [agrupado, setAgrupado]   = useState([])
+  const [loadingAgrp, setLoadingAgrp] = useState(false)
+
+  useEffect(() => { setPagina(1) }, [anio, buscar, filtroDepto, filtroSector, vista])
+
+  // ── NACIONAL: ordena por índice total en el servidor y pagina (puesto = posición) ──
+  useEffect(() => {
+    if (vista !== 'colegios') return
+    let cancel = false
+    ;(async () => {
+      setLoading(true)
+      const offset = (pagina - 1) * POR_PAG_ICFES
+      let q = supabase.from('clasificacion_icfes')
+        .select('codigo_dane,nombre_sede,municipio,departamento,sector,clasificacion,idx_matematicas,idx_cn,idx_sociales,idx_lc,idx_ingles,puntaje_global', { count:'exact' })
+        .eq('anio', anio).eq('periodo', 1).eq('grado', 11)
+        .not('puntaje_global', 'is', null)
+        .order('puntaje_global', { ascending:false })
+        .order('nombre_sede', { ascending:true })
+        .range(offset, offset + POR_PAG_ICFES - 1)
+      if (buscar.trim())  q = q.ilike('nombre_sede', `%${buscar.trim()}%`)
+      if (filtroDepto)    q = q.eq('departamento', filtroDepto)
+      if (filtroSector)   q = q.eq('sector', filtroSector)
+      const { data: rows, count } = await q
+      // Tendencia: índice total vs año anterior por colegio (mismo DANE).
+      let prevMap = {}
+      if (rows?.length && anio > 2022) {
+        const { data: prev } = await supabase.from('clasificacion_icfes')
+          .select('codigo_dane,puntaje_global')
+          .eq('anio', anio - 1).eq('periodo', 1).eq('grado', 11)
+          .in('codigo_dane', rows.map(r => r.codigo_dane).filter(Boolean))
+        ;(prev || []).forEach(r => { prevMap[r.codigo_dane] = parseFloat(r.puntaje_global) })
+      }
+      if (cancel) return
+      setData((rows || []).map((r, i) => ({
+        ...r, puesto: offset + i + 1,
+        // Aquí la "tendencia" del nacional compara el índice total (subió/bajó), no el puesto.
+        tendencia: prevMap[r.codigo_dane] != null ? Math.sign(parseFloat(r.puntaje_global) - prevMap[r.codigo_dane]) : null,
+      })))
+      setTotal(count || 0)
+      setLoading(false)
+    })()
+    return () => { cancel = true }
+  }, [anio, pagina, buscar, filtroDepto, filtroSector, vista])
+
+  // ── AGRUPADO (regiones/departamentos/municipios): promedia y ordena por índice total ──
+  useEffect(() => {
+    if (vista === 'colegios') return
+    let cancel = false
+    ;(async () => {
+      setLoadingAgrp(true)
+      const cols = 'departamento,municipio,num_evaluados,idx_matematicas,idx_cn,idx_sociales,idx_lc,idx_ingles,puntaje_global'
+      const buildQ = (year) => {
+        let q = supabase.from('clasificacion_icfes').select(cols)
+          .eq('anio', year).eq('periodo', 1).eq('grado', 11)
+          .not('puntaje_global', 'is', null).limit(20000)
+        if (vista === 'municipios' && filtroDepto) q = q.eq('departamento', filtroDepto)
+        if (filtroSector) q = q.eq('sector', filtroSector)
+        return q
+      }
+      const groupKey = (r) =>
+        vista === 'regiones'   ? (DEPTO_REGION[r.departamento] || 'Sin región')
+        : vista === 'municipios' ? `${r.municipio}|||${r.departamento}`
+        : r.departamento
+      const aggregate = (rows) => {
+        const g = {}
+        ;(rows || []).forEach(r => {
+          const k = groupKey(r)
+          if (!g[k]) g[k] = { nombre: vista === 'municipios' ? r.municipio : k, departamento: r.departamento,
+            colegios:0, evaluados:0, mate:0, cn:0, soc:0, lc:0, ing:0, total:0 }
+          const x = g[k]
+          x.colegios++
+          x.evaluados += parseInt(r.num_evaluados || 0)
+          x.mate += parseFloat(r.idx_matematicas || 0); x.cn  += parseFloat(r.idx_cn || 0)
+          x.soc  += parseFloat(r.idx_sociales || 0);    x.lc  += parseFloat(r.idx_lc || 0)
+          x.ing  += parseFloat(r.idx_ingles || 0);      x.total += parseFloat(r.puntaje_global || 0)
+        })
+        return Object.values(g).map(x => ({
+          nombre:x.nombre, departamento:x.departamento, colegios:x.colegios, evaluados:x.evaluados,
+          mate:x.mate/x.colegios, cn:x.cn/x.colegios, soc:x.soc/x.colegios,
+          lc:x.lc/x.colegios, ing:x.ing/x.colegios, total:x.total/x.colegios,
+        })).sort((a, b) => b.total - a.total)
+      }
+      const [{ data: curr }, { data: prev }] = await Promise.all([buildQ(anio), buildQ(anio - 1)])
+      const cAgg = aggregate(curr), pAgg = aggregate(prev)
+      const prevRank = {}
+      pAgg.forEach((x, i) => { prevRank[vista === 'municipios' ? `${x.nombre}|||${x.departamento}` : x.nombre] = i + 1 })
+      if (cancel) return
+      setAgrupado(cAgg.map((x, i) => {
+        const k = vista === 'municipios' ? `${x.nombre}|||${x.departamento}` : x.nombre
+        const pr = prevRank[k]
+        return { ...x, puesto: i + 1, tendencia: pr != null ? pr - (i + 1) : null }
+      }))
+      setLoadingAgrp(false)
+    })()
+    return () => { cancel = true }
+  }, [vista, anio, filtroDepto, filtroSector])
+
+  const totalPags = Math.ceil(total / POR_PAG_ICFES)
+
+  return (
+    <div>
+      {/* Aviso: qué es este ranking */}
+      <div style={{ background:'#EFF6FF', border:'1px solid #BFDBFE', borderRadius:8, padding:'10px 16px',
+        marginBottom:16, fontFamily:'Inter', fontSize:12.5, color:'#1E40AF' }}>
+        Ordena los colegios por el <strong>Índice Total del ICFES</strong> (0–1), mostrando también la
+        clasificación oficial A+/A/B/C/D y los índices por área. Saber 11 · grado 11.
+      </div>
+
+      {/* Año + vistas */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, flexWrap:'wrap', gap:12 }}>
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+          {ANIOS_RANK_ICFES.map(a => <Pill key={a} active={anio===a} onClick={() => setAnio(a)}>{a}</Pill>)}
+        </div>
+        <div style={{ display:'flex', gap:4, background:C.bg, borderRadius:8, padding:4 }}>
+          {[['colegios','🎯 Nacional'],['regiones','🌎 Regiones'],['departamentos','🗺 Departamentos'],['municipios','🏙 Municipios']].map(([v,l]) => (
+            <button key={v} onClick={() => setVista(v)} style={{
+              padding:'7px 14px', borderRadius:6, border:'none', fontFamily:'Inter', fontSize:12,
+              fontWeight: vista===v ? 600 : 400, background: vista===v ? C.navy : 'transparent',
+              color: vista===v ? C.white : C.gray, cursor:'pointer', transition:'all 0.15s',
+            }}>{l}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Filtros */}
+      <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:12, flexWrap:'wrap' }}>
+        {vista === 'colegios' && (
+          <input value={buscar} onChange={e => setBuscar(e.target.value)} placeholder="Buscar colegio…"
+            style={{ padding:'8px 12px', border:`1px solid ${C.grayLt}`, borderRadius:7, fontFamily:'Inter',
+              fontSize:12, minWidth:200, outline:'none', color:C.text }} />
+        )}
+        {(vista === 'colegios' || vista === 'municipios') && (
+          <SelectF value={filtroDepto} onChange={setFiltroDepto} options={DEPARTAMENTOS_COL} placeholder="Departamento" />
+        )}
+        <SelectF value={filtroSector} onChange={setFiltroSector} options={SECTORES} placeholder="Sector" />
+        {(buscar || filtroDepto || filtroSector) && (
+          <button onClick={() => { setBuscar(''); setFiltroDepto(''); setFiltroSector('') }}
+            style={{ padding:'7px 12px', border:`1px solid ${C.red}`, borderRadius:7, background:'transparent',
+              color:C.red, fontFamily:'Inter', fontSize:12, cursor:'pointer' }}>Limpiar ✕</button>
+        )}
+      </div>
+
+      <div style={{ background:C.white, borderRadius:10, border:`1px solid ${C.grayLt}`, overflow:'hidden',
+        boxShadow:'0 1px 4px rgba(10,31,61,0.05)' }}>
+        {(vista === 'colegios' ? loading : loadingAgrp) ? (
+          <div style={{ textAlign:'center', padding:60, color:C.gray, fontFamily:'Inter' }}>Cargando…</div>
+        ) : (vista === 'colegios' ? data : agrupado).length === 0 ? (
+          <div style={{ textAlign:'center', padding:60, color:C.gray, fontFamily:'Inter' }}>Sin resultados.</div>
+        ) : (
+          <div style={{ overflowX:'auto' }}>
+            <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:'Inter' }}>
+              <thead>
+                {vista === 'colegios' ? (
+                  <tr>
+                    <Th style={{width:52, textAlign:'center'}}>#</Th>
+                    <Th>Colegio</Th>
+                    <Th>Municipio</Th>
+                    <Th style={{textAlign:'center'}}>Clasif.</Th>
+                    <Th style={{textAlign:'center'}}>Mat.</Th>
+                    <Th style={{textAlign:'center'}}>C.N.</Th>
+                    <Th style={{textAlign:'center'}}>Soc.</Th>
+                    <Th style={{textAlign:'center'}}>L.C.</Th>
+                    <Th style={{textAlign:'center'}}>Inglés</Th>
+                    <Th style={{textAlign:'center'}}>Índice total</Th>
+                    <Th style={{textAlign:'center'}}>Tend.</Th>
+                  </tr>
+                ) : (
+                  <tr>
+                    <Th style={{width:52, textAlign:'center'}}>#</Th>
+                    <Th>{vista==='regiones' ? 'Región' : vista==='municipios' ? 'Municipio' : 'Departamento'}</Th>
+                    {vista==='municipios' && <Th>Departamento</Th>}
+                    <Th style={{textAlign:'center'}}>Tend.</Th>
+                    <Th style={{textAlign:'center'}}>Colegios</Th>
+                    <Th style={{textAlign:'center'}}>Evaluados</Th>
+                    <Th style={{textAlign:'center'}}>Mat.</Th>
+                    <Th style={{textAlign:'center'}}>C.N.</Th>
+                    <Th style={{textAlign:'center'}}>Soc.</Th>
+                    <Th style={{textAlign:'center'}}>L.C.</Th>
+                    <Th style={{textAlign:'center'}}>Inglés</Th>
+                    <Th style={{textAlign:'center'}}>Índice total</Th>
+                  </tr>
+                )}
+              </thead>
+              <tbody>
+                {vista === 'colegios' ? data.map(r => (
+                  <tr key={r.codigo_dane + r.nombre_sede} style={{ borderBottom:`1px solid ${C.bg2}`, background: rowBg(r.puesto) }}>
+                    <Td style={{ fontWeight:700, color:C.navy, textAlign:'center' }}>{medalla(r.puesto) || r.puesto}</Td>
+                    <Td style={{ fontWeight:600, color:C.navy }}>{r.nombre_sede}</Td>
+                    <Td style={{ color:C.gray, fontSize:11 }}>{r.municipio}<div style={{ color:C.grayLt, fontSize:10 }}>{r.departamento}</div></Td>
+                    <Td style={{ textAlign:'center' }}><ClasBadge val={r.clasificacion} /></Td>
+                    <Td style={{ textAlign:'center' }}><IdxScore val={r.idx_matematicas} /></Td>
+                    <Td style={{ textAlign:'center' }}><IdxScore val={r.idx_cn} /></Td>
+                    <Td style={{ textAlign:'center' }}><IdxScore val={r.idx_sociales} /></Td>
+                    <Td style={{ textAlign:'center' }}><IdxScore val={r.idx_lc} /></Td>
+                    <Td style={{ textAlign:'center' }}><IdxScore val={r.idx_ingles} /></Td>
+                    <Td style={{ textAlign:'center' }}><IdxScore val={r.puntaje_global} fuerte /></Td>
+                    <Td style={{ textAlign:'center' }}><TrendIcfes diff={r.tendencia} /></Td>
+                  </tr>
+                )) : agrupado.map(g => (
+                  <tr key={g.nombre + g.departamento} style={{ borderBottom:`1px solid ${C.bg2}`, background: rowBg(g.puesto) }}>
+                    <Td style={{ fontWeight:700, color:C.navy, textAlign:'center' }}>{medalla(g.puesto) || g.puesto}</Td>
+                    <Td style={{ fontWeight:600, color:C.navy }}>{g.nombre}</Td>
+                    {vista==='municipios' && <Td style={{ color:C.gray, fontSize:11 }}>{g.departamento}</Td>}
+                    <Td style={{ textAlign:'center' }}><TrendIcfes diff={g.tendencia} /></Td>
+                    <Td style={{ textAlign:'center', color:C.gray }}>{g.colegios}</Td>
+                    <Td style={{ textAlign:'center', color:C.gray }}>{g.evaluados.toLocaleString('es-CO')}</Td>
+                    <Td style={{ textAlign:'center' }}><IdxScore val={g.mate} /></Td>
+                    <Td style={{ textAlign:'center' }}><IdxScore val={g.cn} /></Td>
+                    <Td style={{ textAlign:'center' }}><IdxScore val={g.soc} /></Td>
+                    <Td style={{ textAlign:'center' }}><IdxScore val={g.lc} /></Td>
+                    <Td style={{ textAlign:'center' }}><IdxScore val={g.ing} /></Td>
+                    <Td style={{ textAlign:'center' }}><IdxScore val={g.total} fuerte /></Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Paginación (solo nacional) */}
+      {vista === 'colegios' && totalPags > 1 && (
+        <div style={{ display:'flex', justifyContent:'center', alignItems:'center', gap:12, marginTop:16, fontFamily:'Inter' }}>
+          <button onClick={() => setPagina(p => Math.max(1, p - 1))} disabled={pagina <= 1}
+            style={{ padding:'7px 14px', border:`1px solid ${C.grayLt}`, borderRadius:7, background:C.white,
+              color: pagina<=1 ? C.grayLt : C.navy, cursor: pagina<=1 ? 'default' : 'pointer', fontSize:12 }}>← Anterior</button>
+          <span style={{ fontSize:12, color:C.gray }}>Página {pagina} de {totalPags} · {total.toLocaleString('es-CO')} colegios</span>
+          <button onClick={() => setPagina(p => Math.min(totalPags, p + 1))} disabled={pagina >= totalPags}
+            style={{ padding:'7px 14px', border:`1px solid ${C.grayLt}`, borderRadius:7, background:C.white,
+              color: pagina>=totalPags ? C.grayLt : C.navy, cursor: pagina>=totalPags ? 'default' : 'pointer', fontSize:12 }}>Siguiente →</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function AdminRanking({ session }) {
   const mobile = useMobile()
   const [subTab, setSubTab] = useState('ranking')
@@ -1996,6 +2267,7 @@ export default function AdminRanking({ session }) {
       {/* Sub-tabs */}
       <div style={{ display:'flex', borderBottom:`1px solid ${C.grayLt}`, marginBottom:24 }}>
         <SubTabBtn id="ranking"       label="🏆 Ranking" />
+        <SubTabBtn id="ranking_icfes" label="🎯 Ranking ICFES" />
         <SubTabBtn id="clasificacion" label="📊 Clasificación ICFES" />
       </div>
 
@@ -2340,6 +2612,9 @@ export default function AdminRanking({ session }) {
           )}
         </div>
       )}
+
+      {/* ── Ranking ICFES ── */}
+      {subTab === 'ranking_icfes' && <RankingICFES />}
 
       {/* ── Clasificación ICFES ── */}
       {subTab === 'clasificacion' && (
