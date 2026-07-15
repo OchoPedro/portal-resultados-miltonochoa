@@ -1,13 +1,28 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import {
-  C, getColor, getLevel, avg,
+  C, getLevel, avg,
   Card, CardTitle, Badge, KpiCard, TabBar, ScoreGauge, Sidebar, useMobile, useTablet
 } from '../components/ui'
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend, Cell
 } from 'recharts'
+
+// Semáforo por área — mismos umbrales pedagógicos AAMO que usa el dashboard de colegio.
+// Las barras sí pueden usar verde (nivel avanzado); el texto/números nunca usan verde.
+const SEMAFORO_T = {
+  mat: [35, 50, 70], cn: [40, 55, 70], soc: [40, 55, 70],
+  lc: [35, 50, 65], ing: [36, 57, 70], _: [24, 44, 64],
+}
+const semaforoNivel = (v, area = '_') => {
+  const [t1, t2, t3] = SEMAFORO_T[area] || SEMAFORO_T['_']
+  return v > t3 ? 3 : v > t2 ? 2 : v > t1 ? 1 : 0
+}
+const NIVEL_COLOR_BARRA = [C.red, '#F97316', '#F59E0B', C.green]
+const NIVEL_COLOR_TEXTO = [C.red, '#F97316', '#F59E0B', C.navy]
+const colorBarra = (v, area) => NIVEL_COLOR_BARRA[semaforoNivel(v, area)]
+const colorTexto = (v, area) => NIVEL_COLOR_TEXTO[semaforoNivel(v, area)]
 
 export default function EstudianteDashboard({ session, onLogout }) {
   const mobile = useMobile()
@@ -17,6 +32,9 @@ export default function EstudianteDashboard({ session, onLogout }) {
   const [compañeros, setCompañeros] = useState([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('resumen')
+  const [pctScope, setPctScope] = useState('plantel')
+  const [pctGeo, setPctGeo] = useState({})
+  const [generando, setGenerando] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -24,7 +42,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
       try {
         const { data: resultados } = await supabase
           .from('resultados_estudiante')
-          .select('*, pruebas(codigo, nombre, fecha, grado)')
+          .select('*, pruebas(codigo, nombre, fecha, grado, estructura_excel)')
           .eq('estudiante_id', session.id)
           .order('created_at', { ascending: false })
 
@@ -35,7 +53,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
           const r = resultados[0]
           const { data: colegioPares } = await supabase
             .from('resultados_estudiante')
-            .select('puntaje_global, estudiante_id, estudiantes(nombre)')
+            .select('puntaje_global, estudiante_id, estudiantes(nombre, grado, salon)')
             .eq('colegio_id', r.colegio_id)
             .eq('prueba_id', r.prueba_id)
             .order('puntaje_global', { ascending: false })
@@ -59,12 +77,25 @@ export default function EstudianteDashboard({ session, onLogout }) {
     if (!r) return
     const { data: colegioPares } = await supabase
       .from('resultados_estudiante')
-      .select('puntaje_global, estudiante_id, estudiantes(nombre)')
+      .select('puntaje_global, estudiante_id, estudiantes(nombre, grado, salon)')
       .eq('colegio_id', r.colegio_id)
       .eq('prueba_id', r.prueba_id)
       .order('puntaje_global', { ascending: false })
     setCompañeros(colegioPares || [])
   }
+
+  // Percentiles geográficos (municipio/departamento/región/nacional) para la prueba activa.
+  const pruebaActivaId = todos[Math.min(selectedIdx, Math.max(0, todos.length - 1))]?.prueba_id
+  useEffect(() => {
+    if (!pruebaActivaId) { setPctGeo({}); return }
+    let cancelled = false
+    supabase.rpc('get_percentil_estudiante', {
+      p_estudiante_id: session.id, p_prueba_id: pruebaActivaId,
+    }).then(({ data }) => {
+      if (!cancelled) setPctGeo(data || {})
+    })
+    return () => { cancelled = true }
+  }, [pruebaActivaId])
 
   if (loading) return (
     <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'center',
@@ -96,21 +127,118 @@ export default function EstudianteDashboard({ session, onLogout }) {
     ? Math.round(avg(compañeros.map(c => c.puntaje_global)))
     : 0
   const miPuesto = compañeros.findIndex(c => c.estudiante_id === session.id) + 1 || 0
-  const percentil = miPuesto && compañeros.length
+  const percentilPlantel = miPuesto && compañeros.length
     ? Math.round((1 - (miPuesto - 1) / compañeros.length) * 100)
     : 0
+  const PCT_SCOPE_LABEL = { plantel:'colegio', municipio:'municipio', departamento:'departamento', region:'región', nacional:'nacional' }
+  const geoKey = { plantel:null, municipio:'municipio_pct', departamento:'departamento_pct', region:'region_pct', nacional:'nacional_pct' }[pctScope]
+  const percentil = geoKey ? (pctGeo?.[geoKey] ?? null) : percentilPlantel
+
+  // Mención de Honor: se otorga al mejor puntaje del MISMO grado y salón, para esta prueba.
+  // (mismo criterio que la Mención de Honor del colegio filtrada por grado y salón)
+  const grupoMencion = compañeros.filter(c =>
+    String(c.estudiantes?.grado ?? '') === String(session.grado ?? '') &&
+    String(c.estudiantes?.salon ?? '') === String(session.salon ?? ''))
+  const maxGrupo = grupoMencion.length
+    ? Math.max(...grupoMencion.map(c => c.puntaje_global ?? -Infinity))
+    : -Infinity
+  const esMencion = r.puntaje_global != null && r.puntaje_global === maxGrupo
+
+  // Diploma en PDF (idéntico al del colegio), para el propio estudiante destacado.
+  const descargarDiploma = async () => {
+    if (!esMencion || generando) return
+    setGenerando(true)
+    try {
+      const { PDFDocument, StandardFonts, rgb, degrees } = await import('pdf-lib')
+      const doc = await PDFDocument.create()
+      const page = doc.addPage([842, 595])
+      const W = 842, H = 595
+      const timesB = await doc.embedFont(StandardFonts.TimesRomanBold)
+      const timesI = await doc.embedFont(StandardFonts.TimesRomanItalic)
+      const helv   = await doc.embedFont(StandardFonts.Helvetica)
+      const helvB  = await doc.embedFont(StandardFonts.HelveticaBold)
+      const navy  = rgb(10/255, 31/255, 61/255)
+      const green = rgb(45/255, 155/255, 111/255)
+      const gold  = rgb(0.70, 0.55, 0.24)
+      const gray  = rgb(0.42, 0.45, 0.5)
+      const clean = (s) => String(s ?? '').replace(/[^\x20-\xFF]/g, '')
+      const center = (t, y, f, s, c, ls = 0) => {
+        t = clean(t)
+        if (ls > 0) {
+          const tot = [...t].reduce((a, ch) => a + f.widthOfTextAtSize(ch, s) + ls, 0) - ls
+          let x = (W - tot) / 2
+          for (const ch of t) { page.drawText(ch, { x, y, size: s, font: f, color: c }); x += f.widthOfTextAtSize(ch, s) + ls }
+        } else {
+          const w = f.widthOfTextAtSize(t, s)
+          page.drawText(t, { x: (W - w) / 2, y, size: s, font: f, color: c })
+        }
+      }
+      const diamond = (cx, cy, rr, color) => page.drawSvgPath(`M ${cx} ${cy-rr} L ${cx+rr} ${cy} L ${cx} ${cy+rr} L ${cx-rr} ${cy} Z`, { color })
+      const branch = (cx, cy, R, a0, a1, ls) => {
+        let prev = null; const n = 8
+        for (let i = 0; i <= n; i++) { const ang = (a0 + (a1-a0)*i/n) * Math.PI/180; const x = cx+R*Math.cos(ang), y = cy+R*Math.sin(ang); if (prev) page.drawLine({ start: prev, end: { x, y }, thickness: 1, color: gold }); prev = { x, y } }
+        for (let i = 1; i < n; i++) { const t = i/n; const ad = a0 + (a1-a0)*t; const a = ad*Math.PI/180; const x = cx+R*Math.cos(a), y = cy+R*Math.sin(a); const sz = 8 - t*2.6; page.drawEllipse({ x, y, xScale: sz, yScale: sz*0.4, color: gold, rotate: degrees(ad + 90*ls) }) }
+      }
+      const laurel = (cx, cy, R) => { branch(cx, cy, R, 256, 116, 1); branch(cx, cy, R, 284, 424, -1) }
+
+      const pruebaNombre = prueba ? (prueba.nombre || prueba.codigo) : 'la prueba'
+      const fecha = new Date().toLocaleDateString('es-CO', { day:'numeric', month:'long', year:'numeric', timeZone:'America/Bogota' })
+      const nombre = session.nombre || 'Estudiante'
+      const grado  = session.grado ?? '—'
+      const salon  = session.salon ?? '—'
+      const punt   = String(r.puntaje_global ?? '—')
+
+      page.drawRectangle({ x:22, y:22, width:W-44, height:H-44, borderColor:navy, borderWidth:3 })
+      page.drawRectangle({ x:30, y:30, width:W-60, height:H-60, borderColor:gold, borderWidth:1 })
+      page.drawRectangle({ x:35, y:35, width:W-70, height:H-70, borderColor:gold, borderWidth:0.4 })
+      for (const [sx, sy] of [[46,46],[W-46,46],[46,H-46],[W-46,H-46]]) { diamond(sx, sy, 6, gold); diamond(sx, sy, 2.4, navy) }
+      center('GRUPO MILTON OCHOA', H-100, helvB, 12, navy, 3)
+      center('EXPERTOS EN EVALUACIÓN', H-116, helv, 8, gray, 2)
+      page.drawRectangle({ x:W/2-70, y:H-132, width:56, height:0.8, color:gold }); page.drawRectangle({ x:W/2+14, y:H-132, width:56, height:0.8, color:gold }); diamond(W/2, H-131, 4, gold)
+      center('Mención de Honor', H-186, timesB, 38, navy)
+      center('Se otorga la presente distinción a', H-224, timesI, 15, gray)
+      center(nombre, H-272, timesB, 40, navy)
+      page.drawRectangle({ x:W/2-90, y:H-286, width:180, height:0.8, color:gold }); diamond(W/2-90, H-285.6, 3, gold); diamond(W/2+90, H-285.6, 3, gold)
+      center(`Grado ${grado}      Salón ${salon}`, H-308, helv, 12, gray, 1)
+      center(`por su destacado desempeño en el ${pruebaNombre}`, H-340, timesI, 14, gray)
+      const cy = 148
+      center('PUNTAJE GLOBAL', cy+56, helvB, 8.5, gray, 2)
+      laurel(W/2, cy, 48)
+      center(punt, cy-6, timesB, 42, green)
+      center('de 500 puntos', cy-26, helv, 8.5, gray)
+      page.drawRectangle({ x:W/2-110, y:68, width:220, height:0.8, color:navy })
+      const cn = clean(session.colegios?.nombre || 'Institución')
+      let cnSize = 13; while (timesB.widthOfTextAtSize(cn, cnSize) > 660 && cnSize > 8) cnSize -= 0.5
+      center(cn, 50, timesB, cnSize, navy)
+      center(`Expedido el ${fecha}`, 36, helv, 9, gray)
+
+      const bytes = await doc.save()
+      const blob = new Blob([bytes], { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Diploma - ${clean(session.nombre || 'estudiante')}.pdf`
+      document.body.appendChild(a); a.click(); a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 2000)
+    } catch (err) {
+      console.error('No se pudo generar el diploma:', err)
+      alert('No se pudo generar el diploma. Intenta de nuevo.')
+    } finally {
+      setGenerando(false)
+    }
+  }
 
   const areaData = [
-    { area: 'Mat. Cuantit.', yo: r.mat_cuantitativo, nac: 50.2 },
-    { area: 'Mat. Específ.', yo: r.mat_especifico, nac: 48.1 },
-    { area: 'Química', yo: r.cn_quimica, nac: 38.6 },
-    { area: 'Física', yo: r.cn_fisica, nac: 47.9 },
-    { area: 'Biología', yo: r.cn_biologia, nac: 58.1 },
-    { area: 'CTS', yo: r.cn_cts, nac: 57.2 },
-    { area: 'Sociales', yo: r.sociales, nac: 51.8 },
-    { area: 'Ciudadanas', yo: r.ciudadanas, nac: 49.3 },
-    { area: 'Lect. Crítica', yo: r.lectura_critica, nac: 52.4 },
-    { area: 'Inglés', yo: r.ingles, nac: 55.3 },
+    { area: 'Mat. Cuantit.', akey: 'mat', yo: r.mat_cuantitativo, nac: 50.2 },
+    { area: 'Mat. Específ.', akey: 'mat', yo: r.mat_especifico, nac: 48.1 },
+    { area: 'Química', akey: 'cn', yo: r.cn_quimica, nac: 38.6 },
+    { area: 'Física', akey: 'cn', yo: r.cn_fisica, nac: 47.9 },
+    { area: 'Biología', akey: 'cn', yo: r.cn_biologia, nac: 58.1 },
+    { area: 'CTS', akey: 'cn', yo: r.cn_cts, nac: 57.2 },
+    { area: 'Sociales', akey: 'soc', yo: r.sociales, nac: 51.8 },
+    { area: 'Ciudadanas', akey: 'soc', yo: r.ciudadanas, nac: 49.3 },
+    { area: 'Lect. Crítica', akey: 'lc', yo: r.lectura_critica, nac: 52.4 },
+    { area: 'Inglés', akey: 'ing', yo: r.ingles, nac: 55.3 },
   ].filter(a => a.yo != null)
 
   const radarData = [
@@ -126,7 +254,11 @@ export default function EstudianteDashboard({ session, onLogout }) {
     { id: 'areas', label: 'Por Área' },
     { id: 'perfil', label: 'Perfil' },
     { id: 'posicion', label: 'Mi Posición' },
+    { id: 'respuestas', label: 'Mis Respuestas' },
+    ...(esMencion ? [{ id: 'mencion', label: '🏅 Mención de Honor' }] : []),
   ]
+  // Si estaba en la pestaña de mención y esta prueba ya no la otorga, volver a Resumen.
+  const tabActivo = (tab === 'mencion' && !esMencion) ? 'resumen' : tab
 
   const distData = [
     { rango: '< 380', cant: compañeros.filter(c => c.puntaje_global < 380).length, color: C.red },
@@ -149,19 +281,16 @@ export default function EstudianteDashboard({ session, onLogout }) {
               width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer',
               borderRadius: 8, padding: '10px 12px', marginBottom: 6, transition: 'all 0.15s',
               background: idx === selectedIdx
-                ? 'rgba(45,155,111,0.25)'
+                ? 'rgba(255,255,255,0.12)'
                 : 'rgba(255,255,255,0.05)',
               borderLeft: idx === selectedIdx
-                ? '3px solid #3AB882'
+                ? '3px solid rgba(255,255,255,0.9)'
                 : '3px solid transparent',
             }}>
-              <div style={{ fontSize: 11, color: idx === selectedIdx ? '#3AB882' : 'rgba(255,255,255,0.6)',
-                fontFamily: 'Inter', fontWeight: 600, marginBottom: 2 }}>
-                {res.pruebas?.codigo}
-              </div>
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', fontFamily: 'Inter',
-                marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {res.pruebas?.nombre}
+              <div style={{ fontSize: 11, color: idx === selectedIdx ? '#FFFFFF' : 'rgba(255,255,255,0.6)',
+                fontFamily: 'Inter', fontWeight: 600, marginBottom: 4,
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {res.pruebas?.nombre || res.pruebas?.codigo}
               </div>
               <div style={{ fontSize: 13, fontFamily: 'Playfair Display, serif',
                 color: C.white, fontWeight: 700 }}>
@@ -175,10 +304,6 @@ export default function EstudianteDashboard({ session, onLogout }) {
       <main style={{ flex: 1, padding: mobile ? '72px 16px 24px' : tablet ? '24px 20px' : '36px 40px', overflowY: 'auto', minWidth: 0 }}>
         {/* Header */}
         <div style={{ marginBottom: 28 }}>
-          <div style={{ fontSize: 11, color: C.green, letterSpacing: '0.15em',
-            textTransform: 'uppercase', fontFamily: 'Inter', marginBottom: 6 }}>
-            {prueba?.codigo} · Grado {prueba?.grado} · {prueba?.fecha}
-          </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
             <div>
               <h1 style={{ fontSize: 26, fontFamily: 'Playfair Display, serif', color: C.navy, marginBottom: 4 }}>
@@ -186,7 +311,6 @@ export default function EstudianteDashboard({ session, onLogout }) {
               </h1>
               <div style={{ fontSize: 13, color: C.gray, fontFamily: 'Inter' }}>
                 {session.colegios?.nombre} · {session.colegios?.ciudad} · Grado {session.grado}
-                {miPuesto ? ` · Puesto #${miPuesto} de ${compañeros.length}` : ''}
               </div>
             </div>
           </div>
@@ -194,29 +318,46 @@ export default function EstudianteDashboard({ session, onLogout }) {
 
         {/* KPIs */}
         <div style={{ display: 'grid', gridTemplateColumns: mobile || tablet ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: 12, marginBottom: 24 }}>
-          <KpiCard label="Puntaje Global" value={r.puntaje_global} sub="Escala 0–500" color={getColor((r.puntaje_global / 500) * 100)} />
-          <KpiCard label="Desempeño" value={`${r.desempeno_pct?.toFixed(1)}%`} sub="Promedio ponderado" color={getColor(r.desempeno_pct)} />
+          <KpiCard label="Puntaje Global" value={r.puntaje_global} sub="Escala 0–500" color={colorTexto((r.puntaje_global / 500) * 100)} />
+          <KpiCard label="Desempeño" value={`${r.desempeno_pct?.toFixed(1)}%`} sub="Promedio ponderado" color={colorTexto(r.desempeno_pct)} />
           <KpiCard label="Puesto" value={miPuesto ? `#${miPuesto}` : '—'} sub={`de ${compañeros.length} estudiantes`} color={C.navy} />
-          <KpiCard label="Percentil" value={`${percentil}°`} sub="Dentro del colegio" color={C.green} />
+          <Card style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 10, color: C.gray, fontFamily: 'Inter',
+              textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Percentil</div>
+            <div style={{ fontSize: 34, fontFamily: 'Playfair Display, serif',
+              color: C.navy, fontWeight: 700, lineHeight: 1, marginBottom: 8 }}>
+              {percentil != null ? `${percentil}°` : '—'}
+            </div>
+            <select value={pctScope} onChange={e => setPctScope(e.target.value)} style={{
+              padding: '4px 8px', border: `1px solid ${C.grayLt}`, borderRadius: 6,
+              fontFamily: 'Inter', fontSize: 11, color: C.text, background: C.bg,
+              outline: 'none', cursor: 'pointer', maxWidth: '100%' }}>
+              <option value="plantel">En el colegio</option>
+              <option value="municipio">En el municipio</option>
+              <option value="departamento">En el departamento</option>
+              <option value="region">En la región</option>
+              <option value="nacional">Nacional</option>
+            </select>
+          </Card>
         </div>
 
-        <TabBar tabs={tabs} active={tab} onChange={setTab} />
+        <TabBar tabs={tabs} active={tabActivo} onChange={setTab} />
 
         {/* RESUMEN */}
-        {tab === 'resumen' && (
+        {tabActivo === 'resumen' && (
           <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : '220px 1fr', gap: 16 }}>
             <Card style={{ display: 'flex', flexDirection: 'column', alignItems: 'center',
               justifyContent: 'center' }}>
               <CardTitle>Puntaje</CardTitle>
               <ScoreGauge value={r.puntaje_global} />
               <div style={{ marginTop: 12, textAlign: 'center' }}>
-                <Badge color={getColor(r.desempeno_pct)}>{getLevel(r.desempeno_pct)}</Badge>
+                <Badge color={colorTexto(r.desempeno_pct)}>{getLevel(r.desempeno_pct)}</Badge>
                 <div style={{ fontSize: 11, color: C.gray, fontFamily: 'Inter', marginTop: 8 }}>
                   Prom. colegio: <strong style={{ color: C.navy }}>{promColegio}</strong>
                 </div>
                 <div style={{ fontSize: 11, color: C.gray, fontFamily: 'Inter' }}>
                   Diferencia:{' '}
-                  <strong style={{ color: r.puntaje_global >= promColegio ? C.green : C.red }}>
+                  <strong style={{ color: r.puntaje_global >= promColegio ? C.navy : C.red }}>
                     {r.puntaje_global >= promColegio ? '+' : ''}{r.puntaje_global - promColegio}
                   </strong>
                 </div>
@@ -229,10 +370,10 @@ export default function EstudianteDashboard({ session, onLogout }) {
                   <CartesianGrid strokeDasharray="3 3" stroke={C.bg2} />
                   <XAxis dataKey="area" tick={{ fontSize: 10, fontFamily: 'Inter', fill: C.gray }} />
                   <YAxis tick={{ fontSize: 10, fontFamily: 'Inter', fill: C.gray }} domain={[0, 100]} />
-                  <Tooltip contentStyle={{ fontFamily: 'Inter', fontSize: 12, borderRadius: 8 }} />
-                  <Legend wrapperStyle={{ fontFamily: 'Inter', fontSize: 11 }} />
+                  <Tooltip contentStyle={{ fontFamily: 'Inter', fontSize: 12, borderRadius: 8 }} itemStyle={{ color: C.text }} labelStyle={{ color: C.navy, fontWeight: 600 }} />
+                  <Legend wrapperStyle={{ fontFamily: 'Inter', fontSize: 11 }} formatter={(v) => <span style={{ color: C.text }}>{v}</span>} />
                   <Bar dataKey="yo" name="Mi puntaje" fill={C.navy} radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="nac" name="Nac." fill={C.grayLt} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="nac" name="Nac." fill={C.gray} radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </Card>
@@ -240,7 +381,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
         )}
 
         {/* POR ÁREA */}
-        {tab === 'areas' && (
+        {tabActivo === 'areas' && (
           <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(3,1fr)', gap: 12 }}>
             {areaData.map((a, i) => (
               <Card key={i}>
@@ -250,7 +391,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center', marginBottom: 16 }}>
                   {[
-                    { label: 'Mi puntaje', val: a.yo, color: getColor(a.yo) },
+                    { label: 'Mi puntaje', val: a.yo, color: colorTexto(a.yo, a.akey) },
                     { label: 'Nacional', val: a.nac, color: C.gray },
                   ].map((item, j) => (
                     <div key={j}>
@@ -261,10 +402,10 @@ export default function EstudianteDashboard({ session, onLogout }) {
                   ))}
                 </div>
                 <div style={{ height: 6, background: C.bg2, borderRadius: 3, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${a.yo}%`, borderRadius: 3, background: getColor(a.yo) }} />
+                  <div style={{ height: '100%', width: `${a.yo}%`, borderRadius: 3, background: colorBarra(a.yo, a.akey) }} />
                 </div>
                 <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center' }}>
-                  <Badge color={a.yo >= a.nac ? C.green : C.amber}>
+                  <Badge color={a.yo >= a.nac ? C.navy : C.amber}>
                     {a.yo >= a.nac ? '+' : ''}{(a.yo - a.nac).toFixed(1)} vs nac.
                   </Badge>
                 </div>
@@ -274,7 +415,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
         )}
 
         {/* PERFIL */}
-        {tab === 'perfil' && (
+        {tabActivo === 'perfil' && (
           <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : '1fr 1fr', gap: 16 }}>
             <Card>
               <CardTitle sub="Radar de tu perfil por área">Perfil Académico</CardTitle>
@@ -294,12 +435,12 @@ export default function EstudianteDashboard({ session, onLogout }) {
                     <span style={{ fontSize: 12, color: C.text, fontFamily: 'Inter' }}>{a.area}</span>
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                       <span style={{ fontSize: 14, fontFamily: 'Playfair Display, serif',
-                        color: getColor(a.yo), fontWeight: 700 }}>{a.yo}%</span>
-                      <Badge color={getColor(a.yo)}>{getLevel(a.yo)}</Badge>
+                        color: colorTexto(a.yo, a.akey), fontWeight: 700 }}>{a.yo}%</span>
+                      <Badge color={colorTexto(a.yo, a.akey)}>{getLevel(a.yo)}</Badge>
                     </div>
                   </div>
                   <div style={{ height: 6, background: C.bg2, borderRadius: 3, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${a.yo}%`, borderRadius: 3, background: getColor(a.yo) }} />
+                    <div style={{ height: '100%', width: `${a.yo}%`, borderRadius: 3, background: colorBarra(a.yo, a.akey) }} />
                   </div>
                 </div>
               ))}
@@ -308,7 +449,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
         )}
 
         {/* MI POSICIÓN */}
-        {tab === 'posicion' && (
+        {tabActivo === 'posicion' && (
           <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : '1fr 1fr', gap: 16 }}>
             <Card>
               <CardTitle sub="Distribución de puntajes del curso">Distribución del Curso</CardTitle>
@@ -324,12 +465,12 @@ export default function EstudianteDashboard({ session, onLogout }) {
                 </BarChart>
               </ResponsiveContainer>
               <div style={{ marginTop: 16, padding: 12, background: C.bg, borderRadius: 8,
-                border: `2px solid ${getColor((r.puntaje_global / 500) * 100)}`, textAlign: 'center' }}>
+                border: `2px solid ${colorTexto((r.puntaje_global / 500) * 100)}`, textAlign: 'center' }}>
                 <div style={{ fontSize: 11, color: C.gray, fontFamily: 'Inter' }}>Tu puntaje</div>
                 <div style={{ fontSize: 28, fontFamily: 'Playfair Display, serif',
-                  color: getColor((r.puntaje_global / 500) * 100), fontWeight: 700 }}>{r.puntaje_global}</div>
+                  color: colorTexto((r.puntaje_global / 500) * 100), fontWeight: 700 }}>{r.puntaje_global}</div>
                 <div style={{ fontSize: 11, color: C.gray, fontFamily: 'Inter' }}>
-                  Puesto #{miPuesto} · Percentil {percentil}°
+                  Puesto #{miPuesto} · Percentil {percentilPlantel}°
                 </div>
               </div>
             </Card>
@@ -348,16 +489,147 @@ export default function EstudianteDashboard({ session, onLogout }) {
                     color: c.estudiante_id === session.id ? C.navy : C.text,
                     fontWeight: c.estudiante_id === session.id ? 600 : 400 }}>
                     {c.estudiantes?.nombre?.split(' ').slice(0, 2).join(' ')}
-                    {c.estudiante_id === session.id && <span style={{ color: C.green, marginLeft: 6, fontSize: 11 }}>← tú</span>}
+                    {c.estudiante_id === session.id && <span style={{ color: C.navy, marginLeft: 6, fontSize: 11 }}>← tú</span>}
                   </div>
                   <div style={{ fontSize: 16, fontFamily: 'Playfair Display, serif',
-                    color: c.estudiante_id === session.id ? C.green : C.navy, fontWeight: 700 }}>
+                    color: C.navy, fontWeight: 700 }}>
                     {c.puntaje_global}
                   </div>
                 </div>
               ))}
             </Card>
           </div>
+        )}
+
+        {/* MIS RESPUESTAS */}
+        {tabActivo === 'respuestas' && (() => {
+          const rawRows = prueba?.estructura_excel?.raw || []
+          const rawHeader = rawRows[0] || []
+          const hIdx = k => rawHeader.findIndex(h => typeof h === 'string' && h.toLowerCase().trim().startsWith(k))
+          const iSesion = 0, iNro = 1, iArea = 2, iMateria = 3
+          const iEstandar    = hIdx('estándar') >= 0 ? hIdx('estándar') : hIdx('estandar')
+          const iCompetencia = hIdx('competencia')
+          const iComponente  = hIdx('componente')
+          const iTarea       = hIdx('tarea')
+          const iRta         = rawHeader.findIndex(h => typeof h === 'string' && ['rta','respuesta correcta','resp. correcta','resp correcta','respuesta'].includes(h.toLowerCase().trim()))
+          // gpos = posición global (fila no vacía, 1..N) — coincide con detalle.pregunta
+          const preguntas = rawRows.slice(1)
+            .filter(f => Array.isArray(f) && f.some(v => v !== '' && v != null))
+            .map((f, i) => ({
+              gpos: i + 1,
+              sesion:      (f[iSesion]    || '').toString().trim(),
+              nro:         (f[iNro]       || '').toString().trim(),
+              area:        (f[iArea]      || '').toString().trim(),
+              materia:     (f[iMateria]   || '').toString().trim(),
+              componente:  iComponente  >= 0 ? (f[iComponente]  || '').toString().trim() : '',
+              competencia: iCompetencia >= 0 ? (f[iCompetencia] || '').toString().trim() : '',
+              tarea:       iTarea       >= 0 ? (f[iTarea]       || '').toString().trim() : '',
+              rta:         iRta         >= 0 ? (f[iRta]         || '').toString().trim() : '',
+            }))
+
+          const detalleMap = {}
+          ;(r.detalle || []).forEach(d => { detalleMap[String(d.pregunta)] = d })
+
+          const thStyle = { padding: '7px 10px', background: C.navy, color: C.white,
+            fontSize: 11, fontWeight: 600, textAlign: 'center', whiteSpace: 'nowrap',
+            borderRight: '1px solid rgba(255,255,255,0.12)' }
+          const tdStyle = (bg) => ({ padding: '5px 8px', fontSize: 11, textAlign: 'center',
+            borderBottom: `1px solid ${C.bg2}`, background: bg || C.white })
+
+          return (
+            <Card>
+              <CardTitle sub={`${preguntas.length} preguntas · ${prueba?.codigo || '—'}`}>
+                Mis Respuestas
+              </CardTitle>
+              {!preguntas.length || !r.detalle ? (
+                <div style={{ textAlign: 'center', padding: 40, color: C.gray, fontFamily: 'Inter', fontSize: 13 }}>
+                  No hay detalle de respuestas disponible para esta prueba.
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ borderCollapse: 'collapse', fontFamily: 'Inter', fontSize: 12, width: '100%', minWidth: 700 }}>
+                    <thead>
+                      <tr>
+                        {['Sesión', 'No', 'Área', 'Asignatura', 'Componente', 'Competencia', 'Tarea', 'Rta', 'Mi respuesta'].map(h => (
+                          <th key={h} style={{ ...thStyle, textAlign: ['Competencia', 'Componente', 'Tarea', 'Asignatura', 'Área'].includes(h) ? 'left' : 'center' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preguntas.map((q, i) => {
+                        const d = detalleMap[q.gpos]
+                        const correcto = d?.correcto
+                        const cellBg = correcto === true ? '#DCFCE7' : correcto === false ? '#FEE2E2' : null
+                        const cellColor = correcto === true ? C.navy : correcto === false ? C.red : C.text
+                        const rowBg = i % 2 === 0 ? C.white : '#F8FAFC'
+                        return (
+                          <tr key={i}>
+                            <td style={tdStyle(rowBg)}>{q.sesion}</td>
+                            <td style={tdStyle(rowBg)}>{q.nro}</td>
+                            <td style={{ ...tdStyle(rowBg), textAlign: 'left', whiteSpace: 'nowrap' }}>{q.area}</td>
+                            <td style={{ ...tdStyle(rowBg), textAlign: 'left', whiteSpace: 'nowrap' }}>{q.materia}</td>
+                            <td style={{ ...tdStyle(rowBg), textAlign: 'left', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{q.componente}</td>
+                            <td style={{ ...tdStyle(rowBg), textAlign: 'left', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{q.competencia}</td>
+                            <td style={{ ...tdStyle(rowBg), textAlign: 'left', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{q.tarea}</td>
+                            <td style={{ ...tdStyle(cellBg), color: cellColor, fontWeight: 700 }}>{q.rta || '—'}</td>
+                            <td style={{ ...tdStyle(cellBg), color: cellColor, fontWeight: 700 }}>{d?.marcada || '—'}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Card>
+          )
+        })()}
+
+        {/* MENCIÓN DE HONOR (solo mejor puntaje del grado+salón en esta prueba) */}
+        {tabActivo === 'mencion' && esMencion && (
+          <Card>
+            <CardTitle sub="Reconocimiento al mejor puntaje de tu grado y salón en esta prueba">
+              🏅 Mención de Honor
+            </CardTitle>
+
+            {/* Diploma en pantalla */}
+            <div style={{ background: `linear-gradient(135deg, ${C.navy} 0%, #1A3560 100%)`,
+              borderRadius: 16, padding: mobile ? 28 : 40, textAlign: 'center', marginBottom: 24,
+              position: 'relative', overflow: 'hidden' }}>
+              <div style={{ position: 'absolute', top: -20, right: -20, fontSize: 120, opacity: 0.05 }}>🏅</div>
+              <div style={{ fontSize: 48, marginBottom: 12 }}>🏅</div>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', fontFamily: 'Inter',
+                letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 8 }}>
+                Mención de Honor
+              </div>
+              <div style={{ fontSize: 28, fontFamily: 'Playfair Display, serif', color: '#FFFFFF',
+                fontWeight: 400, marginBottom: 4 }}>{session.nombre}</div>
+              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', fontFamily: 'Inter', marginBottom: 6 }}>
+                Grado {session.grado ?? '—'} · Salón {session.salon ?? '—'}
+              </div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', fontFamily: 'Inter', marginBottom: 24 }}>
+                por su destacado desempeño en el {prueba?.nombre || prueba?.codigo || 'simulacro'}
+              </div>
+              <div style={{ display: 'inline-block', background: 'rgba(255,255,255,0.1)',
+                borderRadius: 12, padding: '16px 40px' }}>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', fontFamily: 'Inter',
+                  letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Puntaje Global</div>
+                <div style={{ fontSize: 52, fontFamily: 'Playfair Display, serif',
+                  color: '#D9B968', fontWeight: 700, lineHeight: 1 }}>{r.puntaje_global}</div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontFamily: 'Inter', marginTop: 4 }}>de 500 puntos</div>
+              </div>
+            </div>
+
+            {/* Descargar diploma */}
+            <div style={{ textAlign: 'center' }}>
+              <button onClick={descargarDiploma} disabled={generando}
+                style={{ padding: '11px 26px', background: generando ? C.gray : C.navy, color: '#FFFFFF',
+                  border: 'none', borderRadius: 9, fontFamily: 'Inter', fontSize: 13.5, fontWeight: 600,
+                  cursor: generando ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8,
+                  boxShadow: '0 2px 8px rgba(10,31,61,0.25)' }}>
+                {generando ? 'Generando…' : '📜  Descargar diploma'}
+              </button>
+            </div>
+          </Card>
         )}
       </main>
     </div>

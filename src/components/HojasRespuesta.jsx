@@ -199,7 +199,7 @@ function HojaImprimible({ prueba, referencia }) {
           <BubbleArea name="CIENCIAS NATURALES"   qStart={92} qEnd={120} nCols={1}/>
         </div>
         <div style={{ display:"flex", justifyContent:"space-between", borderTop:"1px solid #DDD", paddingTop:3, marginTop:3, fontSize:6, color:"#999" }}>
-          <div>Asesorías Académicas Milton Ochoa &mdash; Expertos en Evaluación</div>
+          <div>Grupo Milton Ochoa &mdash; Expertos en Evaluación</div>
           <div>{titulo} &mdash; Sesión 1 de 2</div>
         </div>
       </div>
@@ -215,7 +215,7 @@ function HojaImprimible({ prueba, referencia }) {
           <BubbleArea name="INGLÉS"              qStart={80} qEnd={134} nCols={2}/>
         </div>
         <div style={{ display:"flex", justifyContent:"space-between", borderTop:"1px solid #DDD", paddingTop:3, marginTop:3, fontSize:6, color:"#999" }}>
-          <div>Asesorías Académicas Milton Ochoa &mdash; Expertos en Evaluación</div>
+          <div>Grupo Milton Ochoa &mdash; Expertos en Evaluación</div>
           <div>{titulo} &mdash; Sesión 2 de 2</div>
         </div>
       </div>

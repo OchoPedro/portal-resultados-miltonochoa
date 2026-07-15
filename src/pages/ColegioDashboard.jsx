@@ -205,6 +205,34 @@ const Loading = () => (
   </div>
 )
 
+// Íconos de sección en SVG inline (no emoji): se ven idénticos en todos los SO/navegadores.
+// Heredan el color del texto (currentColor), así respetan el estado activo del menú.
+const NavIcon = ({ id, size = 17 }) => {
+  const common = { width:size, height:size, viewBox:'0 0 24 24', fill:'none',
+    stroke:'currentColor', strokeWidth:2, strokeLinecap:'round', strokeLinejoin:'round',
+    'aria-hidden':'true', style:{flexShrink:0} }
+  if (id === 'plantel') return (
+    <svg {...common}>
+      <path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/>
+      <path d="M22 10v6"/>
+      <path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>
+    </svg>
+  )
+  if (id === 'herramientas') return (
+    <svg {...common}>
+      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+    </svg>
+  )
+  // consultoria (ahora "Recursos")
+  return (
+    <svg {...common}>
+      <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/>
+      <path d="M9 18h6"/>
+      <path d="M10 22h4"/>
+    </svg>
+  )
+}
+
 // ── PLANTEL: LISTADO DE ESTUDIANTES ──────────────────────────
 function PlantelEstudiantes({ colegioId }) {
   const mobile = useMobile()
@@ -213,17 +241,31 @@ function PlantelEstudiantes({ colegioId }) {
   const [search, setSearch] = useState('')
   const [filtroGrado, setFiltroGrado] = useState('Todos')
   const [filtroSalon, setFiltroSalon] = useState('Todos')
+  const [filtroEstado, setFiltroEstado] = useState('Todos')
+  const [ingresos, setIngresos] = useState({})
 
   useEffect(() => {
     const load = async () => {
+      // Sin filtro de activo: se muestran activos e inactivos, con su estado.
       const { data } = await supabase.from('estudiantes')
-        .select('id, nombre, usuario, grado, salon').eq('colegio_id', colegioId).eq('activo', true)
+        .select('id, nombre, usuario, grado, salon, activo, ultima_sesion').eq('colegio_id', colegioId)
         .order('nombre')
       setEstudiantes(data || [])
       setLoading(false)
     }
     load()
+    fetch('/api/estudiantes-ingresos', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : { ingresos: {} })
+      .then(d => setIngresos(d.ingresos || {}))
+      .catch(() => setIngresos({}))
   }, [colegioId])
+
+  const fmtFecha = (iso) => {
+    if (!iso) return null
+    const d = new Date(iso)
+    return d.toLocaleDateString('es-CO', { day:'2-digit', month:'short', year:'numeric', timeZone:'America/Bogota' }) +
+      ' · ' + d.toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit', timeZone:'America/Bogota' })
+  }
 
   const grados = ['Todos', ...new Set(estudiantes.map(e => e.grado).filter(Boolean))]
   const salones = ['Todos', ...new Set(
@@ -236,8 +278,11 @@ function PlantelEstudiantes({ colegioId }) {
       e.usuario?.includes(search)
     const matchGrado = filtroGrado === 'Todos' || e.grado === filtroGrado
     const matchSalon = filtroSalon === 'Todos' || e.salon === filtroSalon
-    return matchSearch && matchGrado && matchSalon
+    const matchEstado = filtroEstado === 'Todos' ||
+      (filtroEstado === 'Activos' ? e.activo : !e.activo)
+    return matchSearch && matchGrado && matchSalon && matchEstado
   })
+  const activos = estudiantes.filter(e => e.activo).length
 
   const selStyle = {
     padding:'8px 12px', border:`1px solid ${C.grayLt}`, borderRadius:6,
@@ -247,9 +292,19 @@ function PlantelEstudiantes({ colegioId }) {
 
   return (
     <Card>
-      <CardTitle sub={`${filtered.length} de ${estudiantes.length} estudiantes activos`}>
+      <CardTitle sub={`${estudiantes.length} estudiantes · ${activos} activos · ${estudiantes.length - activos} inactivos`}>
         Listado de Estudiantes
       </CardTitle>
+
+      {/* Aviso: la clave del estudiante es su documento (= su usuario) */}
+      <div style={{display:'flex', alignItems:'center', gap:10, background:`${C.green}12`,
+        border:`1px solid ${C.green}40`, borderRadius:9, padding:'10px 14px', margin:'14px 0 18px'}}>
+        <span style={{fontSize:16}}>🔑</span>
+        <span style={{fontSize:12.5, color:C.text, fontFamily:'Inter', lineHeight:1.5}}>
+          La clave de cada estudiante es su <strong>número de documento</strong> — el mismo que aparece en la columna <strong>Usuario</strong>.
+        </span>
+      </div>
+
       {/* Filtros */}
       <div style={{display:'flex', gap:10, marginBottom:20, flexWrap:'wrap'}}>
         <input value={search} onChange={e=>setSearch(e.target.value)}
@@ -262,6 +317,9 @@ function PlantelEstudiantes({ colegioId }) {
         <select value={filtroSalon} onChange={e=>setFiltroSalon(e.target.value)} style={selStyle}>
           {salones.map(s => <option key={s} value={s}>{s==='Todos'?'Todos los salones':`Salón ${s}`}</option>)}
         </select>
+        <select value={filtroEstado} onChange={e=>setFiltroEstado(e.target.value)} style={selStyle}>
+          {['Todos','Activos','Inactivos'].map(s => <option key={s} value={s}>{s==='Todos'?'Todos los estados':s}</option>)}
+        </select>
       </div>
 
       {loading ? (
@@ -271,27 +329,39 @@ function PlantelEstudiantes({ colegioId }) {
           No se encontraron estudiantes.
         </div>
       ) : (
-        <div style={{overflowX:'auto'}}>
-          <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter', minWidth: mobile ? 480 : 'auto'}}>
+        <div style={{overflowX:'auto', overflowY:'auto', maxHeight:560}}>
+          <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter', minWidth: mobile ? 620 : 'auto'}}>
             <thead>
-              <tr style={{borderBottom:`2px solid ${C.bg2}`}}>
-                {['#','Nombre','Grado','Salón','Usuario'].map(h => (
+              <tr style={{borderBottom:`2px solid ${C.bg2}`, position:'sticky', top:0, background:C.white, zIndex:1}}>
+                {['#','Nombre','Grado','Salón','Usuario','Estado','Ingresos','Último ingreso'].map(h => (
                   <th key={h} style={{textAlign:'left', padding:'8px 12px', fontSize:10,
                     color:C.gray, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em', whiteSpace:'nowrap'}}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filtered.map((e,i) => (
+              {filtered.map((e,i) => {
+                const fecha = fmtFecha(e.ultima_sesion)
+                return (
                 <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`,
-                  background:i%2===0?`${C.bg}80`:'transparent'}}>
+                  background:i%2===0?`${C.bg}80`:'transparent', opacity: e.activo ? 1 : 0.6}}>
                   <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{i+1}</td>
                   <td style={{padding:'10px 12px', fontSize:13, color:C.text, fontWeight:500, whiteSpace:'nowrap'}}>{e.nombre}</td>
                   <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{e.grado||'—'}</td>
                   <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{e.salon||'—'}</td>
-                  <td style={{padding:'10px 12px', fontSize:12, color:C.navy, fontWeight:500}}>{e.usuario}</td>
+                  <td style={{padding:'10px 12px', fontSize:12, color:C.navy, fontWeight:500, whiteSpace:'nowrap'}}>{e.usuario}</td>
+                  <td style={{padding:'10px 12px', whiteSpace:'nowrap'}}>
+                    <Badge color={e.activo ? C.green : C.red}>{e.activo ? 'Activo' : 'Inactivo'}</Badge>
+                  </td>
+                  <td style={{padding:'10px 12px', fontSize:12, color:C.gray, textAlign:'center'}}>
+                    {ingresos[e.usuario] || 0}
+                  </td>
+                  <td style={{padding:'10px 12px', fontSize:12, color: fecha ? C.gray : C.grayLt, whiteSpace:'nowrap'}}>
+                    {fecha || 'Nunca ingresó'}
+                  </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -312,8 +382,10 @@ function PlantelResultados({ colegioId, pruebas }) {
 
   useEffect(() => {
     const load = async () => {
+      // Sin filtro de activo: el colegio ve TODOS sus estudiantes (activos e inactivos),
+      // igual que en Listado de Estudiantes. Un inactivo solo no puede ingresar él mismo.
       const { data: est } = await supabase.from('estudiantes')
-        .select('id, nombre, usuario, grado, salon').eq('colegio_id', colegioId).eq('activo', true).order('nombre')
+        .select('id, nombre, usuario, grado, salon, activo').eq('colegio_id', colegioId).order('nombre')
       setEstudiantes(est || [])
       setLoading(false)
     }
@@ -360,7 +432,7 @@ function PlantelResultados({ colegioId, pruebas }) {
         <div style={{display:'flex', gap:10, marginBottom:20, flexWrap:'wrap'}}>
           <select value={filtroPrueba} onChange={e=>setFiltroPrueba(e.target.value)} style={selStyle}>
             <option value="">Seleccionar prueba...</option>
-            {pruebas.map(p => <option key={p.id} value={p.id}>{p.codigo} — {p.nombre}</option>)}
+            {pruebas.map(p => <option key={p.id} value={p.id}>{p.nombre || p.codigo}</option>)}
           </select>
           <select value={filtroGrado} onChange={e=>{setFiltroGrado(e.target.value); setFiltroSalon('Todos')}}
             style={selStyle}>
@@ -376,8 +448,8 @@ function PlantelResultados({ colegioId, pruebas }) {
           <div style={{display:'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(3,1fr)', gap:12, marginBottom:20}}>
             {[
               {label:'Total estudiantes', val:filtered.length, color:C.navy},
-              {label:'Con resultados', val:conResultados, color:C.green},
-              {label:'Sin resultados', val:sinResultados, color:sinResultados>0?C.amber:C.green},
+              {label:'Con resultados', val:conResultados, color:C.navy},
+              {label:'Sin resultados', val:sinResultados, color:sinResultados>0?C.amber:C.navy},
             ].map((k,i) => (
               <div key={i} style={{background:C.bg, borderRadius:8, padding:'16px',
                 textAlign:'center', border:`1px solid ${C.grayLt}`}}>
@@ -393,10 +465,10 @@ function PlantelResultados({ colegioId, pruebas }) {
         {loading ? (
           <div style={{textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter'}}>Cargando...</div>
         ) : (
-          <div style={{overflowX:'auto'}}>
+          <div style={{overflowX:'auto', overflowY:'auto', maxHeight:560}}>
             <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter', minWidth: mobile ? 420 : 'auto'}}>
               <thead>
-                <tr style={{borderBottom:`2px solid ${C.bg2}`}}>
+                <tr style={{borderBottom:`2px solid ${C.bg2}`, position:'sticky', top:0, background:C.white, zIndex:1}}>
                   {['#','Nombre','Grado','Salón','Estado','Puntaje'].map(h => (
                     <th key={h} style={{textAlign:'left', padding:'8px 12px', fontSize:10,
                       color:C.gray, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em', whiteSpace:'nowrap'}}>{h}</th>
@@ -408,9 +480,12 @@ function PlantelResultados({ colegioId, pruebas }) {
                   const res = resultados.find(r => r.estudiante_id === e.id)
                   return (
                     <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`,
-                      background:i%2===0?`${C.bg}80`:'transparent'}}>
+                      background:i%2===0?`${C.bg}80`:'transparent', opacity: e.activo === false ? 0.6 : 1}}>
                       <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{i+1}</td>
-                      <td style={{padding:'10px 12px', fontSize:13, color:C.text, fontWeight:500, whiteSpace:'nowrap'}}>{e.nombre}</td>
+                      <td style={{padding:'10px 12px', fontSize:13, color:C.text, fontWeight:500, whiteSpace:'nowrap'}}>
+                        {e.nombre}
+                        {e.activo === false && <span style={{marginLeft:8, fontSize:10, color:C.red, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.04em'}}>Inactivo</span>}
+                      </td>
                       <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{e.grado||'—'}</td>
                       <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{e.salon||'—'}</td>
                       <td style={{padding:'10px 12px'}}>
@@ -439,32 +514,46 @@ function PlantelResultados({ colegioId, pruebas }) {
 }
 
 // ── PLANTEL: MENCIÓN DE HONOR ─────────────────────────────────
-function PlantelMencion({ colegioId, pruebas }) {
+function PlantelMencion({ colegioId, pruebas, colegioNombre }) {
   const mobile = useMobile()
   const [filtroPrueba, setFiltroPrueba] = useState('')
-  const [filtroGrado, setFiltroGrado] = useState('Todos')
+  const [filtroGrado, setFiltroGrado] = useState('')
   const [filtroSalon, setFiltroSalon] = useState('Todos')
   const [ganador, setGanador] = useState(null)
   const [todosResultados, setTodosResultados] = useState([])
-  const [grados, setGrados] = useState(['Todos'])
+  const [grados, setGrados] = useState([])
   const [salones, setSalones] = useState(['Todos'])
   const [loading, setLoading] = useState(false)
+  const [pruebasConResultados, setPruebasConResultados] = useState([])
+  const [generando, setGenerando] = useState(false)
 
   useEffect(() => {
     const loadGrados = async () => {
       const { data } = await supabase.from('estudiantes')
-        .select('grado, salon').eq('colegio_id', colegioId).eq('activo', true)
-      const g = ['Todos', ...new Set((data||[]).map(e=>e.grado).filter(Boolean))]
+        .select('grado, salon').eq('colegio_id', colegioId)
+      const g = [...new Set((data||[]).map(e=>e.grado).filter(Boolean))]
       setGrados(g)
     }
     loadGrados()
   }, [colegioId])
 
+  // Solo las pruebas que YA tienen resultados calificados en este colegio.
   useEffect(() => {
+    const load = async () => {
+      const { data } = await supabase.from('resultados_estudiante')
+        .select('prueba_id').eq('colegio_id', colegioId)
+      const ids = new Set((data||[]).map(r => r.prueba_id))
+      setPruebasConResultados(pruebas.filter(p => ids.has(p.id)))
+    }
+    load()
+  }, [colegioId, pruebas])
+
+  useEffect(() => {
+    if (!filtroGrado) { setSalones(['Todos']); setFiltroSalon('Todos'); return }
     const updateSalones = async () => {
       const { data } = await supabase.from('estudiantes')
-        .select('salon, grado').eq('colegio_id', colegioId).eq('activo', true)
-      const filtered = (data||[]).filter(e => filtroGrado==='Todos' || e.grado===filtroGrado)
+        .select('salon, grado').eq('colegio_id', colegioId)
+      const filtered = (data||[]).filter(e => e.grado===filtroGrado)
       setSalones(['Todos', ...new Set(filtered.map(e=>e.salon).filter(Boolean))])
       setFiltroSalon('Todos')
     }
@@ -486,9 +575,9 @@ function PlantelMencion({ colegioId, pruebas }) {
   }, [filtroPrueba])
 
   useEffect(() => {
-    if (!todosResultados.length) { setGanador(null); return }
+    if (!filtroGrado || !todosResultados.length) { setGanador(null); return }
     const filtrados = todosResultados.filter(r => {
-      const g = filtroGrado==='Todos' || r.estudiantes?.grado===filtroGrado
+      const g = r.estudiantes?.grado===filtroGrado
       const s = filtroSalon==='Todos' || r.estudiantes?.salon===filtroSalon
       return g && s
     })
@@ -512,6 +601,93 @@ function PlantelMencion({ colegioId, pruebas }) {
     {label:'Inglés',            val:ganador.ingles},
   ].filter(a => a.val != null) : []
 
+  // Genera un diploma en PDF (A4 horizontal) para el estudiante destacado. pdf-lib se
+  // carga de forma diferida (solo al hacer clic) para no pesar en el bundle inicial.
+  const descargarDiploma = async () => {
+    if (!ganador || generando) return
+    setGenerando(true)
+    try {
+      const { PDFDocument, StandardFonts, rgb, degrees } = await import('pdf-lib')
+      const doc = await PDFDocument.create()
+      const page = doc.addPage([842, 595])          // A4 horizontal, en puntos
+      const W = 842, H = 595
+      const timesB  = await doc.embedFont(StandardFonts.TimesRomanBold)
+      const timesI  = await doc.embedFont(StandardFonts.TimesRomanItalic)
+      const helv    = await doc.embedFont(StandardFonts.Helvetica)
+      const helvB   = await doc.embedFont(StandardFonts.HelveticaBold)
+      const navy  = rgb(10/255, 31/255, 61/255)
+      const green = rgb(45/255, 155/255, 111/255)
+      const gold  = rgb(0.70, 0.55, 0.24)
+      const gray  = rgb(0.42, 0.45, 0.5)
+      // pdf-lib solo maneja WinAnsi (Latin-1); quitar caracteres fuera de ese rango evita errores.
+      const clean = (s) => String(s ?? '').replace(/[^\x20-\xFF]/g, '')
+      const center = (t, y, f, s, c, ls = 0) => {
+        t = clean(t)
+        if (ls > 0) {
+          const tot = [...t].reduce((a, ch) => a + f.widthOfTextAtSize(ch, s) + ls, 0) - ls
+          let x = (W - tot) / 2
+          for (const ch of t) { page.drawText(ch, { x, y, size: s, font: f, color: c }); x += f.widthOfTextAtSize(ch, s) + ls }
+        } else {
+          const w = f.widthOfTextAtSize(t, s)
+          page.drawText(t, { x: (W - w) / 2, y, size: s, font: f, color: c })
+        }
+      }
+      const diamond = (cx, cy, r, color) => page.drawSvgPath(`M ${cx} ${cy-r} L ${cx+r} ${cy} L ${cx} ${cy+r} L ${cx-r} ${cy} Z`, { color })
+      const branch = (cx, cy, R, a0, a1, ls) => {
+        let prev = null; const n = 8
+        for (let i = 0; i <= n; i++) { const ang = (a0 + (a1-a0)*i/n) * Math.PI/180; const x = cx+R*Math.cos(ang), y = cy+R*Math.sin(ang); if (prev) page.drawLine({ start: prev, end: { x, y }, thickness: 1, color: gold }); prev = { x, y } }
+        for (let i = 1; i < n; i++) { const t = i/n; const ad = a0 + (a1-a0)*t; const a = ad*Math.PI/180; const x = cx+R*Math.cos(a), y = cy+R*Math.sin(a); const sz = 8 - t*2.6; page.drawEllipse({ x, y, xScale: sz, yScale: sz*0.4, color: gold, rotate: degrees(ad + 90*ls) }) }
+      }
+      const laurel = (cx, cy, R) => { branch(cx, cy, R, 256, 116, 1); branch(cx, cy, R, 284, 424, -1) }
+
+      const prueba = pruebas.find(p => p.id === filtroPrueba)
+      const pruebaNombre = prueba ? (prueba.nombre || prueba.codigo) : 'la prueba'
+      const fecha = new Date().toLocaleDateString('es-CO', { day:'numeric', month:'long', year:'numeric', timeZone:'America/Bogota' })
+      const nombre = ganador.estudiantes?.nombre || 'Estudiante'
+      const grado  = ganador.estudiantes?.grado ?? '—'
+      const salon  = ganador.estudiantes?.salon ?? '—'
+      const punt   = String(ganador.puntaje_global ?? '—')
+
+      page.drawRectangle({ x:22, y:22, width:W-44, height:H-44, borderColor:navy, borderWidth:3 })
+      page.drawRectangle({ x:30, y:30, width:W-60, height:H-60, borderColor:gold, borderWidth:1 })
+      page.drawRectangle({ x:35, y:35, width:W-70, height:H-70, borderColor:gold, borderWidth:0.4 })
+      for (const [sx, sy] of [[46,46],[W-46,46],[46,H-46],[W-46,H-46]]) { diamond(sx, sy, 6, gold); diamond(sx, sy, 2.4, navy) }
+      center('GRUPO MILTON OCHOA', H-100, helvB, 12, navy, 3)
+      center('EXPERTOS EN EVALUACIÓN', H-116, helv, 8, gray, 2)
+      page.drawRectangle({ x:W/2-70, y:H-132, width:56, height:0.8, color:gold }); page.drawRectangle({ x:W/2+14, y:H-132, width:56, height:0.8, color:gold }); diamond(W/2, H-131, 4, gold)
+      center('Mención de Honor', H-186, timesB, 38, navy)
+      center('Se otorga la presente distinción a', H-224, timesI, 15, gray)
+      center(nombre, H-272, timesB, 40, navy)
+      page.drawRectangle({ x:W/2-90, y:H-286, width:180, height:0.8, color:gold }); diamond(W/2-90, H-285.6, 3, gold); diamond(W/2+90, H-285.6, 3, gold)
+      center(`Grado ${grado}      Salón ${salon}`, H-308, helv, 12, gray, 1)
+      center(`por su destacado desempeño en el ${pruebaNombre}`, H-340, timesI, 14, gray)
+      const cy = 148
+      center('PUNTAJE GLOBAL', cy+56, helvB, 8.5, gray, 2)
+      laurel(W/2, cy, 48)
+      center(punt, cy-6, timesB, 42, green)
+      center('de 500 puntos', cy-26, helv, 8.5, gray)
+      page.drawRectangle({ x:W/2-110, y:68, width:220, height:0.8, color:navy })
+      const cn = clean(colegioNombre || 'Institución')
+      let cnSize = 13; while (timesB.widthOfTextAtSize(cn, cnSize) > 660 && cnSize > 8) cnSize -= 0.5
+      center(cn, 50, timesB, cnSize, navy)
+      center(`Expedido el ${fecha}`, 36, helv, 9, gray)
+
+      const bytes = await doc.save()
+      const blob = new Blob([bytes], { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Diploma - ${clean(ganador.estudiantes?.nombre || 'estudiante')}.pdf`
+      document.body.appendChild(a); a.click(); a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 2000)
+    } catch (err) {
+      console.error('No se pudo generar el diploma:', err)
+      alert('No se pudo generar el diploma. Intenta de nuevo.')
+    } finally {
+      setGenerando(false)
+    }
+  }
+
   return (
     <Card>
       <CardTitle sub="Estudiante con mejor puntaje según los filtros aplicados">
@@ -521,11 +697,12 @@ function PlantelMencion({ colegioId, pruebas }) {
       {/* Filtros */}
       <div style={{display:'flex', gap:10, marginBottom:24, flexWrap:'wrap'}}>
         <select value={filtroPrueba} onChange={e=>setFiltroPrueba(e.target.value)} style={selStyle}>
-          <option value="">Seleccionar prueba...</option>
-          {pruebas.map(p => <option key={p.id} value={p.id}>{p.codigo} — {p.nombre}</option>)}
+          <option value="">{pruebasConResultados.length ? 'Seleccionar prueba...' : 'Sin pruebas calificadas aún'}</option>
+          {pruebasConResultados.map(p => <option key={p.id} value={p.id}>{p.nombre || p.codigo}</option>)}
         </select>
         <select value={filtroGrado} onChange={e=>setFiltroGrado(e.target.value)} style={selStyle}>
-          {grados.map(g => <option key={g} value={g}>{g==='Todos'?'Todos los grados':`Grado ${g}`}</option>)}
+          <option value="">Seleccionar grado…</option>
+          {grados.map(g => <option key={g} value={g}>{`Grado ${g}`}</option>)}
         </select>
         <select value={filtroSalon} onChange={e=>setFiltroSalon(e.target.value)} style={selStyle}>
           {salones.map(s => <option key={s} value={s}>{s==='Todos'?'Todos los salones':`Salón ${s}`}</option>)}
@@ -539,6 +716,14 @@ function PlantelMencion({ colegioId, pruebas }) {
             Selecciona una prueba
           </div>
           <div style={{fontSize:13}}>para ver el estudiante con mejor desempeño.</div>
+        </div>
+      ) : !filtroGrado ? (
+        <div style={{textAlign:'center', padding:60, color:C.gray, fontFamily:'Inter'}}>
+          <div style={{fontSize:40, marginBottom:12}}>🎓</div>
+          <div style={{fontFamily:'Playfair Display, serif', fontSize:18, color:C.navy, marginBottom:8}}>
+            Selecciona un grado
+          </div>
+          <div style={{fontSize:13}}>para ver el estudiante con mejor desempeño de ese grado.</div>
         </div>
       ) : loading ? (
         <div style={{textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter'}}>Cargando...</div>
@@ -568,10 +753,21 @@ function PlantelMencion({ colegioId, pruebas }) {
               <div style={{fontSize:11, color:'rgba(255,255,255,0.5)', fontFamily:'Inter',
                 letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:4}}>Puntaje Global</div>
               <div style={{fontSize:52, fontFamily:'Playfair Display, serif',
-                color:C.greenLt, fontWeight:700, lineHeight:1}}>{ganador.puntaje_global}</div>
+                color:'#D9B968', fontWeight:700, lineHeight:1}}>{ganador.puntaje_global}</div>
               <div style={{fontSize:11, color:'rgba(255,255,255,0.4)', fontFamily:'Inter',
                 marginTop:4}}>de 500 puntos</div>
             </div>
+          </div>
+
+          {/* Descargar diploma */}
+          <div style={{textAlign:'center', marginBottom:24}}>
+            <button onClick={descargarDiploma} disabled={generando}
+              style={{padding:'11px 26px', background: generando ? C.gray : C.navy, color:'#FFFFFF',
+                border:'none', borderRadius:9, fontFamily:'Inter', fontSize:13.5, fontWeight:600,
+                cursor: generando ? 'default' : 'pointer', display:'inline-flex', alignItems:'center', gap:8,
+                boxShadow:'0 2px 8px rgba(10,31,61,0.25)'}}>
+              {generando ? 'Generando…' : '📜  Descargar diploma'}
+            </button>
           </div>
 
           {/* Desglose por áreas */}
@@ -582,10 +778,11 @@ function PlantelMencion({ colegioId, pruebas }) {
                 <div style={{fontSize:10, color:C.gray, fontFamily:'Inter',
                   textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4}}>{a.label}</div>
                 <div style={{fontSize:22, fontFamily:'Playfair Display, serif',
-                  color:semaforoColor(a.val), fontWeight:700}}>{a.val?.toFixed(1)}%</div>
+                  color:C.navy, fontWeight:700}}>{Math.round(a.val)}<span style={{fontSize:12,
+                  color:C.gray, fontWeight:400, fontFamily:'Inter'}}> / 100</span></div>
                 <div style={{height:4, background:C.bg2, borderRadius:2, marginTop:6, overflow:'hidden'}}>
                   <div style={{height:'100%', width:`${a.val}%`, borderRadius:2,
-                    background:semaforoColor(a.val)}}/>
+                    background:C.navy}}/>
                 </div>
               </div>
             ))}
@@ -644,16 +841,12 @@ function RecomendacionesClaude({ session, prueba }) {
       <div style={{background:`linear-gradient(135deg, ${C.navy} 0%, #1A3560 100%)`,
         borderRadius:16, padding:'32px 40px', position:'relative', overflow:'hidden'}}>
         <div style={{position:'absolute', top:-20, right:-20, fontSize:120, opacity:0.06}}>🤖</div>
-        <div style={{fontSize:10, color:'rgba(255,255,255,0.45)', fontFamily:'Inter',
-          letterSpacing:'0.2em', textTransform:'uppercase', marginBottom:10}}>
-          Consultoría Inteligente — Powered by Claude AI
-        </div>
         <div style={{fontSize:26, fontFamily:'Playfair Display, serif', color:'#FFFFFF', marginBottom:8}}>
           Análisis y Recomendaciones
         </div>
         <div style={{fontSize:13, color:'rgba(255,255,255,0.6)', fontFamily:'Inter', lineHeight:1.7, maxWidth:600}}>
-          Recomendaciones pedagógicas personalizadas generadas por inteligencia artificial
-          y publicadas por el equipo de Asesorías Académicas Milton Ochoa.
+          Recomendaciones pedagógicas personalizadas generadas
+          y publicadas por el equipo del Grupo Milton Ochoa.
         </div>
       </div>
 
@@ -683,7 +876,7 @@ function RecomendacionesClaude({ session, prueba }) {
             <div style={{fontSize:11, fontWeight:600, color:C.navy, letterSpacing:'0.08em',
               textTransform:'uppercase'}}>Informe de Recomendaciones Pedagógicas</div>
             <div style={{fontSize:11, color:C.gray, fontFamily:'Inter', marginTop:3}}>
-              Publicado por Asesorías Académicas Milton Ochoa ·{' '}
+              Publicado por el Grupo Milton Ochoa ·{' '}
               {new Date(analisis.created_at).toLocaleDateString('es-CO', {
                 year:'numeric', month:'long', day:'numeric', timeZone:'America/Bogota'
               })}
@@ -712,7 +905,7 @@ export default function ColegioDashboard({session, onLogout}) {
   const [allPruebas, setAllPruebas] = useState([])
   const [pruebasDisponibles, setPruebasDisponibles] = useState([])
   const [selectedPrueba, setSelectedPrueba] = useState(null)
-  const [selectedGrado, setSelectedGrado] = useState('Todos')
+  const [selectedGrado, setSelectedGrado] = useState('')
   const [selectedSalon, setSelectedSalon] = useState('Todos')
 
   // Student detail modal
@@ -730,8 +923,10 @@ export default function ColegioDashboard({session, onLogout}) {
   const [notasComp, setNotasComp] = useState([])
   const [notasCompAsig, setNotasCompAsig] = useState('Todas')
   const [notasCompEst, setNotasCompEst] = useState('Todas')
+  const [notasCompPage, setNotasCompPage] = useState(1)
   const [notasCompN, setNotasCompN] = useState([])
   const [notasCompNAsig, setNotasCompNAsig] = useState('Todas')
+  const [notasCompNPage, setNotasCompNPage] = useState(1)
   const [compNGestion, setCompNGestion] = useState([])
   const [mejoraLimite, setMejoraLimite] = useState(0)
   const [mejoraAsig, setMejoraAsig] = useState('Todas')
@@ -755,6 +950,8 @@ export default function ColegioDashboard({session, onLogout}) {
   const [rankingSort, setRankingSort] = useState({col:'_def', dir:'desc'})
   const [detallePruebaSort, setDetallePruebaSort] = useState({col:'nro_pregunta', dir:'asc'})
   const [listadoNotasSort, setListadoNotasSort] = useState({col:'_def', dir:'desc'})
+  const [pctScope, setPctScope] = useState('plantel')
+  const [pctGeo, setPctGeo] = useState({})
   const [nombreColWidth, setNombreColWidth] = useState(175)
   const [convMin, setConvMin] = useState(0)
   const [convMax, setConvMax] = useState(5)
@@ -783,7 +980,7 @@ export default function ColegioDashboard({session, onLogout}) {
 
   // Derived filter options from loaded data
   const gradosDisponibles = useMemo(() =>
-    ['Todos', ...new Set(allStudents.map(s => s.estudiantes?.grado != null ? String(s.estudiantes.grado) : null).filter(Boolean)).values()],
+    [...new Set(allStudents.map(s => s.estudiantes?.grado != null ? String(s.estudiantes.grado) : null).filter(Boolean)).values()],
     [allStudents]
   )
   const salonesDisponibles = useMemo(() =>
@@ -802,6 +999,23 @@ export default function ColegioDashboard({session, onLogout}) {
     loadForPrueba(selectedPrueba, () => cancelled)
     return () => { cancelled = true }
   }, [selectedPrueba])
+
+  // Percentiles geográficos (municipio/departamento/región/nacional) para Listado de Notas.
+  // Se cargan una sola vez por prueba+grado (con los 4 alcances ya calculados), no en cada
+  // cambio del filtro "Percentil de:".
+  useEffect(() => {
+    if (!selectedPrueba?.id || !selectedGrado || selectedGrado === 'Todos') { setPctGeo({}); return }
+    let cancelled = false
+    supabase.rpc('get_percentil_geografico', {
+      p_prueba_id: selectedPrueba.id, p_colegio_id: session.id, p_grado: selectedGrado,
+    }).then(({ data }) => {
+      if (cancelled) return
+      const map = {}
+      ;(data || []).forEach(r => { map[r.estudiante_id] = r })
+      setPctGeo(map)
+    })
+    return () => { cancelled = true }
+  }, [selectedPrueba?.id, selectedGrado])
 
   // Load student detail when selectedStudent changes
   useEffect(() => {
@@ -843,21 +1057,22 @@ export default function ColegioDashboard({session, onLogout}) {
 
       if (!pruebasData?.length) { setLoading(false); return }
 
-      // Seleccionar la más reciente por defecto
-      // setSelectedPrueba dispara el useEffect que llama loadForPrueba — no llamar dos veces
-      const primera = pruebasData[0]
-      setSelectedPrueba(primera)
-      setPrueba(primera)
-
-      // Notas Acumuladas — promedios por prueba para línea de tiempo
+      // Qué pruebas tienen resultados para este colegio (define el default y el selector).
+      // Se consulta ANTES de elegir el default para no aterrizar en una prueba vacía.
       const { data: todosRes } = await supabase
         .from('resultados_estudiante')
         .select('prueba_id, puntaje_global, mat_cuantitativo, mat_especifico, cn_quimica, cn_fisica, cn_biologia, cn_cts, sociales, ciudadanas, lectura_critica, ingles')
         .eq('colegio_id', session.id)
-      if (pruebasData?.length) {
-        const idsConResultados = new Set((todosRes || []).map(r => r.prueba_id))
-        setPruebasDisponibles(pruebasData.filter(p => idsConResultados.has(p.id)))
-      }
+      if (!mountedRef.current) return
+      const idsConResultados = new Set((todosRes || []).map(r => r.prueba_id))
+      setPruebasDisponibles(pruebasData.filter(p => idsConResultados.has(p.id)))
+
+      // Default: la prueba más reciente CON resultados; si ninguna tiene, la más reciente.
+      // (pruebasData viene ordenada por created_at desc.) setSelectedPrueba dispara loadForPrueba.
+      const primera = pruebasData.find(p => idsConResultados.has(p.id)) || pruebasData[0]
+      setSelectedPrueba(primera)
+      setPrueba(primera)
+
       if (todosRes && pruebasData?.length) {
         const byPrueba = {}
         todosRes.forEach(r => {
@@ -926,7 +1141,7 @@ export default function ColegioDashboard({session, onLogout}) {
         .order('puntaje_global', {ascending: false})
       if (isCancelled()) return
       setAllStudents(res || [])
-      setSelectedGrado('Todos')
+      setSelectedGrado('')          // exige elegir grado antes de mostrar resultados
       setSelectedSalon('Todos')
 
       if (!res?.length) {
@@ -1217,18 +1432,54 @@ export default function ColegioDashboard({session, onLogout}) {
     </div>
   )
 
-  const EmptyState = ({msg='Los resultados aparecerán aquí cuando AAMO los cargue.'}) => (
-    <Card>
-      <div style={{textAlign:'center', padding:60, display:'flex', flexDirection:'column',
-        alignItems:'center', gap:16}}>
-        <div style={{fontSize:48}}>📋</div>
-        <div style={{fontFamily:'Playfair Display, serif', fontSize:20, color:C.navy}}>
-          Sin resultados disponibles
+  // Sin grado seleccionado, las pantallas de Herramientas piden elegir uno (evita mezclar
+  // grados en pruebas que se apliquen a varios). Con grado elegido pero sin datos, muestra
+  // el mensaje normal.
+  const EmptyState = ({msg='Los resultados aparecerán aquí cuando AAMO los cargue.'}) => {
+    const sinGrado = !selectedGrado
+    return (
+      <Card>
+        <div style={{textAlign:'center', padding:60, display:'flex', flexDirection:'column',
+          alignItems:'center', gap:16}}>
+          <div style={{fontSize:48}}>{sinGrado ? '🎓' : '📋'}</div>
+          <div style={{fontFamily:'Playfair Display, serif', fontSize:20, color:C.navy}}>
+            {sinGrado ? 'Selecciona un grado' : 'Sin resultados disponibles'}
+          </div>
+          <div style={{fontFamily:'Inter', fontSize:13, color:C.gray, maxWidth:360}}>
+            {sinGrado ? 'Elige un grado en el panel de la izquierda para ver los resultados de esta prueba.' : msg}
+          </div>
         </div>
-        <div style={{fontFamily:'Inter', fontSize:13, color:C.gray, maxWidth:360}}>{msg}</div>
+      </Card>
+    )
+  }
+
+  const PAGE_SIZE = 50
+  const Pagination = ({page, setPage, total}) => {
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+    const from = total === 0 ? 0 : (page-1)*PAGE_SIZE + 1
+    const to = Math.min(page*PAGE_SIZE, total)
+    const btnStyle = (disabled) => ({padding:'6px 12px', borderRadius:6,
+      border:`1px solid ${C.grayLt}`, background: disabled ? C.bg2 : C.white,
+      color: disabled ? C.grayLt : C.navy, fontFamily:'Inter', fontSize:12,
+      fontWeight:600, cursor: disabled ? 'default' : 'pointer'})
+    return (
+      <div style={{display:'flex', alignItems:'center', justifyContent:'space-between',
+        gap:12, marginTop:14, flexWrap:'wrap'}}>
+        <span style={{fontSize:12, color:C.gray, fontFamily:'Inter'}}>
+          {total === 0 ? 'Sin registros' : `Mostrando ${from}–${to} de ${total}`}
+        </span>
+        <div style={{display:'flex', alignItems:'center', gap:8}}>
+          <button disabled={page<=1} onClick={()=>setPage(p=>Math.max(1,p-1))}
+            style={btnStyle(page<=1)}>← Anterior</button>
+          <span style={{fontSize:12, color:C.text, fontFamily:'Inter', fontWeight:600}}>
+            Página {page} de {totalPages}
+          </span>
+          <button disabled={page>=totalPages} onClick={()=>setPage(p=>Math.min(totalPages,p+1))}
+            style={btnStyle(page>=totalPages)}>Siguiente →</button>
+        </div>
       </div>
-    </Card>
-  )
+    )
+  }
 
   // No early return — always show layout
 
@@ -1284,7 +1535,7 @@ export default function ColegioDashboard({session, onLogout}) {
           {/* Menú jerárquico */}
           {[
             {
-              id: 'plantel', label: 'Plantel', icon: '🏫',
+              id: 'plantel', label: 'Plantel',
               items: [
                 {id:'carta',      label:'Carta de Bienvenida'},
                 {id:'estudiantes',label:'Listado de Estudiantes'},
@@ -1294,7 +1545,7 @@ export default function ColegioDashboard({session, onLogout}) {
               ]
             },
             {
-              id: 'herramientas', label: 'Herramientas', icon: '🛠️',
+              id: 'herramientas', label: 'Herramientas',
               filters: true,
               items: [
                 {id:'tablero',       label:'Tablero de Gestión'},
@@ -1338,7 +1589,7 @@ export default function ColegioDashboard({session, onLogout}) {
               ],
             },
             {
-              id: 'consultoria', label: 'Consultoría', icon: '💡',
+              id: 'consultoria', label: 'Recursos',
               items: [
                 {id:'recomendaciones', label:'Recomendaciones'},
                 {id:'portafolio',      label:'Portafolio'},
@@ -1357,7 +1608,7 @@ export default function ColegioDashboard({session, onLogout}) {
                   display:'flex', alignItems:'center', gap:8, fontWeight:600,
                   transition:'all 0.2s',
                 }}>
-                <span>{section.icon}</span>
+                <span style={{display:'flex', alignItems:'center'}}><NavIcon id={section.id} /></span>
                 <span style={{flex:1}}>{section.label}</span>
                 <span style={{fontSize:10, opacity:0.5}}>{menuSection===section.id ? '▲' : '▼'}</span>
               </button>
@@ -1393,13 +1644,13 @@ export default function ColegioDashboard({session, onLogout}) {
                       <FilterSelect
                         label="Grado"
                         value={selectedGrado}
-                        onChange={val => { setSelectedGrado(val); setSelectedSalon('Todos') }}
-                        options={gradosDisponibles.map(g => ({value:g, label:g==='Todos'?'Todos los grados':g}))}
+                        onChange={val => { setSelectedGrado(val); setSelectedSalon('Todos'); setNotasCompPage(1); setNotasCompNPage(1) }}
+                        options={[{value:'', label:'Seleccionar grado…'}, ...gradosDisponibles.map(g => ({value:g, label:`Grado ${g}`}))]}
                       />
                       <FilterSelect
                         label="Salón"
                         value={selectedSalon}
-                        onChange={setSelectedSalon}
+                        onChange={val => { setSelectedSalon(val); setNotasCompPage(1); setNotasCompNPage(1) }}
                         options={salonesDisponibles.map(s => ({value:s, label:s==='Todos'?'Todos los salones':`Salón ${s}`}))}
                       />
                       <div style={{height:1, background:'rgba(255,255,255,0.08)', margin:'8px 0 12px'}}/>
@@ -1487,7 +1738,7 @@ export default function ColegioDashboard({session, onLogout}) {
           {/* Menú jerárquico */}
           {[
             {
-              id: 'plantel', label: 'Plantel', icon: '🏫',
+              id: 'plantel', label: 'Plantel',
               items: [
                 {id:'carta',      label:'Carta de Bienvenida'},
                 {id:'estudiantes',label:'Listado de Estudiantes'},
@@ -1497,7 +1748,7 @@ export default function ColegioDashboard({session, onLogout}) {
               ]
             },
             {
-              id: 'herramientas', label: 'Herramientas', icon: '🛠️',
+              id: 'herramientas', label: 'Herramientas',
               filters: true,
               items: [
                 {id:'tablero',       label:'Tablero de Gestión'},
@@ -1541,7 +1792,7 @@ export default function ColegioDashboard({session, onLogout}) {
               ],
             },
             {
-              id: 'consultoria', label: 'Consultoría', icon: '💡',
+              id: 'consultoria', label: 'Recursos',
               items: [
                 {id:'recomendaciones', label:'Recomendaciones'},
                 {id:'portafolio',      label:'Portafolio'},
@@ -1560,7 +1811,7 @@ export default function ColegioDashboard({session, onLogout}) {
                   display:'flex', alignItems:'center', gap:8, fontWeight:600,
                   transition:'all 0.2s',
                 }}>
-                <span>{section.icon}</span>
+                <span style={{display:'flex', alignItems:'center'}}><NavIcon id={section.id} /></span>
                 <span style={{flex:1}}>{section.label}</span>
                 <span style={{fontSize:10, opacity:0.5}}>{menuSection===section.id ? '▲' : '▼'}</span>
               </button>
@@ -1596,13 +1847,13 @@ export default function ColegioDashboard({session, onLogout}) {
                       <FilterSelect
                         label="Grado"
                         value={selectedGrado}
-                        onChange={val => { setSelectedGrado(val); setSelectedSalon('Todos') }}
-                        options={gradosDisponibles.map(g => ({value:g, label:g==='Todos'?'Todos los grados':g}))}
+                        onChange={val => { setSelectedGrado(val); setSelectedSalon('Todos'); setNotasCompPage(1); setNotasCompNPage(1) }}
+                        options={[{value:'', label:'Seleccionar grado…'}, ...gradosDisponibles.map(g => ({value:g, label:`Grado ${g}`}))]}
                       />
                       <FilterSelect
                         label="Salón"
                         value={selectedSalon}
-                        onChange={setSelectedSalon}
+                        onChange={val => { setSelectedSalon(val); setNotasCompPage(1); setNotasCompNPage(1) }}
                         options={salonesDisponibles.map(s => ({value:s, label:s==='Todos'?'Todos los salones':`Salón ${s}`}))}
                       />
                       <div style={{height:1, background:'rgba(255,255,255,0.08)', margin:'8px 0 12px'}}/>
@@ -1676,7 +1927,7 @@ export default function ColegioDashboard({session, onLogout}) {
       <main style={{flex:1, padding: mobile ? '72px 16px 24px' : tablet ? '24px 20px' : '36px 40px', overflowY:'auto', minWidth: 0}}>
         {/* HEADER */}
         <div style={{marginBottom:28}}>
-          <div style={{fontSize:11, color:C.green, letterSpacing:'0.12em',
+          <div style={{fontSize:11, color:C.gray, letterSpacing:'0.12em',
             textTransform:'uppercase', fontFamily:'Inter', marginBottom:6}}>
             {new Date().toLocaleDateString('es-CO', {
               weekday:'long', year:'numeric', month:'long', day:'numeric',
@@ -1695,24 +1946,15 @@ export default function ColegioDashboard({session, onLogout}) {
                   {session?.nombre}
                 </h1>
                 <div style={{fontSize:13, color:C.gray, fontFamily:'Inter'}}>
-                  {session?.ciudad} · {students.length} estudiantes evaluados
+                  {session?.ciudad}{selectedGrado ? ` · Grado ${selectedGrado} · ${students.length} estudiantes evaluados` : ''}
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* KPIs — solo en Tablero de Gestión */}
-        {tab === 'tablero' && (
-        <div style={{display:'grid', gridTemplateColumns: mobile || tablet ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap:12, marginBottom:28}}>
-          <KpiCard label="Prom. Global" value={promGlobal ?? '—'} sub={`Prueba ${prueba?.codigo ?? '—'}`} color={C.navy}/>
-          <KpiCard label="Estudiantes" value={students.length || '—'} sub="Evaluados" color={C.navy}/>
-          <KpiCard label="Mejor puntaje"
-            value={maxStudent ? (maxStudent.puntaje_irt?.global ?? maxStudent.puntaje_global ?? '—') : '—'}
-            sub={maxStudent?.estudiantes?.nombre?.split(' ').slice(0,2).join(' ') || 'Sin datos'} color={C.green}/>
-          <KpiCard label="Oport. mejora" value={oportunidades.length || '—'} sub="Preguntas críticas" color={C.red}/>
-        </div>
-        )}
+        {/* KPIs removidos del Tablero de Gestión a pedido (Prom. Global, Estudiantes,
+            Mejor puntaje, Oport. mejora). */}
 
         {/* ══ TABLERO ══════════════════════════════════════════ */}
         {tab==='tablero' && (
@@ -2025,9 +2267,9 @@ export default function ColegioDashboard({session, onLogout}) {
                   // Barras flotantes: cada barra va de (prom - desv) a (prom + desv)
                   // Las etiquetas muestran el valor mínimo (abajo) y máximo (arriba) de la barra
                   const SCOPES = [
-                    {sfx:'nac',  color:'#2563EB', label:'Nacional',     promKey:'nac_prom',    desvKey:'nac_desv'},
-                    {sfx:'reg',  color:'#059669', label:regionNombre,   promKey:'reg_prom',    desvKey:'reg_desv'},
-                    {sfx:'dpto', color:'#7C3AED', label:dptoNombre,    promKey:'dpto_prom',   desvKey:'dpto_desv'},
+                    {sfx:'nac',  color:'#3B82F6', label:'Nacional',     promKey:'nac_prom',    desvKey:'nac_desv'},
+                    {sfx:'reg',  color:'#EC4899', label:regionNombre,   promKey:'reg_prom',    desvKey:'reg_desv'},
+                    {sfx:'dpto', color:'#8B5CF6', label:dptoNombre,    promKey:'dpto_prom',   desvKey:'dpto_desv'},
                     {sfx:'ciu',  color:'#06B6D4', label:ciudadNombre,  promKey:'ciudad_prom', desvKey:'ciudad_desv'},
                     {sfx:'pln',  color:'#1E3A5F', label:'Plantel',      promKey:'plantel_prom',desvKey:'plantel_desv'},
                   ]
@@ -2041,9 +2283,13 @@ export default function ColegioDashboard({session, onLogout}) {
                         entry[`${sfx}_base`] = 0; entry[`${sfx}_rng`] = 0
                         entry[`${sfx}_lo`] = null; entry[`${sfx}_hi`] = null
                       } else if (desv == null) {
-                        // Sin desviación: barra sólida desde 0 hasta el promedio
-                        entry[`${sfx}_base`] = 0; entry[`${sfx}_rng`] = clamp(prom)
-                        entry[`${sfx}_lo`] = null; entry[`${sfx}_hi`] = clamp(prom)
+                        // Sin desviación (p.ej. un solo colegio en el grupo): marcador delgado
+                        // AL NIVEL del promedio, no una barra desde 0 (que se leía como un rango
+                        // enorme pegado al eje). El borde superior del marcador queda en el promedio.
+                        const p = clamp(prom), H = 4
+                        const base = Math.max(0, p - H)
+                        entry[`${sfx}_base`] = base; entry[`${sfx}_rng`] = p - base
+                        entry[`${sfx}_lo`] = null; entry[`${sfx}_hi`] = p
                       } else {
                         // Con desviación: barra flotante entre prom-desv y prom+desv
                         const lo = clamp(prom - desv), hi = clamp(prom + desv)
@@ -2277,7 +2523,7 @@ export default function ColegioDashboard({session, onLogout}) {
               {/* Box plot SVG interactivo */}
               <div style={{width:'100%', overflowX:'auto', position:'relative'}}
                 onMouseLeave={()=>setBoxHover(null)}>
-                <svg viewBox="0 0 1020 300" style={{width:'100%', minWidth:640, display:'block'}}>
+                <svg viewBox="0 0 1020 340" style={{width:'100%', minWidth:640, display:'block'}}>
                   {/* Grid lines */}
                   {[0,25,50,75,100].map(v => {
                     const y = 30 + 210 * (1 - v/110)
@@ -2446,7 +2692,7 @@ export default function ColegioDashboard({session, onLogout}) {
               </CardTitle>
               <div style={{width:'100%', overflowX:'auto', position:'relative'}}
                 onMouseLeave={()=>setBoxHover(null)}>
-                <svg viewBox="0 0 720 300" style={{width:'100%', minWidth:480, display:'block'}}>
+                <svg viewBox="0 0 720 340" style={{width:'100%', minWidth:480, display:'block'}}>
                   {[0,25,50,75,100].map(v => {
                     const y = 30 + 210 * (1 - v/110)
                     return <g key={v}>
@@ -2601,7 +2847,7 @@ export default function ColegioDashboard({session, onLogout}) {
             if (notasCompEst !== 'Todas' && (estMap[r.estudiante_id]?.nombre||'') !== notasCompEst) return false
             return true
           })
-          const handleSortComp = col => setNotasCompSort(s => ({col, dir: s.col===col && s.dir==='asc' ? 'desc' : 'asc'}))
+          const handleSortComp = col => { setNotasCompSort(s => ({col, dir: s.col===col && s.dir==='asc' ? 'desc' : 'asc'})); setNotasCompPage(1) }
           const arrowComp = col => notasCompSort.col===col ? (notasCompSort.dir==='asc' ? ' ▲' : ' ▼') : ' ⇅'
           const filas = [...filasBase].sort((a, b) => {
             const est_a = estMap[a.estudiante_id] || {}
@@ -2617,6 +2863,7 @@ export default function ColegioDashboard({session, onLogout}) {
             color:'white', fontSize:11, fontWeight:700, whiteSpace:'nowrap',
             borderBottom:'1px solid rgba(255,255,255,0.15)', cursor:'pointer', userSelect:'none'}
           const thNum = {...thSt, textAlign:'center'}
+          const filasPag = filas.slice((notasCompPage-1)*PAGE_SIZE, notasCompPage*PAGE_SIZE)
 
           return students.length === 0 ? <EmptyState/> : (
             <Card>
@@ -2628,7 +2875,7 @@ export default function ColegioDashboard({session, onLogout}) {
                 <div style={{display:'flex', alignItems:'center', gap:16, flexWrap:'wrap'}}>
                   <div style={{display:'flex', alignItems:'center', gap:8}}>
                     <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Asignatura:</span>
-                    <select value={notasCompAsig} onChange={e => setNotasCompAsig(e.target.value)}
+                    <select value={notasCompAsig} onChange={e => {setNotasCompAsig(e.target.value); setNotasCompPage(1)}}
                       style={{padding:'6px 10px', border:`1px solid ${C.grayLt}`, borderRadius:6,
                         fontFamily:'Inter', fontSize:12, color:C.text, background:C.white,
                         outline:'none', cursor:'pointer'}}>
@@ -2637,7 +2884,7 @@ export default function ColegioDashboard({session, onLogout}) {
                   </div>
                   <div style={{display:'flex', alignItems:'center', gap:8}}>
                     <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Estudiante:</span>
-                    <select value={notasCompEst} onChange={e => setNotasCompEst(e.target.value)}
+                    <select value={notasCompEst} onChange={e => {setNotasCompEst(e.target.value); setNotasCompPage(1)}}
                       style={{padding:'6px 10px', border:`1px solid ${C.grayLt}`, borderRadius:6,
                         fontFamily:'Inter', fontSize:12, color:C.text, background:C.white,
                         outline:'none', cursor:'pointer', maxWidth:220}}>
@@ -2666,7 +2913,7 @@ export default function ColegioDashboard({session, onLogout}) {
                       </tr>
                     </thead>
                     <tbody>
-                      {filas.map((r, i) => {
+                      {filasPag.map((r, i) => {
                         const est = estMap[r.estudiante_id] || {}
                         const nota = r.nota != null ? Math.round(r.nota * 100) / 100 : null
                         const bg = nota != null ? semaforoBg(nota, '_') : C.bg2
@@ -2701,6 +2948,8 @@ export default function ColegioDashboard({session, onLogout}) {
                   </table>
                 </div>
               )}
+              {filas.length > 0 &&
+                <Pagination page={notasCompPage} setPage={setNotasCompPage} total={filas.length}/>}
             </Card>
           )
         })()}
@@ -2853,7 +3102,7 @@ export default function ColegioDashboard({session, onLogout}) {
                       <Tooltip content={<ScatterTooltip/>}/>
                       <ReferenceLine y={avgPctDebajo} strokeDasharray="4 2" stroke="red"
                         label={{value:`Prom: ${Math.round(avgPctDebajo)}%`, position:'insideTopRight', fontFamily:'Inter', fontSize:10, fill:'red'}}/>
-                      <Scatter data={scatterData} fill="#2563EB" opacity={0.8}/>
+                      <Scatter data={scatterData} fill="#3B82F6" opacity={0.8}/>
                     </ScatterChart>
                   </ResponsiveContainer>
                 )
@@ -2985,13 +3234,14 @@ export default function ColegioDashboard({session, onLogout}) {
           })
           const thR = {textAlign:'left', padding:'8px 10px', fontSize:10, color:C.gray, fontWeight:600,
             textTransform:'uppercase', letterSpacing:'0.04em', whiteSpace:'nowrap',
-            cursor:'pointer', userSelect:'none', background:'#1E3A5F', color:'white'}
+            cursor:'pointer', userSelect:'none', background:'#1E3A5F', color:'white',
+            position:'sticky', top:0, zIndex:1}
           return students.length === 0 ? <EmptyState/> : (
           <Card>
             <CardTitle sub={`${students.length} estudiantes`}>
               Ranking Completo
             </CardTitle>
-            <div style={{overflowX:'auto'}}>
+            <div style={{overflowX:'auto', overflowY:'auto', maxHeight:560}}>
               <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter'}}>
                 <thead>
                   <tr>
@@ -3094,7 +3344,7 @@ export default function ColegioDashboard({session, onLogout}) {
                           <tr key={i} style={{background: mejora ? '#FFF7F7' : i%2===0 ? `${C.bg}80` : C.white}}>
                             <td style={{...tdDP, textAlign:'center', color:C.gray}}>{q.sesion??'—'}</td>
                             <td style={{...tdDP, textAlign:'center', fontWeight:700, fontSize:13,
-                              color:C.navy, fontFamily:'Playfair Display, serif'}}>{q.nro_pregunta}</td>
+                              color:C.navy, fontFamily:'Playfair Display, serif'}}>{q.nro_sesion ?? q.nro_pregunta}</td>
                             <td style={{...tdDP, color:C.text, lineHeight:1.4}}>{q.estandar||'—'}</td>
                             <td style={{...tdDP, color:C.gray}}>{q.componente||'—'}</td>
                             <td style={{...tdDP, color:C.gray}}>{q.competencia||'—'}</td>
@@ -3187,10 +3437,15 @@ export default function ColegioDashboard({session, onLogout}) {
           const getGlobal = s => s.puntaje_global ?? null
           const getDef = s => s.desempeno_pct != null ? +parseFloat(s.desempeno_pct).toFixed(3) : null
 
+          const geoKey = {plantel:null, municipio:'municipio_pct', departamento:'departamento_pct',
+            region:'region_pct', nacional:'nacional_pct'}[pctScope]
+
           const withDef = [...students].map(s => ({...s, _def: getDef(s), _global: getGlobal(s)}))
           const byDef = [...withDef].sort((a,b) => (b._global||0) - (a._global||0))
           byDef.forEach((s, idx) => {
-            s._pct = byDef.length > 1 ? Math.round(((byDef.length - 1 - idx) / (byDef.length - 1)) * 100) : 100
+            s._pct = geoKey
+              ? (pctGeo[s.estudiante_id]?.[geoKey] ?? null)
+              : (byDef.length > 1 ? Math.round(((byDef.length - 1 - idx) / (byDef.length - 1)) * 100) : 100)
           })
           const ranked = [...withDef].sort((a, b) => {
               const v = listadoNotasSort.col
@@ -3225,7 +3480,19 @@ export default function ColegioDashboard({session, onLogout}) {
 
           return students.length === 0 ? <EmptyState/> : (
             <Card>
-              <div style={{overflowX:'auto'}}>
+              <div style={{display:'flex', alignItems:'center', justifyContent:'flex-end', gap:8, marginBottom:12}}>
+                <label style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Percentil de:</label>
+                <select value={pctScope} onChange={e=>setPctScope(e.target.value)} style={{
+                  padding:'6px 10px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+                  fontFamily:'Inter', fontSize:12, color:C.text, background:C.bg, outline:'none', cursor:'pointer'}}>
+                  <option value="plantel">Plantel</option>
+                  <option value="municipio">Municipio</option>
+                  <option value="departamento">Departamento</option>
+                  <option value="region">Región</option>
+                  <option value="nacional">Nacional</option>
+                </select>
+              </div>
+              <div style={{overflowX:'auto', overflowY:'auto', maxHeight:560}}>
                 <table style={{borderCollapse:'collapse', fontFamily:'Inter', fontSize:11, width:'100%', tableLayout:'fixed'}}>
                   <colgroup>
                     <col style={{width:28}}/>
@@ -3236,7 +3503,7 @@ export default function ColegioDashboard({session, onLogout}) {
                     <col style={{width:42}}/>
                     <col style={{width:38}}/>
                   </colgroup>
-                  <thead>
+                  <thead style={{position:'sticky', top:0, zIndex:1}}>
                     <tr>
                       <th rowSpan={2} style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)',
                         cursor:'default', padding:'4px 4px'}}>#</th>
@@ -3409,7 +3676,7 @@ export default function ColegioDashboard({session, onLogout}) {
               </div>
 
               {/* Table */}
-              <div style={{overflowX:'auto'}}>
+              <div style={{overflowX:'auto', overflowY:'auto', maxHeight:560}}>
                 <table style={{borderCollapse:'collapse', fontFamily:'Inter', fontSize:11,
                   width:'100%', tableLayout:'fixed'}}>
                   <colgroup>
@@ -3418,7 +3685,7 @@ export default function ColegioDashboard({session, onLogout}) {
                     {AREAS_CONV.flatMap(a => a.cols.map(([col]) => <col key={col} style={{width:52}}/>))}
                     <col style={{width:58}}/>
                   </colgroup>
-                  <thead>
+                  <thead style={{position:'sticky', top:0, zIndex:1}}>
                     <tr>
                       <th rowSpan={2} style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)',
                         padding:'4px 4px'}}>#</th>
@@ -3623,9 +3890,9 @@ export default function ColegioDashboard({session, onLogout}) {
 
                 {filas.length > 0 && compNAsigFilter !== 'Todas' && (() => {
                   const SCOPES = [
-                    {sfx:'nac',  color:'#2563EB', label:'Nacional',     promKey:'nac_prom',    desvKey:'nac_desv'},
-                    {sfx:'reg',  color:'#059669', label:regionNombre,  promKey:'reg_prom',    desvKey:'reg_desv'},
-                    {sfx:'dpto', color:'#7C3AED', label:dptoNombre,   promKey:'dpto_prom',   desvKey:'dpto_desv'},
+                    {sfx:'nac',  color:'#3B82F6', label:'Nacional',     promKey:'nac_prom',    desvKey:'nac_desv'},
+                    {sfx:'reg',  color:'#EC4899', label:regionNombre,  promKey:'reg_prom',    desvKey:'reg_desv'},
+                    {sfx:'dpto', color:'#8B5CF6', label:dptoNombre,   promKey:'dpto_prom',   desvKey:'dpto_desv'},
                     {sfx:'ciu',  color:'#06B6D4', label:ciudadNombre, promKey:'ciudad_prom', desvKey:'ciudad_desv'},
                     {sfx:'pln',  color:'#1E3A5F', label:'Plantel',    promKey:'plantel_prom',desvKey:'plantel_desv'},
                   ]
@@ -3759,7 +4026,7 @@ export default function ColegioDashboard({session, onLogout}) {
             if (notasCompNAsig !== 'Todas' && r.materia !== notasCompNAsig) return false
             return true
           })
-          const handleSortCompN = col => setNotasCompNSort(s => ({col, dir: s.col===col && s.dir==='asc' ? 'desc' : 'asc'}))
+          const handleSortCompN = col => { setNotasCompNSort(s => ({col, dir: s.col===col && s.dir==='asc' ? 'desc' : 'asc'})); setNotasCompNPage(1) }
           const arrowCompN = col => notasCompNSort.col===col ? (notasCompNSort.dir==='asc' ? ' ▲' : ' ▼') : ' ⇅'
           const filas = [...filasBaseN].sort((a, b) => {
             const est_a = estMap[a.estudiante_id] || {}
@@ -3772,13 +4039,14 @@ export default function ColegioDashboard({session, onLogout}) {
           })
           const thSt = {padding:'8px 10px',textAlign:'left',background:'#1E3A5F',color:'white',fontSize:11,fontWeight:700,whiteSpace:'nowrap',borderBottom:'1px solid rgba(255,255,255,0.15)',cursor:'pointer',userSelect:'none'}
           const thNum = {...thSt, textAlign:'center'}
+          const filasPag = filas.slice((notasCompNPage-1)*PAGE_SIZE, notasCompNPage*PAGE_SIZE)
           return students.length === 0 ? <EmptyState/> : (
             <Card>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:12,marginBottom:20}}>
                 <CardTitle sub={`${filas.length} registros`}>Notas Estudiantes por Componentes</CardTitle>
                 <div style={{display:'flex',alignItems:'center',gap:8}}>
                   <span style={{fontSize:11,color:C.gray,fontFamily:'Inter'}}>Asignatura:</span>
-                  <select value={notasCompNAsig} onChange={e=>setNotasCompNAsig(e.target.value)}
+                  <select value={notasCompNAsig} onChange={e=>{setNotasCompNAsig(e.target.value); setNotasCompNPage(1)}}
                     style={{padding:'6px 10px',border:`1px solid ${C.grayLt}`,borderRadius:6,fontFamily:'Inter',fontSize:12,color:C.text,background:C.white,outline:'none',cursor:'pointer'}}>
                     {asignaturas.map(a=><option key={a} value={a}>{a}</option>)}
                   </select>
@@ -3801,7 +4069,7 @@ export default function ColegioDashboard({session, onLogout}) {
                       </tr>
                     </thead>
                     <tbody>
-                      {filas.map((r,i) => {
+                      {filasPag.map((r,i) => {
                         const est = estMap[r.estudiante_id] || {}
                         const nota = r.nota!=null ? Math.round(r.nota*100)/100 : null
                         const bg = nota!=null ? semaforoBg(nota,'_') : C.bg2
@@ -3826,6 +4094,8 @@ export default function ColegioDashboard({session, onLogout}) {
                   </table>
                 </div>
               )}
+              {filas.length > 0 &&
+                <Pagination page={notasCompNPage} setPage={setNotasCompNPage} total={filas.length}/>}
             </Card>
           )
         })()}
@@ -3975,7 +4245,7 @@ export default function ColegioDashboard({session, onLogout}) {
                       <Tooltip content={<ScatterTooltipComp/>}/>
                       <ReferenceLine y={avgPctDebajoComp} strokeDasharray="4 2" stroke="red"
                         label={{value:`Prom: ${Math.round(avgPctDebajoComp)}%`, position:'insideTopRight', fontFamily:'Inter', fontSize:10, fill:'red'}}/>
-                      <Scatter data={scatterDataComp} fill="#2563EB" opacity={0.8}/>
+                      <Scatter data={scatterDataComp} fill="#3B82F6" opacity={0.8}/>
                     </ScatterChart>
                   </ResponsiveContainer>
                 )
@@ -4098,9 +4368,14 @@ export default function ColegioDashboard({session, onLogout}) {
             <Card><EmptyState msg="No hay resultados cargados para esta prueba."/></Card>
           )
 
-          // Lookup sesión por nro_pregunta desde analisis_preguntas
-          const sesionMap = {}
-          detallePreguntas.forEach(q => { sesionMap[q.nro_pregunta] = q.sesion })
+          // Sesión y Nro por-sesión desde la estructura de la prueba. La posición global
+          // (fila no vacía, 1..N) coincide con detalle.pregunta (i+1 en la calificación),
+          // así que no depende del cálculo de análisis.
+          const rawRows = selectedPrueba?.estructura_excel?.raw || []
+          const posMap = {}
+          rawRows.slice(1)
+            .filter(f => Array.isArray(f) && f.some(v => v!=='' && v!=null && v!==undefined))
+            .forEach((f, i) => { posMap[i+1] = { sesion: f[0], nro: f[1] } })
 
           // Agregar respuestas por pregunta desde detalle de cada estudiante
           const OPTS = ['A','B','C','D','E','F','G','H']
@@ -4112,7 +4387,8 @@ export default function ColegioDashboard({session, onLogout}) {
               if (!byQ[nro]) {
                 byQ[nro] = {
                   nro,
-                  sesion: sesionMap[nro] ?? '—',
+                  sesion: posMap[nro]?.sesion ?? '—',
+                  nroSesion: posMap[nro]?.nro ?? nro,
                   area: d.area || '',
                   materia: d.asignatura || '',
                   correcta: (d.correcta || '').toUpperCase().trim(),
@@ -4129,7 +4405,7 @@ export default function ColegioDashboard({session, onLogout}) {
           })
 
           const filas = Object.values(byQ)
-            .sort((a,b) => a.sesion - b.sesion || a.nro - b.nro)
+            .sort((a,b) => (Number(a.sesion)||0) - (Number(b.sesion)||0) || (Number(a.nroSesion)||0) - (Number(b.nroSesion)||0))
 
           // Filtro por área
           const areas = ['Todas', ...new Set(filas.map(f => f.area).filter(Boolean))]
@@ -4195,7 +4471,7 @@ export default function ColegioDashboard({session, onLogout}) {
                       return (
                         <tr key={f.nro}>
                           <td style={tdS(rowBg)}>{f.sesion}</td>
-                          <td style={{...tdS(rowBg), fontWeight:700, color:C.navy}}>{f.nro}</td>
+                          <td style={{...tdS(rowBg), fontWeight:700, color:C.navy}}>{f.nroSesion}</td>
                           <td style={{...tdS(rowBg), textAlign:'left', paddingLeft:10,
                             whiteSpace:'nowrap', maxWidth:140, overflow:'hidden',
                             textOverflow:'ellipsis'}}>{f.area}</td>
@@ -4436,62 +4712,74 @@ export default function ColegioDashboard({session, onLogout}) {
 
         {/* ══ CARTA DE BIENVENIDA ══════════════════════════════ */}
         {tab==='carta' && (
-          <div style={{display:'grid', gap:20}}>
+          <div style={{display:'flex', flexDirection:'column', gap:16,
+            minHeight: !mobile && !tablet ? 'calc(100vh - 132px)' : undefined}}>
             {/* Header carta */}
             <div style={{background:`linear-gradient(135deg, ${C.navy} 0%, #1A3560 100%)`,
-              borderRadius:16, padding:'48px 56px', position:'relative', overflow:'hidden'}}>
-              <div style={{position:'absolute', top:-30, right:-30, fontSize:180,
-                opacity:0.04, lineHeight:1}}>✦</div>
-              <div style={{position:'absolute', bottom:-20, left:-20, fontSize:120,
-                opacity:0.04, lineHeight:1}}>✦</div>
-              <div style={{fontSize:10, color:'rgba(255,255,255,0.45)', fontFamily:'Inter',
-                letterSpacing:'0.2em', textTransform:'uppercase', marginBottom:16}}>
-                Portal de Resultados — Milton Ochoa
-              </div>
-              <div style={{fontSize:32, fontFamily:'Playfair Display, serif', color:C.white,
-                fontWeight:400, lineHeight:1.3, marginBottom:8}}>
+              borderRadius:16, padding:'24px 48px', position:'relative', overflow:'hidden', flexShrink:0}}>
+              <div style={{position:'absolute', top:-38, right:-24, fontSize:170,
+                opacity:0.05, lineHeight:1, color:C.white}}>✦</div>
+              <div style={{position:'absolute', bottom:-30, left:-16, fontSize:120,
+                opacity:0.05, lineHeight:1, color:C.white}}>✦</div>
+              <div style={{fontSize:28, fontFamily:'Playfair Display, serif', color:C.white,
+                fontWeight:400, lineHeight:1.15}}>
                 Carta de Bienvenida
               </div>
-              <div style={{width:48, height:2, background:C.green, marginTop:16}}/>
+              <div style={{width:42, height:2.5, background:C.green, borderRadius:2, marginTop:12}}/>
             </div>
 
-            {/* Cuerpo de la carta */}
-            <Card style={{padding:'48px 56px'}}>
-              {/* Saludo */}
-              <div style={{fontFamily:'Playfair Display, serif', fontSize:18, color:C.navy,
-                fontStyle:'italic', marginBottom:32}}>
-                Estimada comunidad de <strong style={{fontStyle:'normal'}}>{session?.nombre}</strong>,
+            {/* Cuerpo de la carta — se estira para llenar el alto disponible. Se divide en
+                3 bloques (texto, cita, firma) con justify-content:space-evenly, para que el
+                espacio sobrante se reparta en dos huecos moderados en vez de uno solo enorme;
+                de paso, empuja la cita hacia abajo y ancla la firma cerca del borde inferior,
+                como en una carta impresa. */}
+            <Card style={{padding:'24px 50px', position:'relative', overflow:'hidden',
+              flex:1, display:'flex', flexDirection:'column', justifyContent:'space-evenly'}}>
+              {/* Marca de agua tipográfica sutil */}
+              <div style={{position:'absolute', top:-16, right:18, fontSize:110,
+                fontFamily:'Playfair Display, serif', color:C.navy, opacity:0.035,
+                lineHeight:1, pointerEvents:'none', userSelect:'none'}}>"</div>
+
+              <div>
+                {/* Saludo */}
+                <div style={{fontFamily:'Playfair Display, serif', fontSize:15.5, color:C.navy,
+                  fontStyle:'italic', marginBottom:14, position:'relative'}}>
+                  Estimada comunidad de <strong style={{fontStyle:'normal'}}>{session?.nombre}</strong>,
+                </div>
+
+                {/* Párrafos */}
+                {[
+                  'Es un honor para nosotros recibirlos en el Portal de Resultados del Grupo Milton Ochoa.',
+                  'Cada institución que confía en nosotros representa mucho más que un aliado estratégico — representa una comunidad comprometida con el futuro de Colombia. Ustedes, junto a sus estudiantes y docentes, son protagonistas de una transformación que va más allá de los resultados académicos: están construyendo el país que soñamos.',
+                  'En Milton Ochoa creemos profundamente que la evaluación es el primer paso hacia la excelencia. No como un juicio, sino como una brújula que orienta, que revela fortalezas y que ilumina el camino por recorrer. Por eso, cada dato que encuentran en este portal no es solo un número — es una oportunidad de crecer.',
+                  'Nuestro equipo está con ustedes en cada etapa. Detrás de cada reporte, de cada análisis, hay personas comprometidas con su éxito y con el de sus estudiantes. No están solos en este camino.',
+                  'Gracias por creer en la educación de calidad. Gracias por ser parte de esta misión que nos une:',
+                ].map((p, i) => (
+                  <p key={i} style={{fontFamily:'Inter', fontSize:13, lineHeight:1.65,
+                    color:C.gray, marginBottom:10, fontWeight:300, position:'relative'}}>{p}</p>
+                ))}
               </div>
 
-              {/* Párrafos */}
-              {[
-                'Es un honor para nosotros recibirlos en el Portal de Resultados de Asesorías Académicas Milton Ochoa.',
-                'Cada institución que confía en nosotros representa mucho más que un aliado estratégico — representa una comunidad comprometida con el futuro de Colombia. Ustedes, junto a sus estudiantes y docentes, son protagonistas de una transformación que va más allá de los resultados académicos: están construyendo el país que soñamos.',
-                'En Milton Ochoa creemos profundamente que la evaluación es el primer paso hacia la excelencia. No como un juicio, sino como una brújula que orienta, que revela fortalezas y que ilumina el camino por recorrer. Por eso, cada dato que encuentran en este portal no es solo un número — es una oportunidad de crecer.',
-                'Nuestro equipo está con ustedes en cada etapa. Detrás de cada reporte, de cada análisis, hay personas comprometidas con su éxito y con el de sus estudiantes. No están solos en este camino.',
-                'Gracias por creer en la educación de calidad. Gracias por ser parte de esta misión que nos une:',
-              ].map((p, i) => (
-                <p key={i} style={{fontFamily:'Inter', fontSize:15, lineHeight:1.9,
-                  color:C.gray, marginBottom:20, fontWeight:300}}>{p}</p>
-              ))}
-
               {/* Frase destacada */}
-              <div style={{background:C.bg, borderRadius:12, padding:'24px 32px',
-                borderLeft:`4px solid ${C.green}`, margin:'8px 0 32px'}}>
-                <div style={{fontFamily:'Playfair Display, serif', fontSize:22, color:C.navy,
-                  fontStyle:'italic', textAlign:'center'}}>
+              <div style={{background:`linear-gradient(135deg, ${C.bg} 0%, #EEF3F0 100%)`,
+                borderRadius:12, padding:'16px 32px', textAlign:'center', position:'relative'}}>
+                <div style={{width:26, height:2, background:C.green, borderRadius:2,
+                  margin:'0 auto 8px'}}/>
+                <div style={{fontFamily:'Playfair Display, serif', fontSize:17.5, color:C.navy,
+                  fontStyle:'italic', lineHeight:1.4}}>
                   "Inspirar y transformar el mundo."
                 </div>
+                <div style={{width:26, height:2, background:C.green, borderRadius:2,
+                  margin:'8px auto 0'}}/>
               </div>
 
               {/* Firma */}
-              <div style={{borderTop:`1px solid ${C.bg2}`, paddingTop:32, marginTop:8}}>
-                <div style={{fontFamily:'Inter', fontSize:13, color:C.gray,
-                  marginBottom:4}}>Con gratitud y compromiso,</div>
-                <div style={{fontFamily:'Playfair Display, serif', fontSize:20, color:C.navy,
-                  fontWeight:700, marginBottom:4}}>Asesorías Académicas Milton Ochoa</div>
-                <div style={{fontFamily:'Inter', fontSize:12, color:C.green,
-                  letterSpacing:'0.08em', textTransform:'uppercase'}}>Expertos en Evaluación</div>
+              <div style={{borderTop:`1px solid ${C.bg2}`, paddingTop:14}}>
+                <div style={{fontFamily:'Inter', fontSize:12.5, color:C.gray,
+                  marginBottom:4, fontStyle:'italic'}}>Con gratitud y compromiso,</div>
+                <div style={{fontFamily:'Playfair Display, serif', fontSize:18, color:C.navy,
+                  fontWeight:700}}>Grupo Milton Ochoa</div>
+                <div style={{width:32, height:2, background:C.green, borderRadius:2, marginTop:8}}/>
               </div>
             </Card>
           </div>
@@ -4504,12 +4792,12 @@ export default function ColegioDashboard({session, onLogout}) {
 
         {/* ══ REPORTE DE RESULTADOS ════════════════════════════ */}
         {tab==='resultados' && (
-          <PlantelResultados colegioId={session?.id} pruebas={allPruebas} />
+          <PlantelResultados colegioId={session?.id} pruebas={pruebasDisponibles} />
         )}
 
         {/* ══ MENCIÓN DE HONOR ═════════════════════════════════ */}
         {tab==='mencion' && (
-          <PlantelMencion colegioId={session?.id} pruebas={allPruebas} />
+          <PlantelMencion colegioId={session?.id} pruebas={allPruebas} colegioNombre={session?.nombre} />
         )}
 
         {/* ══ ACOMPAÑAMIENTO ═══════════════════════════════════ */}
@@ -4586,10 +4874,8 @@ export default function ColegioDashboard({session, onLogout}) {
             <div style={{background:C.navy, color:C.white, padding:'8px 18px 14px',
               fontFamily:'Inter', fontSize:11, lineHeight:1.9}}>
               <div>
-                <strong>Código:</strong> {session?.codigo} &nbsp;|&nbsp;
                 <strong>Nombre:</strong> {session?.nombre} &nbsp;|&nbsp;
-                <strong>Ciudad:</strong> {toTitleCase(session?.municipio)} - {toTitleCase(session?.departamento_nombre)} &nbsp;|&nbsp;
-                <strong>Fecha:</strong> {new Date().toLocaleDateString('es-CO', {day:'2-digit', month:'2-digit', year:'numeric'})}
+                <strong>Ciudad:</strong> {toTitleCase(session?.municipio)} - {toTitleCase(session?.departamento_nombre)}
               </div>
               <div>
                 <strong>Producto:</strong> {selectedPrueba?.tipo} &nbsp;|&nbsp;
@@ -4599,8 +4885,7 @@ export default function ColegioDashboard({session, onLogout}) {
                 <strong>Usuario:</strong> {selectedStudent.estudiantes?.usuario || '—'} &nbsp;|&nbsp;
                 <strong>Nombre:</strong> {selectedStudent.estudiantes?.nombre || '—'} &nbsp;|&nbsp;
                 <strong>Grado:</strong> {selectedStudent.estudiantes?.grado || '—'} &nbsp;|&nbsp;
-                <strong>Salón:</strong> {selectedStudent.estudiantes?.salon || '—'} &nbsp;|&nbsp;
-                <strong>Est:</strong> {selectedStudent.estudiantes?.codigo || '—'}
+                <strong>Salón:</strong> {selectedStudent.estudiantes?.salon || '—'}
               </div>
             </div>
 
@@ -4621,19 +4906,25 @@ export default function ColegioDashboard({session, onLogout}) {
                 const iComponente  = hIdx('componente')
                 const iTarea       = hIdx('tarea')
                 const iRta         = rawHeader.findIndex(h => typeof h === 'string' && ['rta','respuesta correcta','resp. correcta','resp correcta','respuesta'].includes(h.toLowerCase().trim()))
-                const questions = rawRows.slice(1).map(f => ({
-                  sesion:      (f[iSesion]    || '').toString().trim(),
-                  nro:         (f[iNro]       || '').toString().trim(),
-                  area:        (f[iArea]      || '').toString().trim(),
-                  materia:     (f[iMateria]   || '').toString().trim(),
-                  estandar:    iEstandar    >= 0 ? (f[iEstandar]    || '').toString().trim() : '',
-                  competencia: iCompetencia >= 0 ? (f[iCompetencia] || '').toString().trim() : '',
-                  componente:  iComponente  >= 0 ? (f[iComponente]  || '').toString().trim() : '',
-                  tarea:       iTarea       >= 0 ? (f[iTarea]       || '').toString().trim() : '',
-                  rta:         iRta         >= 0 ? (f[iRta]         || '').toString().trim() : '',
-                })).filter(q => q.nro && !isNaN(Number(q.nro)))
+                // gpos = posición global (fila no vacía, 1..N) — coincide con detalle.pregunta
+                // (i+1 en calcularResultado). El "Nro" del Excel se reinicia por sesión, así
+                // que no sirve como llave de cruce con el detalle del estudiante.
+                const questions = rawRows.slice(1)
+                  .filter(f => Array.isArray(f) && f.some(v => v !== '' && v != null))
+                  .map((f, i) => ({
+                    gpos:        i + 1,
+                    sesion:      (f[iSesion]    || '').toString().trim(),
+                    nro:         (f[iNro]       || '').toString().trim(),
+                    area:        (f[iArea]      || '').toString().trim(),
+                    materia:     (f[iMateria]   || '').toString().trim(),
+                    estandar:    iEstandar    >= 0 ? (f[iEstandar]    || '').toString().trim() : '',
+                    competencia: iCompetencia >= 0 ? (f[iCompetencia] || '').toString().trim() : '',
+                    componente:  iComponente  >= 0 ? (f[iComponente]  || '').toString().trim() : '',
+                    tarea:       iTarea       >= 0 ? (f[iTarea]       || '').toString().trim() : '',
+                    rta:         iRta         >= 0 ? (f[iRta]         || '').toString().trim() : '',
+                  }))
 
-                // Build a map from pregunta number → detalle entry
+                // Build a map from posición global → detalle entry
                 const detalleMap = {}
                 ;(studentDetalle || []).forEach(d => {
                   detalleMap[String(d.pregunta)] = d
@@ -4656,7 +4947,7 @@ export default function ColegioDashboard({session, onLogout}) {
                     </thead>
                     <tbody>
                       {questions.map((q, i) => {
-                        const d = detalleMap[q.nro]
+                        const d = detalleMap[q.gpos]
                         const correcto = d?.correcto
                         const cellBg = correcto === true ? '#DCFCE7' : correcto === false ? '#FEE2E2' : null
                         const cellColor = correcto === true ? C.green : correcto === false ? C.red : C.dark
@@ -4705,7 +4996,9 @@ export default function ColegioDashboard({session, onLogout}) {
                 </div>
                 <div style={{color:'#fff', fontSize:16, fontFamily:'Playfair Display, serif',
                   fontWeight:700, marginTop:4}}>
-                  Pregunta #{distribModal.q.nro_pregunta} · {distribModal.q.materia||'—'}
+                  Pregunta #{distribModal.q.nro_sesion ?? distribModal.q.nro_pregunta}
+                  {distribModal.q.sesion != null ? ` (Sesión ${distribModal.q.sesion})` : ''}
+                  {' '}· {distribModal.q.materia||'—'}
                   &nbsp;·&nbsp; Correcta:&nbsp;
                   <span style={{color:'#4ADE80'}}>{distribModal.q.respuesta_correcta||'—'}</span>
                 </div>
@@ -4729,7 +5022,10 @@ export default function ColegioDashboard({session, onLogout}) {
                 const rawHeader = rawRows[0] || []
                 const iAfirm = rawHeader.findIndex(h => typeof h === 'string' && h.toLowerCase().trim().startsWith('afirm'))
                 const iEvid  = rawHeader.findIndex(h => typeof h === 'string' && h.toLowerCase().trim().startsWith('evid'))
-                const rawRow = rawRows.slice(1).find(r => r && String(r[1]||'').trim() === String(q.nro_pregunta))
+                // q.nro_pregunta es la posición global (1..N entre filas no vacías) —
+                // el "Nro" del Excel se reinicia por sesión, así que no sirve para buscar la fila.
+                const nonEmptyRows = rawRows.slice(1).filter(f => Array.isArray(f) && f.some(v => v !== '' && v != null))
+                const rawRow = nonEmptyRows[q.nro_pregunta - 1]
 
                 const OPTS = ['A','B','C','D','E','F','G','H']
                 const OPT_COLORS = {
