@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import RankingNacional from './RankingNacional'
 import {
   C,
   Card, CardTitle, Badge, KpiCard, Sidebar, useMobile, useTablet
@@ -1591,6 +1592,7 @@ export default function ColegioDashboard({session, onLogout}) {
             {
               id: 'consultoria', label: 'Recursos',
               items: [
+                {id:'ranking_nacional', label:'Ranking'},
                 {id:'recomendaciones', label:'Recomendaciones'},
                 {id:'portafolio',      label:'Portafolio'},
                 {id:'valor',           label:'Valor Agregado'},
@@ -1794,6 +1796,7 @@ export default function ColegioDashboard({session, onLogout}) {
             {
               id: 'consultoria', label: 'Recursos',
               items: [
+                {id:'ranking_nacional', label:'Ranking'},
                 {id:'recomendaciones', label:'Recomendaciones'},
                 {id:'portafolio',      label:'Portafolio'},
                 {id:'valor',           label:'Valor Agregado'},
@@ -4814,6 +4817,11 @@ export default function ColegioDashboard({session, onLogout}) {
               </div>
             </div>
           </Card>
+        )}
+
+        {/* ══ RECURSOS — RANKING NACIONAL ═════════════════════ */}
+        {tab==='ranking_nacional' && (
+          <RankingNacional />
         )}
 
         {/* ══ CONSULTORÍA — RECOMENDACIONES ═══════════════════ */}
