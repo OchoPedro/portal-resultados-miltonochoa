@@ -7,6 +7,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { C, Card, Badge, useMobile } from '../components/ui'
+import ReportePlantel from './ReportePlantel'
+import ReporteAgrupado from './ReporteAgrupado'
 
 const POR_PAGINA = 100
 
@@ -108,17 +110,20 @@ export default function RankingNacional() {
   const [filtroNatAgrp, setFiltroNatAgrp] = useState('')
   const [filtroCalAgrp, setFiltroCalAgrp] = useState('')
   const [errorRanking, setErrorRanking] = useState('')
+  const [reporte, setReporte] = useState(null) // colegio seleccionado → abre el reporte de plantel
+  const [reporteAgrupado, setReporteAgrupado] = useState(null) // región/depto/municipio → reporte agrupado
   const agrupadoReqRef = useRef(0)
   const doLoadReqRef = useRef(0)
 
-  // Último año cargado + años disponibles (los 6 más recientes con datos).
+  // En el portal los colegios solo consultan el ranking del ÚLTIMO año cargado; el historial
+  // de años anteriores se ve al abrir el detalle del colegio (ReportePlantel). Por eso aquí el
+  // selector de años queda fijo en el año más reciente (un solo "pill", no 6 años navegables).
   useEffect(() => {
     (async () => {
       const { data: r } = await supabase.from('ranking_colegios')
         .select('anio').order('anio', { ascending: false }).limit(1)
       const maxY = (r && r[0]?.anio) || new Date().getFullYear() - 1
-      const lista = Array.from({ length: 6 }, (_, i) => maxY - i)
-      setAnios(lista); setAnio(maxY)
+      setAnios([maxY]); setAnio(maxY)
     })()
   }, [])
 
@@ -266,6 +271,11 @@ export default function RankingNacional() {
             <Sel value={filtroNatAgrp} onChange={setFiltroNatAgrp} options={['OFICIAL', 'NO OFICIAL', 'OFICIAL(C)']} placeholder="Naturaleza" />
             <Sel value={filtroCalAgrp} onChange={setFiltroCalAgrp} options={['A', 'B', 'O']} placeholder="Calendario" />
           </div>
+          {!loadingAgrp && agrupado.length > 0 && (
+            <div style={{ fontFamily: 'Inter', fontSize: 12, color: C.gray, marginBottom: 8 }}>
+              👆 Haz clic en una fila para ver su reporte detallado (comparativos, evolución y top colegios).
+            </div>
+          )}
           <Card style={{ padding: 0, overflow: 'hidden' }}>
             {loadingAgrp ? <div style={{ padding: 40, textAlign: 'center', color: C.gray, fontFamily: 'Inter' }}>Cargando…</div> : (
               <div style={{ overflowX: 'auto' }}>
@@ -283,7 +293,15 @@ export default function RankingNacional() {
                   </tr></thead>
                   <tbody>
                     {agrupado.map((g, i) => (
-                      <tr key={g.nombre + g.departamento} style={{ background: rowBg(i + 1, i) }}>
+                      <tr key={g.nombre + g.departamento}
+                        onClick={() => setReporteAgrupado({
+                          tipo: vista === 'regiones' ? 'region' : vista === 'municipios' ? 'municipio' : 'departamento',
+                          nombre: g.nombre, departamento: g.departamento,
+                        })}
+                        title={`Ver detalle de ${g.nombre}`}
+                        style={{ background: rowBg(i + 1, i), cursor: 'pointer' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = C.bg2 }}
+                        onMouseLeave={e => { e.currentTarget.style.background = rowBg(i + 1, i) }}>
                         <Td style={{ textAlign: 'center', fontWeight: 700, color: C.navy }}>{medal(i + 1)}{i + 1}</Td>
                         <Td style={{ fontWeight: 600, color: C.navy }}>{g.nombre}</Td>
                         {vista === 'municipios' && <Td style={{ color: C.gray, fontSize: 11 }}>{g.departamento}</Td>}
@@ -336,6 +354,12 @@ export default function RankingNacional() {
           {hayFiltros && <button onClick={limpiar} style={{ padding: '8px 12px', border: `1px solid ${C.red}`, borderRadius: 7, background: 'transparent', color: C.red, fontFamily: 'Inter', fontSize: 12, cursor: 'pointer' }}>✕ Limpiar</button>}
         </Card>
 
+        {data.length > 0 && !loading && (
+          <div style={{ fontFamily: 'Inter', fontSize: 12, color: C.gray, marginBottom: 8 }}>
+            👆 Haz clic en un colegio para ver su reporte detallado (historial de años anteriores, comparativos y tendencias).
+          </div>
+        )}
+
         <Card style={{ padding: 0, overflow: 'hidden' }}>
           {loading ? <div style={{ padding: 40, textAlign: 'center', color: C.gray, fontFamily: 'Inter' }}>Cargando ranking…</div>
             : data.length === 0 ? <div style={{ padding: 40, textAlign: 'center', color: C.gray, fontFamily: 'Inter' }}>No se encontraron resultados. Intenta con otros filtros.</div>
@@ -355,7 +379,12 @@ export default function RankingNacional() {
                     {data.map((r, i) => {
                       const p = r.puesto_anio
                       return (
-                        <tr key={r.id} style={{ background: rowBg(p, i) }}>
+                        <tr key={r.id}
+                          onClick={() => setReporte({ codigo: r.codigo, nombre: r.nombre, anio })}
+                          title="Ver detalle del colegio"
+                          style={{ background: rowBg(p, i), cursor: 'pointer' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = C.bg2 }}
+                          onMouseLeave={e => { e.currentTarget.style.background = rowBg(p, i) }}>
                           <Td style={{ fontWeight: 700, color: C.navy, textAlign: 'center', whiteSpace: 'nowrap' }}>{medal(p)}{p}</Td>
                           <Td style={{ textAlign: 'center', padding: '9px 4px' }}><Trend v={r.comportamiento} /></Td>
                           <Td style={{ maxWidth: 240 }}>
@@ -392,6 +421,25 @@ export default function RankingNacional() {
           </div>
         )}
       </>}
+
+      {reporte && (
+        <ReportePlantel
+          codigo={reporte.codigo}
+          nombre={reporte.nombre}
+          anioRef={reporte.anio}
+          onClose={() => setReporte(null)}
+        />
+      )}
+
+      {reporteAgrupado && (
+        <ReporteAgrupado
+          tipo={reporteAgrupado.tipo}
+          nombre={reporteAgrupado.nombre}
+          departamento={reporteAgrupado.departamento}
+          anioRef={anio}
+          onClose={() => setReporteAgrupado(null)}
+        />
+      )}
     </div>
   )
 }
