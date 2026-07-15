@@ -565,7 +565,8 @@ export default function EstudianteDashboard({ session, onLogout }) {
 
           const thStyle = { padding: '7px 10px', background: C.navy, color: C.white,
             fontSize: 11, fontWeight: 600, textAlign: 'center', whiteSpace: 'nowrap',
-            borderRight: '1px solid rgba(255,255,255,0.12)' }
+            borderRight: '1px solid rgba(255,255,255,0.12)',
+            position: 'sticky', top: 0, zIndex: 1 }
           const tdStyle = (bg) => ({ padding: '5px 8px', fontSize: 11, textAlign: 'center',
             borderBottom: `1px solid ${C.bg2}`, background: bg || C.white })
 
@@ -579,7 +580,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
                   No hay detalle de respuestas disponible para esta prueba.
                 </div>
               ) : (
-                <div style={{ overflowX: 'auto' }}>
+                <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 560 }}>
                   <table style={{ borderCollapse: 'collapse', fontFamily: 'Inter', fontSize: 12, width: '100%', minWidth: 700 }}>
                     <thead>
                       <tr>
