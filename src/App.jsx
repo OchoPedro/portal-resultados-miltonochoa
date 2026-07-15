@@ -3,7 +3,6 @@ import { setSupabaseToken, clearSupabaseToken } from './lib/supabase'
 import Login from './pages/Login'
 const EstudianteDashboard = lazy(() => import('./pages/EstudianteDashboard'))
 const ColegioDashboard    = lazy(() => import('./pages/ColegioDashboard'))
-const AdminDashboard      = lazy(() => import('./pages/admin/AdminDashboard'))
 
 export default function App() {
   const [session, setSession] = useState(null)
@@ -57,7 +56,6 @@ export default function App() {
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     }>
-      {session.role === 'admin'      && <AdminDashboard session={session.data} onLogout={handleLogout} />}
       {session.role === 'colegio'    && <ColegioDashboard session={session.data} onLogout={handleLogout} />}
       {session.role === 'estudiante' && <EstudianteDashboard session={session.data} onLogout={handleLogout} />}
     </Suspense>
