@@ -1942,18 +1942,7 @@ export default function ColegioDashboard({session, onLogout}) {
               timeZone:'America/Bogota'
             })}
           </div>
-          {['tablero','niveles','desv_materias','desv_area','desviacion','comp_comparativo','competencias','mejora','comp_desviacion','comp_comp2','comp_notas','comp_mejora','listado_notas','convertidor_notas','detalle_prueba','consolidado','equilibrio'].includes(tab) && (
-            <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:12}}>
-              <div>
-                <h1 style={{fontSize:26, fontFamily:'Playfair Display, serif', color:C.navy, marginBottom:4}}>
-                  {session?.nombre}
-                </h1>
-                <div style={{fontSize:13, color:C.gray, fontFamily:'Inter'}}>
-                  {session?.ciudad}{selectedGrado ? ` · Grado ${selectedGrado} · ${students.length} estudiantes evaluados` : ''}
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Nombre del colegio + subtítulo ocultos a pedido: ya aparecen en la barra lateral. */}
         </div>
 
         {/* KPIs removidos del Tablero de Gestión a pedido (Prom. Global, Estudiantes,
