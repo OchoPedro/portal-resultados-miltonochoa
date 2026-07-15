@@ -87,6 +87,42 @@ export default async function handler(req, res) {
     }
   }
 
+  // Puerta temporal: credenciales de un contrato (p. ej. Gobernación de Santander) que
+  // caducan por fecha. MISMA lógica que /api/auth — la credencial temporal NO es una
+  // identidad nueva, apunta al colegio/estudiante REAL, así que el token de login se emite
+  // con la identidad real y la sesión resultante es idéntica a la del código permanente.
+  // Sin esto, el código del contrato entra directo al portal (auth.js) pero era rechazado
+  // desde el formulario de la web (que pasa por este endpoint).
+  {
+    const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
+    const { data: temp } = await adminSupabase
+      .from('credenciales_temporales')
+      .select('colegio_id, estudiante_id, password_hash')
+      .eq('usuario_temp', usuario.trim())
+      .eq('activo', true)
+      .lte('vigente_desde', hoy)
+      .gte('vigente_hasta', hoy)
+      .maybeSingle()
+
+    if (temp?.password_hash?.startsWith('$2') && await bcrypt.compare(password, temp.password_hash)) {
+      let real = null
+      if (temp.colegio_id) {
+        const { data: colegio } = await adminSupabase
+          .from('colegios').select('id').eq('id', temp.colegio_id).eq('activo', true).single()
+        if (colegio) real = { id: colegio.id, role: 'colegio' }
+      } else if (temp.estudiante_id) {
+        const { data: est } = await adminSupabase
+          .from('estudiantes').select('id').eq('id', temp.estudiante_id).eq('activo', true).single()
+        if (est) real = { id: est.id, role: 'estudiante' }
+      }
+      if (real) {
+        await limpiarIntentos(ip)
+        const loginToken = await generarLoginToken(String(real.id), real.role)
+        return res.status(200).json({ ok: true, loginToken })
+      }
+    }
+  }
+
   // Conteo atómico vía RPC; rl_fail devuelve el nº de intentos acumulado
   const { data: intentos } = await adminSupabase.rpc('rl_fail', { p_key: ip, p_max: MAX_INTENTOS, p_window_min: 15 })
   const restantes = Math.max(0, MAX_INTENTOS - (intentos || MAX_INTENTOS))
