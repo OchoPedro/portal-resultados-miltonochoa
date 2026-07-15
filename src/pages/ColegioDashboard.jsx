@@ -335,7 +335,7 @@ function PlantelEstudiantes({ colegioId }) {
             <thead>
               <tr style={{borderBottom:`2px solid ${C.bg2}`, position:'sticky', top:0, background:C.white, zIndex:1}}>
                 {['#','Nombre','Grado','Salón','Usuario','Estado','Ingresos','Último ingreso'].map(h => (
-                  <th key={h} style={{textAlign:'left', padding:'8px 12px', fontSize:10,
+                  <th key={h} style={{textAlign: ['Grado','Salón','Ingresos'].includes(h) ? 'center' : 'left', padding:'8px 12px', fontSize:10,
                     color:C.gray, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em', whiteSpace:'nowrap'}}>{h}</th>
                 ))}
               </tr>
@@ -348,8 +348,8 @@ function PlantelEstudiantes({ colegioId }) {
                   background:i%2===0?`${C.bg}80`:'transparent', opacity: e.activo ? 1 : 0.6}}>
                   <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{i+1}</td>
                   <td style={{padding:'10px 12px', fontSize:13, color:C.text, fontWeight:500, whiteSpace:'nowrap'}}>{e.nombre}</td>
-                  <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{e.grado||'—'}</td>
-                  <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{e.salon||'—'}</td>
+                  <td style={{padding:'10px 12px', fontSize:12, color:C.gray, textAlign:'center'}}>{e.grado||'—'}</td>
+                  <td style={{padding:'10px 12px', fontSize:12, color:C.gray, textAlign:'center'}}>{e.salon||'—'}</td>
                   <td style={{padding:'10px 12px', fontSize:12, color:C.navy, fontWeight:500, whiteSpace:'nowrap'}}>{e.usuario}</td>
                   <td style={{padding:'10px 12px', whiteSpace:'nowrap'}}>
                     <Badge color={e.activo ? C.green : C.red}>{e.activo ? 'Activo' : 'Inactivo'}</Badge>
@@ -404,13 +404,21 @@ function PlantelResultados({ colegioId, pruebas }) {
     load()
   }, [filtroPrueba, colegioId])
 
-  const grados = ['Todos', ...new Set(estudiantes.map(e => e.grado).filter(Boolean))]
+  // pruebas.grados (int[]) define los grados habilitados para cada prueba (p. ej. GO-3 → [11]).
+  // Al filtrar una prueba, solo se muestran esos grados; el grado del estudiante es text, se compara con String().
+  const pruebaSel = pruebas.find(p => p.id === filtroPrueba)
+  const gradosHabilitados = pruebaSel?.grados?.length ? pruebaSel.grados.map(String) : null
+  const estudiantesPrueba = gradosHabilitados
+    ? estudiantes.filter(e => gradosHabilitados.includes(String(e.grado)))
+    : estudiantes
+
+  const grados = ['Todos', ...new Set(estudiantesPrueba.map(e => e.grado).filter(Boolean))]
   const salones = ['Todos', ...new Set(
-    estudiantes.filter(e => filtroGrado==='Todos' || e.grado===filtroGrado)
+    estudiantesPrueba.filter(e => filtroGrado==='Todos' || e.grado===filtroGrado)
       .map(e => e.salon).filter(Boolean)
   )]
 
-  const filtered = estudiantes.filter(e => {
+  const filtered = estudiantesPrueba.filter(e => {
     const matchGrado = filtroGrado==='Todos' || e.grado===filtroGrado
     const matchSalon = filtroSalon==='Todos' || e.salon===filtroSalon
     return matchGrado && matchSalon
@@ -431,7 +439,7 @@ function PlantelResultados({ colegioId, pruebas }) {
         <CardTitle sub="Estudiantes con y sin resultados cargados">Reporte de Resultados</CardTitle>
         {/* Filtros */}
         <div style={{display:'flex', gap:10, marginBottom:20, flexWrap:'wrap'}}>
-          <select value={filtroPrueba} onChange={e=>setFiltroPrueba(e.target.value)} style={selStyle}>
+          <select value={filtroPrueba} onChange={e=>{setFiltroPrueba(e.target.value); setFiltroGrado('Todos'); setFiltroSalon('Todos')}} style={selStyle}>
             <option value="">Seleccionar prueba...</option>
             {pruebas.map(p => <option key={p.id} value={p.id}>{p.nombre || p.codigo}</option>)}
           </select>
@@ -471,7 +479,7 @@ function PlantelResultados({ colegioId, pruebas }) {
               <thead>
                 <tr style={{borderBottom:`2px solid ${C.bg2}`, position:'sticky', top:0, background:C.white, zIndex:1}}>
                   {['#','Nombre','Grado','Salón','Estado','Puntaje'].map(h => (
-                    <th key={h} style={{textAlign:'left', padding:'8px 12px', fontSize:10,
+                    <th key={h} style={{textAlign: ['Grado','Salón','Puntaje'].includes(h) ? 'center' : 'left', padding:'8px 12px', fontSize:10,
                       color:C.gray, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em', whiteSpace:'nowrap'}}>{h}</th>
                   ))}
                 </tr>
@@ -487,8 +495,8 @@ function PlantelResultados({ colegioId, pruebas }) {
                         {e.nombre}
                         {e.activo === false && <span style={{marginLeft:8, fontSize:10, color:C.red, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.04em'}}>Inactivo</span>}
                       </td>
-                      <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{e.grado||'—'}</td>
-                      <td style={{padding:'10px 12px', fontSize:12, color:C.gray}}>{e.salon||'—'}</td>
+                      <td style={{padding:'10px 12px', fontSize:12, color:C.gray, textAlign:'center'}}>{e.grado||'—'}</td>
+                      <td style={{padding:'10px 12px', fontSize:12, color:C.gray, textAlign:'center'}}>{e.salon||'—'}</td>
                       <td style={{padding:'10px 12px'}}>
                         {!filtroPrueba ? (
                           <span style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Selecciona una prueba</span>
@@ -499,7 +507,7 @@ function PlantelResultados({ colegioId, pruebas }) {
                         )}
                       </td>
                       <td style={{padding:'10px 12px', fontSize:14, fontWeight:700,
-                        color:C.navy, fontFamily:'Playfair Display, serif'}}>
+                        color:C.navy, fontFamily:'Playfair Display, serif', textAlign:'center'}}>
                         {res?.puntaje_global ?? '—'}
                       </td>
                     </tr>
@@ -689,6 +697,12 @@ function PlantelMencion({ colegioId, pruebas, colegioNombre }) {
     }
   }
 
+  // pruebas.grados (int[]) define los grados habilitados para la prueba (p. ej. GO-3 → [11]).
+  // Al elegir una prueba, el selector de grado solo ofrece esos grados.
+  const pruebaSel = pruebas.find(p => p.id === filtroPrueba)
+  const gradosHabilitados = pruebaSel?.grados?.length ? pruebaSel.grados.map(String) : null
+  const gradosVisibles = gradosHabilitados ? grados.filter(g => gradosHabilitados.includes(String(g))) : grados
+
   return (
     <Card>
       <CardTitle sub="Estudiante con mejor puntaje según los filtros aplicados">
@@ -697,13 +711,13 @@ function PlantelMencion({ colegioId, pruebas, colegioNombre }) {
 
       {/* Filtros */}
       <div style={{display:'flex', gap:10, marginBottom:24, flexWrap:'wrap'}}>
-        <select value={filtroPrueba} onChange={e=>setFiltroPrueba(e.target.value)} style={selStyle}>
+        <select value={filtroPrueba} onChange={e=>{setFiltroPrueba(e.target.value); setFiltroGrado(''); setFiltroSalon('Todos')}} style={selStyle}>
           <option value="">{pruebasConResultados.length ? 'Seleccionar prueba...' : 'Sin pruebas calificadas aún'}</option>
           {pruebasConResultados.map(p => <option key={p.id} value={p.id}>{p.nombre || p.codigo}</option>)}
         </select>
         <select value={filtroGrado} onChange={e=>setFiltroGrado(e.target.value)} style={selStyle}>
           <option value="">Seleccionar grado…</option>
-          {grados.map(g => <option key={g} value={g}>{`Grado ${g}`}</option>)}
+          {gradosVisibles.map(g => <option key={g} value={g}>{`Grado ${g}`}</option>)}
         </select>
         <select value={filtroSalon} onChange={e=>setFiltroSalon(e.target.value)} style={selStyle}>
           {salones.map(s => <option key={s} value={s}>{s==='Todos'?'Todos los salones':`Salón ${s}`}</option>)}
@@ -993,6 +1007,17 @@ export default function ColegioDashboard({session, onLogout}) {
     [allStudents, selectedGrado]
   )
 
+  // Notas Acumuladas: la trazabilidad solo tiene sentido entre pruebas del MISMO grado
+  // (AR-3 es grado 10, GO-3 es grado 11 → no se mezclan en una misma evolución).
+  // Grado objetivo = el grado seleccionado en Herramientas; si no hay, el de la prueba de referencia.
+  // pruebas.grados es int[]; se compara con String().
+  const gradoTraza = selectedGrado && selectedGrado !== 'Todos'
+    ? selectedGrado
+    : (prueba?.grados?.length ? String(prueba.grados[0]) : null)
+  const pruebasTrazables = gradoTraza
+    ? allPruebasPromedio.filter(row => (row.prueba?.grados || []).map(String).includes(gradoTraza))
+    : allPruebasPromedio
+
   // Reload when prueba changes
   useEffect(() => {
     if (!selectedPrueba) return
@@ -1051,7 +1076,7 @@ export default function ColegioDashboard({session, onLogout}) {
 
       // Cargar todas las pruebas activas
       const { data: pruebasData } = await supabase
-        .from('pruebas').select('id, codigo, nombre, fecha, grado, tipo, activa, created_at, estructura_excel').eq('activa', true)
+        .from('pruebas').select('id, codigo, nombre, fecha, grado, grados, tipo, activa, created_at, estructura_excel').eq('activa', true)
         .order('created_at', {ascending: false})
       if (!mountedRef.current) return
       setAllPruebas(pruebasData || [])
@@ -3749,7 +3774,7 @@ export default function ColegioDashboard({session, onLogout}) {
         {/* ══ NOTAS ACUMULADAS ═══════════════════════════════════ */}
         {tab==='notas_acumuladas' && (
           <div style={{display:'grid', gap:16}}>
-            {allPruebasPromedio.length === 0 ? (
+            {pruebasTrazables.length === 0 ? (
               <Card><EmptyState msg="No hay datos acumulados de pruebas anteriores."/></Card>
             ) : (
               <>
@@ -3758,7 +3783,7 @@ export default function ColegioDashboard({session, onLogout}) {
                     Notas Acumuladas por Prueba
                   </CardTitle>
                   <ResponsiveContainer width="100%" height={280}>
-                    <ComposedChart data={allPruebasPromedio} margin={{top:10, right:20, bottom:0, left:-20}}>
+                    <ComposedChart data={pruebasTrazables} margin={{top:10, right:20, bottom:0, left:-20}}>
                       <CartesianGrid strokeDasharray="3 3" stroke={C.bg2}/>
                       <XAxis dataKey="label" tick={{fontSize:10, fontFamily:'Inter', fill:C.gray}}/>
                       <YAxis tick={{fontSize:10, fontFamily:'Inter', fill:C.gray}} domain={[0,110]}/>
@@ -3788,7 +3813,7 @@ export default function ColegioDashboard({session, onLogout}) {
                         </tr>
                       </thead>
                       <tbody>
-                        {allPruebasPromedio.map((row,i) => (
+                        {pruebasTrazables.map((row,i) => (
                           <tr key={i} style={{borderBottom:`1px solid ${C.bg2}`,
                             background: row.prueba?.id === prueba?.id ? `${C.navy}08` : i%2===0?`${C.bg}60`:'transparent',
                             fontWeight: row.prueba?.id === prueba?.id ? 600 : 400}}>
