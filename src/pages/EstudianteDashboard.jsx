@@ -264,7 +264,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
 
   const tabs = [
     { id: 'resumen', label: 'Resumen' },
-    { id: 'areas', label: 'Por Área' },
+    { id: 'areas', label: 'Por Asignatura' },
     { id: 'perfil', label: 'Perfil' },
     { id: 'posicion', label: 'Mi Posición' },
     { id: 'respuestas', label: 'Mis Respuestas' },
@@ -377,7 +377,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
               </div>
             </Card>
             <Card>
-              <CardTitle sub="Tu puntaje vs promedio nacional por área">Resumen por Área</CardTitle>
+              <CardTitle sub="Tu puntaje vs promedio nacional por asignatura">Resumen por Asignatura</CardTitle>
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={areaData} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.bg2} />
@@ -461,7 +461,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
               </ResponsiveContainer>
             </Card>
             <Card>
-              <CardTitle sub="Nivel de desempeño en cada área">Nivel por Área</CardTitle>
+              <CardTitle sub="Nivel de desempeño en cada asignatura">Nivel por Asignatura</CardTitle>
               {areaData.map((a, i) => (
                 <div key={i} style={{ marginBottom: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
