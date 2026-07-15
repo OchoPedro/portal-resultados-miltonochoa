@@ -34,8 +34,11 @@ export default function EstudianteDashboard({ session, onLogout }) {
   const [tab, setTab] = useState('resumen')
   const [pctScope, setPctScope] = useState('plantel')
   const [pctGeo, setPctGeo] = useState({})
-  const [areaScope, setAreaScope] = useState('nacional') // alcance del comparativo Por Área
-  const [promAreas, setPromAreas] = useState({})         // promedios por área y alcance (RPC)
+  const [areaScope, setAreaScope] = useState('nacional') // alcance del comparativo
+  const [promAreas, setPromAreas] = useState({})         // promedios por asignatura y alcance (RPC)
+  const [resumenVista, setResumenVista] = useState('asignatura') // gráfico Resumen: asignatura/área
+  const [compVista, setCompVista]       = useState('asignatura') // tarjetas Comparativo: asignatura/área
+  const [perfilVista, setPerfilVista]   = useState('area')       // Perfil (radar + niveles): área/asignatura
   const [generando, setGenerando] = useState(false)
 
   useEffect(() => {
@@ -241,30 +244,53 @@ export default function EstudianteDashboard({ session, onLogout }) {
   const A_NAC = promAreas?.nacional || {}
   const AREA_SCOPE_LABEL = { plantel:'Plantel', municipio:'Municipio', departamento:'Departamento', region:'Región', nacional:'Nacional' }
   const AREA_SCOPE_SHORT = { plantel:'plantel', municipio:'mun.', departamento:'depto.', region:'región', nacional:'nac.' }
-  const areaData = [
-    { area: 'Mat. Cuantit.', akey: 'mat', col: 'mat_cuantitativo', yo: r.mat_cuantitativo },
-    { area: 'Mat. Específ.', akey: 'mat', col: 'mat_especifico',   yo: r.mat_especifico },
-    { area: 'Química',       akey: 'cn',  col: 'cn_quimica',        yo: r.cn_quimica },
-    { area: 'Física',        akey: 'cn',  col: 'cn_fisica',         yo: r.cn_fisica },
-    { area: 'Biología',      akey: 'cn',  col: 'cn_biologia',       yo: r.cn_biologia },
-    { area: 'CTS',           akey: 'cn',  col: 'cn_cts',            yo: r.cn_cts },
-    { area: 'Sociales',      akey: 'soc', col: 'sociales',          yo: r.sociales },
-    { area: 'Ciudadanas',    akey: 'soc', col: 'ciudadanas',        yo: r.ciudadanas },
-    { area: 'Lect. Crítica', akey: 'lc',  col: 'lectura_critica',   yo: r.lectura_critica },
-    { area: 'Inglés',        akey: 'ing', col: 'ingles',            yo: r.ingles },
-  ].map(a => ({ ...a, nac: A_NAC[a.col] ?? null })).filter(a => a.yo != null)
-
-  const radarData = [
-    { comp: 'Matemáticas', yo: Math.round(((r.mat_cuantitativo || 0) + (r.mat_especifico || 0)) / 2) },
-    { comp: 'Ciencias Nat.', yo: Math.round(((r.cn_quimica || 0) + (r.cn_fisica || 0) + (r.cn_biologia || 0) + (r.cn_cts || 0)) / 4) },
-    { comp: 'Soc. y Ciud.', yo: Math.round(((r.sociales||0)+(r.ciudadanas||0))/2) },
-    { comp: 'Lect. Crítica', yo: r.lectura_critica || 0 },
-    { comp: 'Inglés', yo: r.ingles || 0 },
+  // Las ÁREAS (Matemáticas, Ciencias Nat., etc.) son agregados de ASIGNATURAS (Mat.Cuantit,
+  // Química, …). El toggle Área/Asignatura de cada pestaña arma su dataset con estas listas.
+  const avgCols = (obj, cols) => {
+    const vals = cols.map(c => obj?.[c]).filter(v => v != null && v !== '' && !isNaN(parseFloat(v))).map(parseFloat)
+    return vals.length ? Math.round(vals.reduce((s, v) => s + v, 0) / vals.length * 100) / 100 : null
+  }
+  const ASIGNATURAS = [
+    { label: 'Mat. Cuantit.', akey: 'mat', cols: ['mat_cuantitativo'] },
+    { label: 'Mat. Específ.', akey: 'mat', cols: ['mat_especifico'] },
+    { label: 'Química',       akey: 'cn',  cols: ['cn_quimica'] },
+    { label: 'Física',        akey: 'cn',  cols: ['cn_fisica'] },
+    { label: 'Biología',      akey: 'cn',  cols: ['cn_biologia'] },
+    { label: 'CTS',           akey: 'cn',  cols: ['cn_cts'] },
+    { label: 'Sociales',      akey: 'soc', cols: ['sociales'] },
+    { label: 'Ciudadanas',    akey: 'soc', cols: ['ciudadanas'] },
+    { label: 'Lect. Crítica', akey: 'lc',  cols: ['lectura_critica'] },
+    { label: 'Inglés',        akey: 'ing', cols: ['ingles'] },
   ]
+  const AREAS = [
+    { label: 'Matemáticas',           akey: 'mat', cols: ['mat_cuantitativo', 'mat_especifico'] },
+    { label: 'Ciencias Naturales',    akey: 'cn',  cols: ['cn_quimica', 'cn_fisica', 'cn_biologia', 'cn_cts'] },
+    { label: 'Sociales y Ciudadanas', akey: 'soc', cols: ['sociales', 'ciudadanas'] },
+    { label: 'Lectura Crítica',       akey: 'lc',  cols: ['lectura_critica'] },
+    { label: 'Inglés',                akey: 'ing', cols: ['ingles'] },
+  ]
+  const itemsDe = (vista) => vista === 'area' ? AREAS : ASIGNATURAS
+  // dataset con mi puntaje + promedio nacional (para el gráfico Resumen); las tarjetas
+  // Comparativo recalculan el comparativo según el alcance elegido.
+  const buildData = (vista) => itemsDe(vista)
+    .map(it => ({ ...it, yo: avgCols(r, it.cols), nac: avgCols(A_NAC, it.cols) }))
+    .filter(it => it.yo != null)
+
+  // Toggle Asignatura/Área reutilizable (función, no componente, para no remontar).
+  const vistaToggle = (value, onChange) => (
+    <div style={{ display: 'flex', gap: 3, background: C.bg2, borderRadius: 8, padding: 3 }}>
+      {[['asignatura', 'Asignatura'], ['area', 'Área']].map(([v, l]) => (
+        <button key={v} onClick={() => onChange(v)} style={{
+          padding: '5px 13px', borderRadius: 6, border: 'none', fontFamily: 'Inter', fontSize: 12, cursor: 'pointer',
+          background: value === v ? C.navy : 'transparent', color: value === v ? C.white : C.gray,
+          fontWeight: value === v ? 600 : 400 }}>{l}</button>
+      ))}
+    </div>
+  )
 
   const tabs = [
     { id: 'resumen', label: 'Resumen' },
-    { id: 'areas', label: 'Por Asignatura' },
+    { id: 'areas', label: 'Comparativo' },
     { id: 'perfil', label: 'Perfil' },
     { id: 'posicion', label: 'Mi Posición' },
     { id: 'respuestas', label: 'Mis Respuestas' },
@@ -377,11 +403,16 @@ export default function EstudianteDashboard({ session, onLogout }) {
               </div>
             </Card>
             <Card>
-              <CardTitle sub="Tu puntaje vs promedio nacional por asignatura">Resumen por Asignatura</CardTitle>
+              <CardTitle sub={`Tu puntaje vs promedio nacional por ${resumenVista === 'area' ? 'área' : 'asignatura'}`}>
+                Resumen por {resumenVista === 'area' ? 'Área' : 'Asignatura'}
+              </CardTitle>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+                {vistaToggle(resumenVista, setResumenVista)}
+              </div>
               <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={areaData} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
+                <BarChart data={buildData(resumenVista)} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.bg2} />
-                  <XAxis dataKey="area" tick={{ fontSize: 10, fontFamily: 'Inter', fill: C.gray }} />
+                  <XAxis dataKey="label" tick={{ fontSize: 10, fontFamily: 'Inter', fill: C.gray }} />
                   <YAxis tick={{ fontSize: 10, fontFamily: 'Inter', fill: C.gray }} domain={[0, 100]} />
                   <Tooltip contentStyle={{ fontFamily: 'Inter', fontSize: 12, borderRadius: 8 }} itemStyle={{ color: C.text }} labelStyle={{ color: C.navy, fontWeight: 600 }} />
                   <Legend wrapperStyle={{ fontFamily: 'Inter', fontSize: 11 }} formatter={(v) => <span style={{ color: C.text }}>{v}</span>} />
@@ -393,30 +424,33 @@ export default function EstudianteDashboard({ session, onLogout }) {
           </div>
         )}
 
-        {/* POR ÁREA */}
+        {/* COMPARATIVO */}
         {tabActivo === 'areas' && (
           <div>
-            <div style={{ display:'flex', justifyContent:'flex-end', alignItems:'center', gap:10, marginBottom:14, flexWrap:'wrap' }}>
-              <span style={{ fontSize:12, color:C.gray, fontFamily:'Inter' }}>Comparar contra:</span>
-              <select value={areaScope} onChange={e => setAreaScope(e.target.value)} style={{
-                padding:'7px 12px', border:`1px solid ${C.grayLt}`, borderRadius:7,
-                fontFamily:'Inter', fontSize:13, color:C.text, background:C.white, outline:'none', cursor:'pointer' }}>
-                <option value="nacional">Nacional</option>
-                <option value="region">Región</option>
-                <option value="departamento">Departamento</option>
-                <option value="municipio">Municipio</option>
-                <option value="plantel">Plantel</option>
-              </select>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, marginBottom:14, flexWrap:'wrap' }}>
+              {vistaToggle(compVista, setCompVista)}
+              <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+                <span style={{ fontSize:12, color:C.gray, fontFamily:'Inter' }}>Comparar contra:</span>
+                <select value={areaScope} onChange={e => setAreaScope(e.target.value)} style={{
+                  padding:'7px 12px', border:`1px solid ${C.grayLt}`, borderRadius:7,
+                  fontFamily:'Inter', fontSize:13, color:C.text, background:C.white, outline:'none', cursor:'pointer' }}>
+                  <option value="nacional">Nacional</option>
+                  <option value="region">Región</option>
+                  <option value="departamento">Departamento</option>
+                  <option value="municipio">Municipio</option>
+                  <option value="plantel">Plantel</option>
+                </select>
+              </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(3,1fr)', gap: 12 }}>
-              {areaData.map((a, i) => {
-                const cmp = promAreas?.[areaScope]?.[a.col]
+              {buildData(compVista).map((a, i) => {
+                const cmp = avgCols(promAreas?.[areaScope] || {}, a.cols)
                 const hasCmp = cmp != null
                 return (
                   <Card key={i}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: C.navy, fontFamily: 'Inter',
                       marginBottom: 16, paddingBottom: 10, borderBottom: `1px solid ${C.bg2}` }}>
-                      {a.area}
+                      {a.label}
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center', marginBottom: 16 }}>
                       {[
@@ -449,35 +483,40 @@ export default function EstudianteDashboard({ session, onLogout }) {
 
         {/* PERFIL */}
         {tabActivo === 'perfil' && (
-          <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : '1fr 1fr', gap: 16 }}>
-            <Card>
-              <CardTitle sub="Radar de tu perfil por área">Perfil Académico</CardTitle>
-              <ResponsiveContainer width="100%" height={300}>
-                <RadarChart data={radarData}>
-                  <PolarGrid stroke={C.bg2} />
-                  <PolarAngleAxis dataKey="comp" tick={{ fontSize: 12, fontFamily: 'Inter', fill: C.gray }} />
-                  <Radar name="Mi puntaje" dataKey="yo" stroke={C.navy} fill={C.navy} fillOpacity={0.2} strokeWidth={2} dot={{ fill: C.navy, r: 5 }} />
-                </RadarChart>
-              </ResponsiveContainer>
-            </Card>
-            <Card>
-              <CardTitle sub="Nivel de desempeño en cada asignatura">Nivel por Asignatura</CardTitle>
-              {areaData.map((a, i) => (
-                <div key={i} style={{ marginBottom: 12 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                    <span style={{ fontSize: 12, color: C.text, fontFamily: 'Inter' }}>{a.area}</span>
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      <span style={{ fontSize: 14, fontFamily: 'Playfair Display, serif',
-                        color: colorTexto(a.yo, a.akey), fontWeight: 700 }}>{a.yo}%</span>
-                      <Badge color={colorTexto(a.yo, a.akey)}>{getLevel(a.yo)}</Badge>
+          <div>
+            <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:14 }}>
+              {vistaToggle(perfilVista, setPerfilVista)}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : '1fr 1fr', gap: 16 }}>
+              <Card>
+                <CardTitle sub={`Radar de tu perfil por ${perfilVista === 'area' ? 'área' : 'asignatura'}`}>Perfil Académico</CardTitle>
+                <ResponsiveContainer width="100%" height={300}>
+                  <RadarChart data={buildData(perfilVista).map(it => ({ comp: it.label, yo: Math.round(it.yo || 0) }))}>
+                    <PolarGrid stroke={C.bg2} />
+                    <PolarAngleAxis dataKey="comp" tick={{ fontSize: perfilVista === 'area' ? 12 : 10, fontFamily: 'Inter', fill: C.gray }} />
+                    <Radar name="Mi puntaje" dataKey="yo" stroke={C.navy} fill={C.navy} fillOpacity={0.2} strokeWidth={2} dot={{ fill: C.navy, r: perfilVista === 'area' ? 5 : 3 }} />
+                  </RadarChart>
+                </ResponsiveContainer>
+              </Card>
+              <Card>
+                <CardTitle sub={`Nivel de desempeño en cada ${perfilVista === 'area' ? 'área' : 'asignatura'}`}>Nivel por {perfilVista === 'area' ? 'Área' : 'Asignatura'}</CardTitle>
+                {buildData(perfilVista).map((a, i) => (
+                  <div key={i} style={{ marginBottom: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <span style={{ fontSize: 12, color: C.text, fontFamily: 'Inter' }}>{a.label}</span>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <span style={{ fontSize: 14, fontFamily: 'Playfair Display, serif',
+                          color: colorTexto(a.yo, a.akey), fontWeight: 700 }}>{a.yo}%</span>
+                        <Badge color={colorTexto(a.yo, a.akey)}>{getLevel(a.yo)}</Badge>
+                      </div>
+                    </div>
+                    <div style={{ height: 6, background: C.bg2, borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${a.yo}%`, borderRadius: 3, background: colorBarra(a.yo, a.akey) }} />
                     </div>
                   </div>
-                  <div style={{ height: 6, background: C.bg2, borderRadius: 3, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${a.yo}%`, borderRadius: 3, background: colorBarra(a.yo, a.akey) }} />
-                  </div>
-                </div>
-              ))}
-            </Card>
+                ))}
+              </Card>
+            </div>
           </div>
         )}
 
