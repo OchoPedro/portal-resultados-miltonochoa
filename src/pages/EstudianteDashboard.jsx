@@ -34,6 +34,8 @@ export default function EstudianteDashboard({ session, onLogout }) {
   const [tab, setTab] = useState('resumen')
   const [pctScope, setPctScope] = useState('plantel')
   const [pctGeo, setPctGeo] = useState({})
+  const [areaScope, setAreaScope] = useState('nacional') // alcance del comparativo Por Área
+  const [promAreas, setPromAreas] = useState({})         // promedios por área y alcance (RPC)
   const [generando, setGenerando] = useState(false)
 
   useEffect(() => {
@@ -93,6 +95,12 @@ export default function EstudianteDashboard({ session, onLogout }) {
       p_estudiante_id: session.id, p_prueba_id: pruebaActivaId,
     }).then(({ data }) => {
       if (!cancelled) setPctGeo(data || {})
+    })
+    // Promedios por área para cada alcance (plantel/municipio/departamento/región/nacional).
+    supabase.rpc('get_promedios_area_estudiante', {
+      p_estudiante_id: session.id, p_prueba_id: pruebaActivaId,
+    }).then(({ data }) => {
+      if (!cancelled) setPromAreas(data || {})
     })
     return () => { cancelled = true }
   }, [pruebaActivaId])
@@ -228,18 +236,23 @@ export default function EstudianteDashboard({ session, onLogout }) {
     }
   }
 
+  // Promedios reales por alcance (RPC). El gráfico Resumen usa el nacional; las tarjetas
+  // Por Área usan el alcance elegido (areaScope).
+  const A_NAC = promAreas?.nacional || {}
+  const AREA_SCOPE_LABEL = { plantel:'Plantel', municipio:'Municipio', departamento:'Departamento', region:'Región', nacional:'Nacional' }
+  const AREA_SCOPE_SHORT = { plantel:'plantel', municipio:'mun.', departamento:'depto.', region:'región', nacional:'nac.' }
   const areaData = [
-    { area: 'Mat. Cuantit.', akey: 'mat', yo: r.mat_cuantitativo, nac: 50.2 },
-    { area: 'Mat. Específ.', akey: 'mat', yo: r.mat_especifico, nac: 48.1 },
-    { area: 'Química', akey: 'cn', yo: r.cn_quimica, nac: 38.6 },
-    { area: 'Física', akey: 'cn', yo: r.cn_fisica, nac: 47.9 },
-    { area: 'Biología', akey: 'cn', yo: r.cn_biologia, nac: 58.1 },
-    { area: 'CTS', akey: 'cn', yo: r.cn_cts, nac: 57.2 },
-    { area: 'Sociales', akey: 'soc', yo: r.sociales, nac: 51.8 },
-    { area: 'Ciudadanas', akey: 'soc', yo: r.ciudadanas, nac: 49.3 },
-    { area: 'Lect. Crítica', akey: 'lc', yo: r.lectura_critica, nac: 52.4 },
-    { area: 'Inglés', akey: 'ing', yo: r.ingles, nac: 55.3 },
-  ].filter(a => a.yo != null)
+    { area: 'Mat. Cuantit.', akey: 'mat', col: 'mat_cuantitativo', yo: r.mat_cuantitativo },
+    { area: 'Mat. Específ.', akey: 'mat', col: 'mat_especifico',   yo: r.mat_especifico },
+    { area: 'Química',       akey: 'cn',  col: 'cn_quimica',        yo: r.cn_quimica },
+    { area: 'Física',        akey: 'cn',  col: 'cn_fisica',         yo: r.cn_fisica },
+    { area: 'Biología',      akey: 'cn',  col: 'cn_biologia',       yo: r.cn_biologia },
+    { area: 'CTS',           akey: 'cn',  col: 'cn_cts',            yo: r.cn_cts },
+    { area: 'Sociales',      akey: 'soc', col: 'sociales',          yo: r.sociales },
+    { area: 'Ciudadanas',    akey: 'soc', col: 'ciudadanas',        yo: r.ciudadanas },
+    { area: 'Lect. Crítica', akey: 'lc',  col: 'lectura_critica',   yo: r.lectura_critica },
+    { area: 'Inglés',        akey: 'ing', col: 'ingles',            yo: r.ingles },
+  ].map(a => ({ ...a, nac: A_NAC[a.col] ?? null })).filter(a => a.yo != null)
 
   const radarData = [
     { comp: 'Matemáticas', yo: Math.round(((r.mat_cuantitativo || 0) + (r.mat_especifico || 0)) / 2) },
@@ -382,35 +395,55 @@ export default function EstudianteDashboard({ session, onLogout }) {
 
         {/* POR ÁREA */}
         {tabActivo === 'areas' && (
-          <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(3,1fr)', gap: 12 }}>
-            {areaData.map((a, i) => (
-              <Card key={i}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: C.navy, fontFamily: 'Inter',
-                  marginBottom: 16, paddingBottom: 10, borderBottom: `1px solid ${C.bg2}` }}>
-                  {a.area}
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center', marginBottom: 16 }}>
-                  {[
-                    { label: 'Mi puntaje', val: a.yo, color: colorTexto(a.yo, a.akey) },
-                    { label: 'Nacional', val: a.nac, color: C.gray },
-                  ].map((item, j) => (
-                    <div key={j}>
-                      <div style={{ fontSize: 28, fontFamily: 'Playfair Display, serif',
-                        color: item.color, fontWeight: 700, lineHeight: 1 }}>{item.val}</div>
-                      <div style={{ fontSize: 10, color: C.gray, fontFamily: 'Inter', marginTop: 4 }}>{item.label}</div>
+          <div>
+            <div style={{ display:'flex', justifyContent:'flex-end', alignItems:'center', gap:10, marginBottom:14, flexWrap:'wrap' }}>
+              <span style={{ fontSize:12, color:C.gray, fontFamily:'Inter' }}>Comparar contra:</span>
+              <select value={areaScope} onChange={e => setAreaScope(e.target.value)} style={{
+                padding:'7px 12px', border:`1px solid ${C.grayLt}`, borderRadius:7,
+                fontFamily:'Inter', fontSize:13, color:C.text, background:C.white, outline:'none', cursor:'pointer' }}>
+                <option value="nacional">Nacional</option>
+                <option value="region">Región</option>
+                <option value="departamento">Departamento</option>
+                <option value="municipio">Municipio</option>
+                <option value="plantel">Plantel</option>
+              </select>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(3,1fr)', gap: 12 }}>
+              {areaData.map((a, i) => {
+                const cmp = promAreas?.[areaScope]?.[a.col]
+                const hasCmp = cmp != null
+                return (
+                  <Card key={i}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: C.navy, fontFamily: 'Inter',
+                      marginBottom: 16, paddingBottom: 10, borderBottom: `1px solid ${C.bg2}` }}>
+                      {a.area}
                     </div>
-                  ))}
-                </div>
-                <div style={{ height: 6, background: C.bg2, borderRadius: 3, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${a.yo}%`, borderRadius: 3, background: colorBarra(a.yo, a.akey) }} />
-                </div>
-                <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center' }}>
-                  <Badge color={a.yo >= a.nac ? C.navy : C.amber}>
-                    {a.yo >= a.nac ? '+' : ''}{(a.yo - a.nac).toFixed(1)} vs nac.
-                  </Badge>
-                </div>
-              </Card>
-            ))}
+                    <div style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center', marginBottom: 16 }}>
+                      {[
+                        { label: 'Mi puntaje', val: a.yo, color: colorTexto(a.yo, a.akey) },
+                        { label: AREA_SCOPE_LABEL[areaScope], val: hasCmp ? cmp : '—', color: C.gray },
+                      ].map((item, j) => (
+                        <div key={j}>
+                          <div style={{ fontSize: 28, fontFamily: 'Playfair Display, serif',
+                            color: item.color, fontWeight: 700, lineHeight: 1 }}>{item.val}</div>
+                          <div style={{ fontSize: 10, color: C.gray, fontFamily: 'Inter', marginTop: 4 }}>{item.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ height: 6, background: C.bg2, borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${a.yo}%`, borderRadius: 3, background: colorBarra(a.yo, a.akey) }} />
+                    </div>
+                    {hasCmp && (
+                      <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center' }}>
+                        <Badge color={a.yo >= cmp ? C.navy : C.amber}>
+                          {a.yo >= cmp ? '+' : ''}{(a.yo - cmp).toFixed(1)} vs {AREA_SCOPE_SHORT[areaScope]}
+                        </Badge>
+                      </div>
+                    )}
+                  </Card>
+                )
+              })}
+            </div>
           </div>
         )}
 
