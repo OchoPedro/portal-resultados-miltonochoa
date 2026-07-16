@@ -250,6 +250,25 @@ export default function EstudianteDashboard({ session, onLogout }) {
     const vals = cols.map(c => obj?.[c]).filter(v => v != null && v !== '' && !isNaN(parseFloat(v))).map(parseFloat)
     return vals.length ? Math.round(vals.reduce((s, v) => s + v, 0) / vals.length * 100) / 100 : null
   }
+  // Las ÁREAS se calculan con los MISMOS pesos que la vista de colegios (ColegioDashboard, su
+  // sección "Desviación por área"): Matemáticas = (cuantitativo·2 + específico)/3, Ciencias
+  // Naturales = (química·0.9 + física·0.9 + biología·0.9 + CTS·0.3)/3, Soc. y Ciudadanas =
+  // (sociales·1.2 + ciudadanas·1.8)/3. Aquí se promediaban SIN pesos, así que el mismo estudiante
+  // veía en Matemáticas 82.94 en su pantalla y 87.39 en la de su colegio — el rector y el alumno
+  // discutiendo dos números distintos del mismo examen. El bueno es el del colegio.
+  // Regla de nulos, también la del colegio: si falta ALGUNA asignatura del área, el área queda
+  // vacía en vez de promediar solo las presentes.
+  // Las ASIGNATURAS (una sola columna) siguen con avgCols: no hay nada que ponderar.
+  const valorDe = (obj, it) => {
+    if (!it?.pesos) return avgCols(obj, it?.cols || [])
+    let suma = 0, peso = 0
+    for (let i = 0; i < it.cols.length; i++) {
+      const v = obj?.[it.cols[i]]
+      if (v == null || v === '' || isNaN(parseFloat(v))) return null
+      suma += parseFloat(v) * it.pesos[i]; peso += it.pesos[i]
+    }
+    return peso ? Math.round(suma / peso * 100) / 100 : null
+  }
   const ASIGNATURAS = [
     { label: 'Mat. Cuantit.', akey: 'mat', cols: ['mat_cuantitativo'] },
     { label: 'Mat. Específ.', akey: 'mat', cols: ['mat_especifico'] },
@@ -263,17 +282,17 @@ export default function EstudianteDashboard({ session, onLogout }) {
     { label: 'Inglés',        akey: 'ing', cols: ['ingles'] },
   ]
   const AREAS = [
-    { label: 'Matemáticas',           akey: 'mat', cols: ['mat_cuantitativo', 'mat_especifico'] },
-    { label: 'Ciencias Naturales',    akey: 'cn',  cols: ['cn_quimica', 'cn_fisica', 'cn_biologia', 'cn_cts'] },
-    { label: 'Sociales y Ciudadanas', akey: 'soc', cols: ['sociales', 'ciudadanas'] },
-    { label: 'Lectura Crítica',       akey: 'lc',  cols: ['lectura_critica'] },
-    { label: 'Inglés',                akey: 'ing', cols: ['ingles'] },
+    { label: 'Matemáticas',           akey: 'mat', cols: ['mat_cuantitativo', 'mat_especifico'], pesos: [2, 1] },
+    { label: 'Ciencias Naturales',    akey: 'cn',  cols: ['cn_quimica', 'cn_fisica', 'cn_biologia', 'cn_cts'], pesos: [0.9, 0.9, 0.9, 0.3] },
+    { label: 'Sociales y Ciudadanas', akey: 'soc', cols: ['sociales', 'ciudadanas'], pesos: [1.2, 1.8] },
+    { label: 'Lectura Crítica',       akey: 'lc',  cols: ['lectura_critica'], pesos: [1] },
+    { label: 'Inglés',                akey: 'ing', cols: ['ingles'], pesos: [1] },
   ]
   const itemsDe = (vista) => vista === 'area' ? AREAS : ASIGNATURAS
   // dataset con mi puntaje + promedio nacional (para el gráfico Resumen); las tarjetas
   // Comparativo recalculan el comparativo según el alcance elegido.
   const buildData = (vista) => itemsDe(vista)
-    .map(it => ({ ...it, yo: avgCols(r, it.cols), nac: avgCols(A_NAC, it.cols) }))
+    .map(it => ({ ...it, yo: valorDe(r, it), nac: valorDe(A_NAC, it) }))
     .filter(it => it.yo != null)
 
   // Toggle Asignatura/Área reutilizable (función, no componente, para no remontar).
@@ -444,7 +463,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: mobile ? '1fr' : 'repeat(3,1fr)', gap: 12 }}>
               {buildData(compVista).map((a, i) => {
-                const cmp = avgCols(promAreas?.[areaScope] || {}, a.cols)
+                const cmp = valorDe(promAreas?.[areaScope] || {}, a)
                 const hasCmp = cmp != null
                 return (
                   <Card key={i}>
