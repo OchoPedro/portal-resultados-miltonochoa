@@ -965,6 +965,8 @@ export default function ColegioDashboard({session, onLogout}) {
   const [rankingSort, setRankingSort] = useState({col:'_def', dir:'desc'})
   const [detallePruebaSort, setDetallePruebaSort] = useState({col:'nro_pregunta', dir:'asc'})
   const [listadoNotasSort, setListadoNotasSort] = useState({col:'_def', dir:'desc'})
+  const [listadoArea, setListadoArea] = useState('todas')
+  const [listadoAsignatura, setListadoAsignatura] = useState('todas')
   const [pctScope, setPctScope] = useState('plantel')
   const [pctGeo, setPctGeo] = useState({})
   const [nombreColWidth, setNombreColWidth] = useState(175)
@@ -1152,6 +1154,8 @@ export default function ColegioDashboard({session, onLogout}) {
     setRankingSort({col:'_def', dir:'desc'})
     setDetallePruebaSort({col:'nro_pregunta', dir:'asc'})
     setListadoNotasSort({col:'_def', dir:'desc'})
+    setListadoArea('todas')
+    setListadoAsignatura('todas')
     setSelectedStudent(null)
     setStudentDetalle(null)
     try {
@@ -3438,6 +3442,29 @@ export default function ColegioDashboard({session, onLogout}) {
             return (((mc||0)*2+(me||0))/3*3 + ((q||0)*0.9+(f||0)*0.9+(b||0)*0.9+(cts||0)*0.3)/3*3 + ((sc||0)*1.2+(ciu||0)*1.8)/3*3 + (lc||0)*3 + (ing||0)) / 13
           }
 
+          // Valor por área con los MISMOS pesos del Tablero de Gestión (promedio ponderado 0–100).
+          // null si el estudiante no tiene ninguna asignatura del área.
+          const areaVal = (s, area) => {
+            if (area === 'mat') {
+              const mc = s.mat_cuantitativo, me = s.mat_especifico
+              if (mc == null && me == null) return null
+              return ((mc||0)*2 + (me||0)) / 3
+            }
+            if (area === 'cn') {
+              const q = s.cn_quimica, f = s.cn_fisica, b = s.cn_biologia, cts = s.cn_cts
+              if ([q,f,b,cts].every(v => v == null)) return null
+              return ((q||0)*0.9 + (f||0)*0.9 + (b||0)*0.9 + (cts||0)*0.3) / 3
+            }
+            if (area === 'soc') {
+              const sc = s.sociales, ciu = s.ciudadanas
+              if (sc == null && ciu == null) return null
+              return ((sc||0)*1.2 + (ciu||0)*1.8) / 3
+            }
+            if (area === 'lc')  return s.lectura_critica ?? null
+            if (area === 'ing') return s.ingles ?? null
+            return null
+          }
+
           const handleSortLN = col => setListadoNotasSort(s => ({col, dir: s.col===col && s.dir==='asc' ? 'desc' : 'asc'}))
           const arrowLN = col => listadoNotasSort.col===col ? (listadoNotasSort.dir==='asc' ? ' ▲' : ' ▼') : ' ⇅'
 
@@ -3466,8 +3493,8 @@ export default function ColegioDashboard({session, onLogout}) {
           })
           const ranked = [...withDef].sort((a, b) => {
               const v = listadoNotasSort.col
-              const av = v==='nombre' ? (a.estudiantes?.nombre||'') : v==='global' ? (a._global||0) : v==='_def' ? (a._def||0) : (a[v]||0)
-              const bv = v==='nombre' ? (b.estudiantes?.nombre||'') : v==='global' ? (b._global||0) : v==='_def' ? (b._def||0) : (b[v]||0)
+              const av = v==='nombre' ? (a.estudiantes?.nombre||'') : v==='global' ? (a._global||0) : v==='_def' ? (a._def||0) : v==='_area' ? (areaVal(a, listadoArea)||0) : (a[v]||0)
+              const bv = v==='nombre' ? (b.estudiantes?.nombre||'') : v==='global' ? (b._global||0) : v==='_def' ? (b._def||0) : v==='_area' ? (areaVal(b, listadoArea)||0) : (b[v]||0)
               const cmp = typeof av==='string' ? av.localeCompare(bv) : av - bv
               return listadoNotasSort.dir==='asc' ? cmp : -cmp
             })
@@ -3495,9 +3522,43 @@ export default function ColegioDashboard({session, onLogout}) {
             {label:'Inglés',        area:'ing', cols:[['ingles','Ing.']]},
           ]
 
+          // Filtro por área / asignatura
+          const showAreaCol = listadoArea !== 'todas'                 // muestra el valor ponderado del área
+          const areaSel = AREAS.find(a => a.area === listadoArea)
+          const asigOptions = areaSel ? areaSel.cols : []             // asignaturas de la área elegida
+          const visibleAreas = (showAreaCol ? [areaSel] : AREAS).map(a => ({
+            ...a,
+            cols: (showAreaCol && listadoAsignatura !== 'todas')
+              ? a.cols.filter(([col]) => col === listadoAsignatura)
+              : a.cols,
+          }))
+          const areaHdr = {mat:'Mat.', cn:'Cs.Nat.', soc:'Soc.Ciu.', lc:'L.C.', ing:'Ing.'}
+
           return students.length === 0 ? <EmptyState/> : (
             <Card>
-              <div style={{display:'flex', alignItems:'center', justifyContent:'flex-end', gap:8, marginBottom:12}}>
+              <div style={{display:'flex', alignItems:'center', justifyContent:'flex-end',
+                gap:8, marginBottom:12, flexWrap:'wrap'}}>
+                <label style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Área:</label>
+                <select value={listadoArea} onChange={e => { setListadoArea(e.target.value); setListadoAsignatura('todas') }} style={{
+                  padding:'6px 10px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+                  fontFamily:'Inter', fontSize:12, color:C.text, background:C.bg, outline:'none', cursor:'pointer'}}>
+                  <option value="todas">Todas</option>
+                  {AREAS.map(a => <option key={a.area} value={a.area}>{a.label}</option>)}
+                </select>
+
+                <label style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Asignatura:</label>
+                <select value={listadoAsignatura} onChange={e => setListadoAsignatura(e.target.value)}
+                  disabled={!showAreaCol || asigOptions.length <= 1}
+                  style={{padding:'6px 10px', border:`1px solid ${C.grayLt}`, borderRadius:6,
+                    fontFamily:'Inter', fontSize:12, background:C.bg, outline:'none',
+                    color: (!showAreaCol || asigOptions.length <= 1) ? C.grayLt : C.text,
+                    cursor: (!showAreaCol || asigOptions.length <= 1) ? 'not-allowed' : 'pointer'}}>
+                  <option value="todas">Todas</option>
+                  {asigOptions.map(([col, h]) => <option key={col} value={col}>{h}</option>)}
+                </select>
+
+                <span style={{width:1, height:20, background:C.grayLt, margin:'0 2px'}}/>
+
                 <label style={{fontSize:11, color:C.gray, fontFamily:'Inter'}}>Percentil de:</label>
                 <select value={pctScope} onChange={e=>setPctScope(e.target.value)} style={{
                   padding:'6px 10px', border:`1px solid ${C.grayLt}`, borderRadius:6,
@@ -3514,7 +3575,8 @@ export default function ColegioDashboard({session, onLogout}) {
                   <colgroup>
                     <col style={{width:28}}/>
                     <col style={{width:nombreColWidth}}/>
-                    {AREAS.flatMap(a => a.cols.map(([col]) => <col key={col} style={{width:52}}/>))}
+                    {visibleAreas.flatMap(a => a.cols.map(([col]) => <col key={col} style={{width:52}}/>))}
+                    {showAreaCol && <col style={{width:56}}/>}
                     <col style={{width:52}}/>
                     <col style={{width:48}}/>
                     <col style={{width:42}}/>
@@ -3534,12 +3596,19 @@ export default function ColegioDashboard({session, onLogout}) {
                             borderRadius:2}}
                           onClick={e => e.stopPropagation()}/>
                       </th>
-                      {AREAS.map(a => (
+                      {visibleAreas.map(a => (
                         <th key={a.label} colSpan={a.cols.length}
                           style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)', cursor:'default', padding:'4px 2px'}}>
                           {a.label}
                         </th>
                       ))}
+                      {showAreaCol && (
+                        <th rowSpan={2} style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)', padding:'4px 2px'}}
+                          onClick={() => handleSortLN('_area')}>
+                          Área{arrowLN('_area')}
+                          <span style={{display:'block',fontSize:8,fontWeight:700,color:'#93c5fd',letterSpacing:.3}}>{areaHdr[listadoArea]}</span>
+                        </th>
+                      )}
                       <th rowSpan={2} style={{...thBase, borderBottom:'1px solid rgba(255,255,255,0.15)', padding:'4px 2px'}}
                         onClick={() => handleSortLN('_def')}>
                         Def.{arrowLN('_def')}
@@ -3555,7 +3624,7 @@ export default function ColegioDashboard({session, onLogout}) {
                         cursor:'default', padding:'4px 2px'}}>Ver</th>
                     </tr>
                     <tr>
-                      {AREAS.flatMap(a => a.cols.map(([col, h]) => (
+                      {visibleAreas.flatMap(a => a.cols.map(([col, h]) => (
                         <th key={col} style={{...thBase, fontSize:9, borderTop:'1px solid rgba(255,255,255,0.15)', padding:'3px 2px'}}
                           onClick={() => handleSortLN(col)}>
                           {h}{arrowLN(col)}
@@ -3574,10 +3643,19 @@ export default function ColegioDashboard({session, onLogout}) {
                             textOverflow:'ellipsis'}}>
                             {s.estudiantes?.nombre}
                           </td>
-                          {AREAS.flatMap(a => a.cols.map(([col]) => {
+                          {visibleAreas.flatMap(a => a.cols.map(([col]) => {
                             const {style, text} = notaTd(s[col], a.area)
                             return <td key={col} style={style}>{text}</td>
                           }))}
+                          {showAreaCol && (() => {
+                            const av = areaVal(s, listadoArea)
+                            return (
+                              <td style={{...tdBase, color: av != null ? semaforoColor(av, listadoArea) : C.grayLt,
+                                fontWeight:700, fontSize:11, background:C.bg}}>
+                                {av != null ? (Math.round(av*100)/100).toFixed(2) : '—'}
+                              </td>
+                            )
+                          })()}
                           <td style={{...tdBase, color: s._def != null ? semaforoColor(s._def, '_') : C.grayLt, fontWeight:700, fontSize:10}}>
                             {s._def != null ? s._def.toFixed(2) : '—'}
                           </td>
