@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import RankingNacional from './RankingNacional'
 import HojaResultados from '../components/HojaResultados'
+import ResumenEstudiante from '../components/ResumenEstudiante'
+import { promedioDeGrupo } from '../lib/areas'
 import { useImpresion } from '../components/useImpresion'
 import { construirPreguntas, mapaDetalle } from '../lib/preguntas'
 import {
@@ -1121,6 +1123,29 @@ export default function ColegioDashboard({session, onLogout}) {
     } finally {
       setPreparandoLote(false)
     }
+  }
+
+  // Resumen gráfico en lote: una página por estudiante del SALÓN seleccionado.
+  // A diferencia de imprimirLote no consulta nada: el resumen solo usa los puntajes por
+  // asignatura, que ya vienen en `students`. El detalle pregunta-a-pregunta —lo único que
+  // obliga a ir a la base— aquí no se usa.
+  //
+  // Se exige salón porque el comparativo de cada página es el promedio de ese salón: con
+  // "Todos los salones" el número diría "promedio del grado" y la etiqueta mentiría.
+  const imprimirResumenLote = () => {
+    if (!selectedPrueba || !students.length) return
+    const promSalon = promedioDeGrupo(students)
+    const ordenados = [...students].sort((a, b) =>
+      (a.estudiantes?.nombre || '').localeCompare(b.estudiantes?.nombre || ''))
+    imprimir(
+      <>
+        {ordenados.map(s => (
+          <ResumenEstudiante key={s.estudiante_id} estudiante={datosEstudiante(s)} resultado={s}
+            prueba={selectedPrueba} colegio={datosColegio}
+            comparativo={promSalon} comparativoLabel="Promedio del salón" />
+        ))}
+      </>
+    )
   }
 
   const loadAll = async () => {
@@ -3628,6 +3653,18 @@ export default function ColegioDashboard({session, onLogout}) {
                 </select>
 
                 <span style={{flex:1}}/>
+                <button onClick={imprimirResumenLote}
+                  disabled={preparandoLote || !students.length || selectedSalon === 'Todos'}
+                  title={selectedSalon === 'Todos'
+                    ? 'Elige un salón: el resumen compara a cada estudiante contra el promedio de su salón'
+                    : 'Una página por estudiante del salón, con gráficas por asignatura y por área'}
+                  style={{padding:'6px 14px', background:C.white,
+                    color: (preparandoLote || !students.length || selectedSalon === 'Todos') ? C.grayLt : C.navy,
+                    border:`1px solid ${(preparandoLote || !students.length || selectedSalon === 'Todos') ? C.grayLt : C.navy}`,
+                    borderRadius:6, fontFamily:'Inter', fontSize:12, fontWeight:600,
+                    cursor:(preparandoLote || !students.length || selectedSalon === 'Todos') ? 'default' : 'pointer'}}>
+                  {selectedSalon === 'Todos' ? '📊 Resumen gráfico (elige salón)' : `📊 Resumen gráfico (${students.length})`}
+                </button>
                 <button onClick={imprimirLote} disabled={preparandoLote || !students.length}
                   title="Una hoja por estudiante, con la selección de grado y salón actual"
                   style={{padding:'6px 14px', background: (preparandoLote || !students.length) ? C.grayLt : C.navy,

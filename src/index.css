@@ -58,6 +58,12 @@ button { cursor: pointer; }
   .hoja-resultados thead { display: table-header-group; }
   .hoja-resultados tr { break-inside: avoid; page-break-inside: avoid; }
 
+  /* El resumen gráfico está dimensionado para caber en UNA página: si el navegador lo
+     partiera, la mitad de un gráfico quedaría huérfana en la siguiente. Sus tablas son
+     cortas y no necesitan repetir encabezado en el tiro. */
+  .hoja-resumen { break-inside: avoid; page-break-inside: avoid; }
+  .hoja-resumen thead { display: table-row-group; }
+
   /* Sin esto el navegador descarta los fondos y se pierde el verde/rojo que
      distingue acierto de error: la hoja saldría en blanco y negro sin sentido. */
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }

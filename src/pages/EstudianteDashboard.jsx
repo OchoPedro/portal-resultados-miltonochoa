@@ -9,19 +9,14 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend, Cell
 } from 'recharts'
 import HojaResultados from '../components/HojaResultados'
+import ResumenEstudiante from '../components/ResumenEstudiante'
 import { useImpresion } from '../components/useImpresion'
 import { construirPreguntas, mapaDetalle } from '../lib/preguntas'
+// Asignaturas, áreas, pesos y semáforo viven en src/lib/areas.js — ver allí por qué no se
+// vuelven a escribir aquí (el rector y el alumno llegaron a ver dos números distintos).
+import { ASIGNATURAS, AREAS, valorDe, avgCols, semaforoNivel } from '../lib/areas'
 
-// Semáforo por área — mismos umbrales pedagógicos AAMO que usa el dashboard de colegio.
 // Las barras sí pueden usar verde (nivel avanzado); el texto/números nunca usan verde.
-const SEMAFORO_T = {
-  mat: [35, 50, 70], cn: [40, 55, 70], soc: [40, 55, 70],
-  lc: [35, 50, 65], ing: [36, 57, 70], _: [24, 44, 64],
-}
-const semaforoNivel = (v, area = '_') => {
-  const [t1, t2, t3] = SEMAFORO_T[area] || SEMAFORO_T['_']
-  return v > t3 ? 3 : v > t2 ? 2 : v > t1 ? 1 : 0
-}
 const NIVEL_COLOR_BARRA = [C.red, '#F97316', '#F59E0B', C.green]
 const NIVEL_COLOR_TEXTO = [C.red, '#F97316', '#F59E0B', C.navy]
 const colorBarra = (v, area) => NIVEL_COLOR_BARRA[semaforoNivel(v, area)]
@@ -161,6 +156,25 @@ export default function EstudianteDashboard({ session, onLogout }) {
   const geoKey = { plantel:null, municipio:'municipio_pct', departamento:'departamento_pct', region:'region_pct', nacional:'nacional_pct' }[pctScope]
   const percentil = geoKey ? (pctGeo?.[geoKey] ?? null) : percentilPlantel
 
+  // Resumen gráfico de una página. El comparativo es el promedio del propio colegio (es el que
+  // le dice algo al acudiente); si el RPC de promedios aún no respondió o no trae plantel, cae
+  // al nacional antes que quedarse sin comparativo.
+  const compResumen = promAreas?.plantel || promAreas?.nacional || null
+  const imprimirResumen = () => imprimir(
+    <ResumenEstudiante
+      estudiante={{ nombre: session.nombre, usuario: session.usuario,
+                    grado: session.grado, salon: session.salon }}
+      resultado={r}
+      prueba={prueba}
+      colegio={{ nombre: session.colegios?.nombre, municipio: session.colegios?.ciudad }}
+      comparativo={compResumen}
+      comparativoLabel={promAreas?.plantel ? 'Promedio del colegio' : 'Promedio nacional'}
+      puesto={miPuesto || null}
+      totalGrupo={compañeros.length || null}
+      percentil={percentilPlantel || null}
+    />
+  )
+
   // Mención de Honor: se otorga al mejor puntaje del MISMO grado y salón, para esta prueba.
   // (mismo criterio que la Mención de Honor del colegio filtrada por grado y salón)
   const grupoMencion = compañeros.filter(c =>
@@ -262,48 +276,6 @@ export default function EstudianteDashboard({ session, onLogout }) {
   const AREA_SCOPE_SHORT = { plantel:'plantel', municipio:'mun.', departamento:'depto.', region:'región', nacional:'nac.' }
   // Las ÁREAS (Matemáticas, Ciencias Nat., etc.) son agregados de ASIGNATURAS (Mat.Cuantit,
   // Química, …). El toggle Área/Asignatura de cada pestaña arma su dataset con estas listas.
-  const avgCols = (obj, cols) => {
-    const vals = cols.map(c => obj?.[c]).filter(v => v != null && v !== '' && !isNaN(parseFloat(v))).map(parseFloat)
-    return vals.length ? Math.round(vals.reduce((s, v) => s + v, 0) / vals.length * 100) / 100 : null
-  }
-  // Las ÁREAS se calculan con los MISMOS pesos que la vista de colegios (ColegioDashboard, su
-  // sección "Desviación por área"): Matemáticas = (cuantitativo·2 + específico)/3, Ciencias
-  // Naturales = (química·0.9 + física·0.9 + biología·0.9 + CTS·0.3)/3, Soc. y Ciudadanas =
-  // (sociales·1.2 + ciudadanas·1.8)/3. Aquí se promediaban SIN pesos, así que el mismo estudiante
-  // veía en Matemáticas 82.94 en su pantalla y 87.39 en la de su colegio — el rector y el alumno
-  // discutiendo dos números distintos del mismo examen. El bueno es el del colegio.
-  // Regla de nulos, también la del colegio: si falta ALGUNA asignatura del área, el área queda
-  // vacía en vez de promediar solo las presentes.
-  // Las ASIGNATURAS (una sola columna) siguen con avgCols: no hay nada que ponderar.
-  const valorDe = (obj, it) => {
-    if (!it?.pesos) return avgCols(obj, it?.cols || [])
-    let suma = 0, peso = 0
-    for (let i = 0; i < it.cols.length; i++) {
-      const v = obj?.[it.cols[i]]
-      if (v == null || v === '' || isNaN(parseFloat(v))) return null
-      suma += parseFloat(v) * it.pesos[i]; peso += it.pesos[i]
-    }
-    return peso ? Math.round(suma / peso * 100) / 100 : null
-  }
-  const ASIGNATURAS = [
-    { label: 'Mat. Cuantit.', akey: 'mat', cols: ['mat_cuantitativo'] },
-    { label: 'Mat. Específ.', akey: 'mat', cols: ['mat_especifico'] },
-    { label: 'Química',       akey: 'cn',  cols: ['cn_quimica'] },
-    { label: 'Física',        akey: 'cn',  cols: ['cn_fisica'] },
-    { label: 'Biología',      akey: 'cn',  cols: ['cn_biologia'] },
-    { label: 'CTS',           akey: 'cn',  cols: ['cn_cts'] },
-    { label: 'Sociales',      akey: 'soc', cols: ['sociales'] },
-    { label: 'Ciudadanas',    akey: 'soc', cols: ['ciudadanas'] },
-    { label: 'Lect. Crítica', akey: 'lc',  cols: ['lectura_critica'] },
-    { label: 'Inglés',        akey: 'ing', cols: ['ingles'] },
-  ]
-  const AREAS = [
-    { label: 'Matemáticas',           akey: 'mat', cols: ['mat_cuantitativo', 'mat_especifico'], pesos: [2, 1] },
-    { label: 'Ciencias Naturales',    akey: 'cn',  cols: ['cn_quimica', 'cn_fisica', 'cn_biologia', 'cn_cts'], pesos: [0.9, 0.9, 0.9, 0.3] },
-    { label: 'Sociales y Ciudadanas', akey: 'soc', cols: ['sociales', 'ciudadanas'], pesos: [1.2, 1.8] },
-    { label: 'Lectura Crítica',       akey: 'lc',  cols: ['lectura_critica'], pesos: [1] },
-    { label: 'Inglés',                akey: 'ing', cols: ['ingles'], pesos: [1] },
-  ]
   const itemsDe = (vista) => vista === 'area' ? AREAS : ASIGNATURAS
   // dataset con mi puntaje + promedio nacional (para el gráfico Resumen); las tarjetas
   // Comparativo recalculan el comparativo según el alcance elegido.
@@ -630,12 +602,23 @@ export default function EstudianteDashboard({ session, onLogout }) {
                 <CardTitle sub={`${preguntas.length} preguntas · ${prueba?.codigo || '—'}`}>
                   Mis Respuestas
                 </CardTitle>
-                <button onClick={imprimirHoja}
-                  style={{ padding: '8px 16px', background: C.navy, color: C.white, border: 'none',
-                    borderRadius: 8, fontFamily: 'Inter', fontSize: 12.5, fontWeight: 600,
-                    display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-                  🖨️  Descargar PDF
-                </button>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button onClick={imprimirResumen}
+                    title="Una sola página con gráficas por asignatura y por área"
+                    style={{ padding: '8px 16px', background: C.white, color: C.navy,
+                      border: `1px solid ${C.navy}`, borderRadius: 8, fontFamily: 'Inter',
+                      fontSize: 12.5, fontWeight: 600,
+                      display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                    📊  Resumen gráfico
+                  </button>
+                  <button onClick={imprimirHoja}
+                    title="Hoja detallada, pregunta por pregunta"
+                    style={{ padding: '8px 16px', background: C.navy, color: C.white, border: 'none',
+                      borderRadius: 8, fontFamily: 'Inter', fontSize: 12.5, fontWeight: 600,
+                      display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                    🖨️  Descargar PDF
+                  </button>
+                </div>
               </div>
               {!preguntas.length || !r.detalle ? (
                 <div style={{ textAlign: 'center', padding: 40, color: C.gray, fontFamily: 'Inter', fontSize: 13 }}>
