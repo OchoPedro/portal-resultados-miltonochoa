@@ -3421,9 +3421,9 @@ export default function ColegioDashboard({session, onLogout}) {
               {detallePreguntas.length === 0 ? (
                 <EmptyState msg="No hay análisis de preguntas cargado para esta prueba."/>
               ) : (
-                <div style={{overflowX:'auto'}}>
+                <div style={{overflowX:'auto', overflowY:'auto', maxHeight:560}}>
                   <table style={{width:'100%', borderCollapse:'collapse', fontFamily:'Inter', fontSize:11}}>
-                    <thead>
+                    <thead style={{position:'sticky', top:0, zIndex:1}}>
                       <tr>
                         <th style={{...thDP, width:40}} onClick={()=>handleSortDP('sesion')}>Ses.{arrowDP('sesion')}</th>
                         <th style={{...thDP, width:40}} onClick={()=>handleSortDP('nro_pregunta')}>Nro{arrowDP('nro_pregunta')}</th>
@@ -4644,10 +4644,10 @@ export default function ColegioDashboard({session, onLogout}) {
                 </div>
               )}
 
-              <div style={{overflowX:'auto', borderRadius:10, border:`1px solid ${C.grayLt}`,
-                boxShadow:'0 2px 8px rgba(0,0,0,0.05)'}}>
+              <div style={{overflowX:'auto', overflowY:'auto', maxHeight:560, borderRadius:10,
+                border:`1px solid ${C.grayLt}`, boxShadow:'0 2px 8px rgba(0,0,0,0.05)'}}>
                 <table style={{width:'100%', borderCollapse:'collapse', fontSize:11, fontFamily:'Inter'}}>
-                  <thead>
+                  <thead style={{position:'sticky', top:0, zIndex:1}}>
                     <tr>
                       {['Ses.','Nro','Área','Asignatura','Correcta',
                         'A','B','C','D','E','F','G','H','X',
