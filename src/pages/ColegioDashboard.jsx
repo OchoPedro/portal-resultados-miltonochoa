@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import RankingNacional from './RankingNacional'
+import HojaResultados from '../components/HojaResultados'
+import { useImpresion } from '../components/useImpresion'
+import { construirPreguntas, mapaDetalle } from '../lib/preguntas'
 import {
   C,
   Card, CardTitle, Badge, KpiCard, Sidebar, useMobile, useTablet
@@ -1065,6 +1068,60 @@ export default function ColegioDashboard({session, onLogout}) {
       })
     return () => { cancelled = true }
   }, [selectedStudent, selectedPrueba])
+
+  // ── Hojas de resultados imprimibles ──────────────────────────────────────
+  const { imprimir, portal } = useImpresion()
+  const [preparandoLote, setPreparandoLote] = useState(false)
+
+  const datosColegio = {
+    nombre: session?.nombre,
+    municipio: toTitleCase(session?.municipio),
+    departamento: toTitleCase(session?.departamento_nombre),
+  }
+  const datosEstudiante = s => ({
+    nombre: s.estudiantes?.nombre, usuario: s.estudiantes?.usuario,
+    grado: s.estudiantes?.grado, salon: s.estudiantes?.salon,
+  })
+
+  const imprimirEstudiante = () => imprimir(
+    <HojaResultados estudiante={datosEstudiante(selectedStudent)} resultado={selectedStudent}
+      detalle={studentDetalle} prueba={selectedPrueba} colegio={datosColegio} />
+  )
+
+  // Lote: una hoja por estudiante de la selección actual (grado + salón). El detalle no está
+  // cargado para todos —el modal lo pide de a uno—, así que hay que traerlo en bloque.
+  const imprimirLote = async () => {
+    if (!selectedPrueba || !students.length) return
+    setPreparandoLote(true)
+    try {
+      const ids = students.map(s => s.estudiante_id)
+      const detallePorId = {}
+      // Se pide por tandas: una lista `in()` con cientos de UUID desborda la URL del REST.
+      for (let i = 0; i < ids.length; i += 100) {
+        const { data, error } = await supabase
+          .from('resultados_estudiante')
+          .select('estudiante_id, detalle')
+          .eq('prueba_id', selectedPrueba.id)
+          .eq('colegio_id', session.id)
+          .in('estudiante_id', ids.slice(i, i + 100))
+        if (error) throw error
+        ;(data || []).forEach(d => { detallePorId[d.estudiante_id] = d.detalle || [] })
+      }
+      imprimir(
+        <>
+          {students.map(s => (
+            <HojaResultados key={s.estudiante_id} estudiante={datosEstudiante(s)} resultado={s}
+              detalle={detallePorId[s.estudiante_id] || []} prueba={selectedPrueba}
+              colegio={datosColegio} />
+          ))}
+        </>
+      )
+    } catch (e) {
+      alert('No se pudieron cargar las respuestas del grupo: ' + (e?.message || e))
+    } finally {
+      setPreparandoLote(false)
+    }
+  }
 
   const loadAll = async () => {
     setLoading(true)
@@ -3569,6 +3626,15 @@ export default function ColegioDashboard({session, onLogout}) {
                   <option value="region">Región</option>
                   <option value="nacional">Nacional</option>
                 </select>
+
+                <span style={{flex:1}}/>
+                <button onClick={imprimirLote} disabled={preparandoLote || !students.length}
+                  title="Una hoja por estudiante, con la selección de grado y salón actual"
+                  style={{padding:'6px 14px', background: (preparandoLote || !students.length) ? C.grayLt : C.navy,
+                    color:C.white, border:'none', borderRadius:6, fontFamily:'Inter', fontSize:12,
+                    fontWeight:600, cursor:(preparandoLote || !students.length) ? 'default' : 'pointer'}}>
+                  {preparandoLote ? 'Preparando…' : `🖨️ Descargar PDF (${students.length})`}
+                </button>
               </div>
               <div style={{overflowX:'auto', overflowY:'auto', maxHeight:560}}>
                 <table style={{borderCollapse:'collapse', fontFamily:'Inter', fontSize:11, width:'100%', tableLayout:'fixed'}}>
@@ -4959,8 +5025,18 @@ export default function ColegioDashboard({session, onLogout}) {
               overflow:'hidden', marginBottom:24}}>
 
             {/* Close button */}
-            <div style={{display:'flex', justifyContent:'flex-end', padding:'10px 14px 0',
-              background:C.navy}}>
+            <div style={{display:'flex', justifyContent:'flex-end', alignItems:'center', gap:10,
+              padding:'10px 14px 0', background:C.navy}}>
+              <button
+                onClick={imprimirEstudiante}
+                disabled={loadingDetalle || !studentDetalle}
+                style={{background:'rgba(255,255,255,0.14)', border:'1px solid rgba(255,255,255,0.35)',
+                  color:C.white, fontSize:12, fontWeight:600, fontFamily:'Inter',
+                  padding:'5px 12px', borderRadius:6,
+                  opacity: (loadingDetalle || !studentDetalle) ? 0.5 : 1,
+                  cursor: (loadingDetalle || !studentDetalle) ? 'default' : 'pointer'}}>
+                🖨️ Descargar PDF
+              </button>
               <button
                 onClick={() => setSelectedStudent(null)}
                 style={{background:'transparent', border:'none', color:C.white,
@@ -4996,39 +5072,11 @@ export default function ColegioDashboard({session, onLogout}) {
                   Cargando respuestas…
                 </div>
               ) : (() => {
-                const rawRows = selectedPrueba?.estructura_excel?.raw || []
-                // Detect column indices from header row
-                const rawHeader = rawRows[0] || []
-                const hIdx = k => rawHeader.findIndex(h => typeof h === 'string' && h.toLowerCase().trim().startsWith(k))
-                const iSesion = 0, iNro = 1, iArea = 2, iMateria = 3
-                const iEstandar    = hIdx('estándar') >= 0 ? hIdx('estándar') : hIdx('estandar')
-                const iCompetencia = hIdx('competencia')
-                const iComponente  = hIdx('componente')
-                const iTarea       = hIdx('tarea')
-                const iRta         = rawHeader.findIndex(h => typeof h === 'string' && ['rta','respuesta correcta','resp. correcta','resp correcta','respuesta'].includes(h.toLowerCase().trim()))
-                // gpos = posición global (fila no vacía, 1..N) — coincide con detalle.pregunta
-                // (i+1 en calcularResultado). El "Nro" del Excel se reinicia por sesión, así
-                // que no sirve como llave de cruce con el detalle del estudiante.
-                const questions = rawRows.slice(1)
-                  .filter(f => Array.isArray(f) && f.some(v => v !== '' && v != null))
-                  .map((f, i) => ({
-                    gpos:        i + 1,
-                    sesion:      (f[iSesion]    || '').toString().trim(),
-                    nro:         (f[iNro]       || '').toString().trim(),
-                    area:        (f[iArea]      || '').toString().trim(),
-                    materia:     (f[iMateria]   || '').toString().trim(),
-                    estandar:    iEstandar    >= 0 ? (f[iEstandar]    || '').toString().trim() : '',
-                    competencia: iCompetencia >= 0 ? (f[iCompetencia] || '').toString().trim() : '',
-                    componente:  iComponente  >= 0 ? (f[iComponente]  || '').toString().trim() : '',
-                    tarea:       iTarea       >= 0 ? (f[iTarea]       || '').toString().trim() : '',
-                    rta:         iRta         >= 0 ? (f[iRta]         || '').toString().trim() : '',
-                  }))
-
-                // Build a map from posición global → detalle entry
-                const detalleMap = {}
-                ;(studentDetalle || []).forEach(d => {
-                  detalleMap[String(d.pregunta)] = d
-                })
+                // Cruce compartido con la hoja imprimible (src/lib/preguntas.js). La llave es
+                // `gpos`, la posición global de fila, no el "Nro" del Excel, que se reinicia
+                // en cada sesión.
+                const questions = construirPreguntas(selectedPrueba?.estructura_excel)
+                const detalleMap = mapaDetalle(studentDetalle)
 
                 const thStyle = {padding:'7px 10px', background:C.navy, color:C.white,
                   fontSize:11, fontWeight:600, textAlign:'center', whiteSpace:'nowrap',
@@ -5254,6 +5302,7 @@ export default function ColegioDashboard({session, onLogout}) {
         </div>
       )}
 
+      {portal}
     </div>
   )
 }

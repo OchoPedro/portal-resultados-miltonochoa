@@ -8,6 +8,9 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend, Cell
 } from 'recharts'
+import HojaResultados from '../components/HojaResultados'
+import { useImpresion } from '../components/useImpresion'
+import { construirPreguntas, mapaDetalle } from '../lib/preguntas'
 
 // Semáforo por área — mismos umbrales pedagógicos AAMO que usa el dashboard de colegio.
 // Las barras sí pueden usar verde (nivel avanzado); el texto/números nunca usan verde.
@@ -40,6 +43,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
   const [compVista, setCompVista]       = useState('asignatura') // tarjetas Comparativo: asignatura/área
   const [perfilVista, setPerfilVista]   = useState('area')       // Perfil (radar + niveles): área/asignatura
   const [generando, setGenerando] = useState(false)
+  const { imprimir, portal } = useImpresion()
 
   useEffect(() => {
     let cancelled = false
@@ -134,6 +138,18 @@ export default function EstudianteDashboard({ session, onLogout }) {
   const r = todos[Math.min(selectedIdx, todos.length - 1)] || todos[0]
   if (!r) return null
   const prueba = r.pruebas
+
+  // Hoja imprimible: todos los datos ya están en memoria, no hace falta consultar nada.
+  const imprimirHoja = () => imprimir(
+    <HojaResultados
+      estudiante={{ nombre: session.nombre, usuario: session.usuario,
+                    grado: session.grado, salon: session.salon }}
+      resultado={r}
+      detalle={r.detalle}
+      prueba={prueba}
+      colegio={{ nombre: session.colegios?.nombre, municipio: session.colegios?.ciudad }}
+    />
+  )
   const promColegio = compañeros.length
     ? Math.round(avg(compañeros.map(c => c.puntaje_global)))
     : 0
@@ -594,32 +610,11 @@ export default function EstudianteDashboard({ session, onLogout }) {
 
         {/* MIS RESPUESTAS */}
         {tabActivo === 'respuestas' && (() => {
-          const rawRows = prueba?.estructura_excel?.raw || []
-          const rawHeader = rawRows[0] || []
-          const hIdx = k => rawHeader.findIndex(h => typeof h === 'string' && h.toLowerCase().trim().startsWith(k))
-          const iSesion = 0, iNro = 1, iArea = 2, iMateria = 3
-          const iEstandar    = hIdx('estándar') >= 0 ? hIdx('estándar') : hIdx('estandar')
-          const iCompetencia = hIdx('competencia')
-          const iComponente  = hIdx('componente')
-          const iTarea       = hIdx('tarea')
-          const iRta         = rawHeader.findIndex(h => typeof h === 'string' && ['rta','respuesta correcta','resp. correcta','resp correcta','respuesta'].includes(h.toLowerCase().trim()))
-          // gpos = posición global (fila no vacía, 1..N) — coincide con detalle.pregunta
-          const preguntas = rawRows.slice(1)
-            .filter(f => Array.isArray(f) && f.some(v => v !== '' && v != null))
-            .map((f, i) => ({
-              gpos: i + 1,
-              sesion:      (f[iSesion]    || '').toString().trim(),
-              nro:         (f[iNro]       || '').toString().trim(),
-              area:        (f[iArea]      || '').toString().trim(),
-              materia:     (f[iMateria]   || '').toString().trim(),
-              componente:  iComponente  >= 0 ? (f[iComponente]  || '').toString().trim() : '',
-              competencia: iCompetencia >= 0 ? (f[iCompetencia] || '').toString().trim() : '',
-              tarea:       iTarea       >= 0 ? (f[iTarea]       || '').toString().trim() : '',
-              rta:         iRta         >= 0 ? (f[iRta]         || '').toString().trim() : '',
-            }))
-
-          const detalleMap = {}
-          ;(r.detalle || []).forEach(d => { detalleMap[String(d.pregunta)] = d })
+          // Cruce compartido con la hoja imprimible (src/lib/preguntas.js): si esta pantalla y
+          // la hoja usaran criterios distintos, el PDF diría algo diferente a lo que el
+          // estudiante ve, y ninguno de los dos daría error.
+          const preguntas = construirPreguntas(prueba?.estructura_excel)
+          const detalleMap = mapaDetalle(r.detalle)
 
           const thStyle = { padding: '7px 10px', background: C.navy, color: C.white,
             fontSize: 11, fontWeight: 600, textAlign: 'center', whiteSpace: 'nowrap',
@@ -630,9 +625,18 @@ export default function EstudianteDashboard({ session, onLogout }) {
 
           return (
             <Card>
-              <CardTitle sub={`${preguntas.length} preguntas · ${prueba?.codigo || '—'}`}>
-                Mis Respuestas
-              </CardTitle>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+                gap: 12, flexWrap: 'wrap' }}>
+                <CardTitle sub={`${preguntas.length} preguntas · ${prueba?.codigo || '—'}`}>
+                  Mis Respuestas
+                </CardTitle>
+                <button onClick={imprimirHoja}
+                  style={{ padding: '8px 16px', background: C.navy, color: C.white, border: 'none',
+                    borderRadius: 8, fontFamily: 'Inter', fontSize: 12.5, fontWeight: 600,
+                    display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                  🖨️  Descargar PDF
+                </button>
+              </div>
               {!preguntas.length || !r.detalle ? (
                 <div style={{ textAlign: 'center', padding: 40, color: C.gray, fontFamily: 'Inter', fontSize: 13 }}>
                   No hay detalle de respuestas disponible para esta prueba.
@@ -724,6 +728,7 @@ export default function EstudianteDashboard({ session, onLogout }) {
           </Card>
         )}
       </main>
+      {portal}
     </div>
   )
 }

@@ -28,3 +28,37 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--green); border-radius: 2px; }
 
 button { cursor: pointer; }
+
+/* ── Hoja de resultados imprimible ──────────────────────────────────────────
+   El contenedor vive siempre en el DOM pero fuera de pantalla; al imprimir se
+   oculta la app y se muestra solo él. Se saca de flujo con position:absolute en
+   vez de display:none porque los navegadores no paginan lo que nunca se pintó. */
+#print-root { position: absolute; left: -10000px; top: 0; width: 210mm; }
+
+@media print {
+  @page { size: A4 portrait; margin: 10mm; }
+
+  /* La app entera desaparece; queda solo la hoja. */
+  #root { display: none !important; }
+
+  #print-root {
+    position: static !important;
+    left: auto !important;
+    width: auto !important;
+    font-family: 'Inter', sans-serif;
+    color: #000;
+  }
+
+  /* Una hoja por estudiante. La última no fuerza salto para no dejar una
+     página en blanco al final del lote. */
+  .hoja-resultados { break-after: page; page-break-after: always; }
+  .hoja-resultados:last-child { break-after: auto; page-break-after: auto; }
+
+  /* El encabezado de la tabla se repite en cada página del tiro. */
+  .hoja-resultados thead { display: table-header-group; }
+  .hoja-resultados tr { break-inside: avoid; page-break-inside: avoid; }
+
+  /* Sin esto el navegador descarta los fondos y se pierde el verde/rojo que
+     distingue acierto de error: la hoja saldría en blanco y negro sin sentido. */
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+}
