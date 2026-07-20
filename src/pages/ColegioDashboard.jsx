@@ -2350,19 +2350,24 @@ export default function ColegioDashboard({session, onLogout}) {
                       if (prom == null) {
                         entry[`${sfx}_base`] = 0; entry[`${sfx}_rng`] = 0
                         entry[`${sfx}_lo`] = null; entry[`${sfx}_hi`] = null
-                      } else if (desv == null) {
-                        // Sin desviación (p.ej. un solo colegio en el grupo): marcador delgado
-                        // AL NIVEL del promedio, no una barra desde 0 (que se leía como un rango
-                        // enorme pegado al eje). El borde superior del marcador queda en el promedio.
+                        return
+                      }
+                      // Con desviación: barra flotante entre prom-desv y prom+desv
+                      const lo = desv == null ? null : clamp(prom - desv)
+                      const hi = desv == null ? null : clamp(prom + desv)
+                      if (lo != null && hi > lo) {
+                        entry[`${sfx}_base`] = lo; entry[`${sfx}_rng`] = hi - lo
+                        entry[`${sfx}_lo`] = lo; entry[`${sfx}_hi`] = hi
+                      } else {
+                        // Sin rango visible: o no hay desviación (un solo colegio en el grupo), o
+                        // es tan pequeña que al redondear colapsa (p.ej. dos colegios en 56,4 y
+                        // 57,0 → ±0,4 → la barra quedaba de altura CERO, una línea suelta sin
+                        // etiquetas). En ambos casos, marcador delgado AL NIVEL del promedio —
+                        // no una barra desde 0, que se leía como un rango enorme pegado al eje.
                         const p = clamp(prom), H = 4
                         const base = Math.max(0, p - H)
                         entry[`${sfx}_base`] = base; entry[`${sfx}_rng`] = p - base
                         entry[`${sfx}_lo`] = null; entry[`${sfx}_hi`] = p
-                      } else {
-                        // Con desviación: barra flotante entre prom-desv y prom+desv
-                        const lo = clamp(prom - desv), hi = clamp(prom + desv)
-                        entry[`${sfx}_base`] = lo; entry[`${sfx}_rng`] = hi - lo
-                        entry[`${sfx}_lo`] = lo; entry[`${sfx}_hi`] = hi
                       }
                     })
                     return entry
@@ -2572,8 +2577,11 @@ export default function ColegioDashboard({session, onLogout}) {
                 <div style={{marginTop:16, padding:'10px 14px', background:C.bg, borderRadius:8,
                   fontSize:11, color:C.gray, fontFamily:'Inter', lineHeight:1.6}}>
                   <strong style={{color:C.navy}}>Nota:</strong> Los promedios de Colombia, {regionNombre}, {dptoNombre} y {ciudadNombre}{' '}
-                  se calculan como el promedio de los colegios registrados con esta misma prueba.
-                  Los valores se actualizan a medida que más colegios carguen resultados.
+                  se calculan como el promedio de los colegios registrados con esta misma prueba, contando
+                  solo los que ya tienen al menos 10 estudiantes calificados en esa competencia: un colegio
+                  a medio calificar movería la referencia tanto como uno completo. Un referente sin ningún
+                  colegio que alcance ese mínimo aparece como “—” y sin barra. Los valores se actualizan a
+                  medida que más colegios carguen resultados.
                 </div>
               </Card>
             </div>
@@ -4097,9 +4105,15 @@ export default function ColegioDashboard({session, onLogout}) {
                     const entry = { name: r.componente }
                     SCOPES.forEach(({sfx, promKey, desvKey}) => {
                       const prom = r[promKey], desv = r[desvKey]
-                      if (prom == null) { entry[`${sfx}_base`]=0; entry[`${sfx}_rng`]=0; entry[`${sfx}_lo`]=null; entry[`${sfx}_hi`]=null }
-                      else if (desv == null) { entry[`${sfx}_base`]=0; entry[`${sfx}_rng`]=clamp(prom); entry[`${sfx}_lo`]=null; entry[`${sfx}_hi`]=clamp(prom) }
-                      else { const lo=clamp(prom-desv),hi=clamp(prom+desv); entry[`${sfx}_base`]=lo; entry[`${sfx}_rng`]=hi-lo; entry[`${sfx}_lo`]=lo; entry[`${sfx}_hi`]=hi }
+                      if (prom == null) { entry[`${sfx}_base`]=0; entry[`${sfx}_rng`]=0; entry[`${sfx}_lo`]=null; entry[`${sfx}_hi`]=null; return }
+                      const lo = desv == null ? null : clamp(prom-desv)
+                      const hi = desv == null ? null : clamp(prom+desv)
+                      if (lo != null && hi > lo) { entry[`${sfx}_base`]=lo; entry[`${sfx}_rng`]=hi-lo; entry[`${sfx}_lo`]=lo; entry[`${sfx}_hi`]=hi }
+                      // Sin rango visible (sin desviación, o tan chica que al redondear colapsa):
+                      // marcador delgado al nivel del promedio. Igual que en Desviación por
+                      // Competencias — aquí seguía dibujando una barra desde 0, que se lee como un
+                      // rango enorme, y la que colapsaba quedaba como una línea suelta.
+                      else { const p=clamp(prom), H=4, base=Math.max(0,p-H); entry[`${sfx}_base`]=base; entry[`${sfx}_rng`]=p-base; entry[`${sfx}_lo`]=null; entry[`${sfx}_hi`]=p }
                     })
                     return entry
                   })
@@ -4204,6 +4218,16 @@ export default function ColegioDashboard({session, onLogout}) {
                     </table>
                   </div>
                 )}
+
+                <div style={{marginTop:16, padding:'10px 14px', background:C.bg, borderRadius:8,
+                  fontSize:11, color:C.gray, fontFamily:'Inter', lineHeight:1.6}}>
+                  <strong style={{color:C.navy}}>Nota:</strong> Los promedios de Colombia, {regionNombre}, {dptoNombre} y {ciudadNombre}{' '}
+                  se calculan como el promedio de los colegios registrados con esta misma prueba, contando
+                  solo los que ya tienen al menos 10 estudiantes calificados en ese componente: un colegio
+                  a medio calificar movería la referencia tanto como uno completo. Un referente sin ningún
+                  colegio que alcance ese mínimo aparece como “—” y sin barra. Los valores se actualizan a
+                  medida que más colegios carguen resultados.
+                </div>
               </Card>
             </div>
           )
