@@ -1,7 +1,60 @@
 # Plan: análisis por pregunta que escale a 1M de estudiantes
 
-**Escrito:** 20 jul 2026 · **Para ejecutar:** martes 21 jul 2026
-**Repos:** `portal` (lectura) · `plataforma-interna` (escritura) · BD `bmspwsbhsjkamjywvvde`
+**Escrito:** 20 jul 2026 · **Repos:** `portal` (lectura) · `plataforma-interna` (escritura) ·
+BD `bmspwsbhsjkamjywvvde`
+
+---
+
+## ESTADO: fases 0–4 EJECUTADAS y VERIFICADAS (20 jul, madrugada)
+
+Todo lo hecho es **aditivo**: tablas y funciones nuevas que nada en producción lee todavía. El
+sistema sigue funcionando exactamente igual que antes. Falta el switch (fases 5–7).
+
+| Fase | Estado | Resultado |
+|---|---|---|
+| 0 · backup | ✅ | `_backup_analisis_20260721` — 99.314 filas, 200 colegios, 2 pruebas |
+| 1 · `preguntas_prueba` | ✅ | 254 preguntas × 2 pruebas. **0 diferencias** contra el backup en materia, competencia, componente, estándar, tarea, dificultad, respuesta, sesión y nro_sesión |
+| 2 · `stats_pregunta_colegio` | ✅ | 391 pares colegio×prueba, 99.314 filas. `refrescar_stats_colegio` |
+| 3 · `stats_pregunta_nacional` | ✅ | 254 gpos × 2 pruebas. `refrescar_stats_nacional` |
+| 4 · `analisis_preguntas_v2` (vista) | ✅ | **0 diferencias en las 99.314 filas**, sin sobrantes ni faltantes |
+
+### Lo medido
+
+| Operación | Antes | Ahora |
+|---|---|---|
+| Refrescar el análisis tras guardar un lote | 4.500 ms (prueba entera) | **17 ms** (por colegio) |
+| Leer el análisis de un colegio | tabla materializada | **2,1 ms** (254 filas, todo por índice) |
+
+La verificación de la fase 4, que es la que decide si esto sirve:
+
+```
+filas_comparadas 99.314 · dif_pct_colegio 0 · dif_pct_nacional 0 · dif_oportunidad 0
+dif_materia 0 · dif_rta 0 · solo_en_nueva 0 · solo_en_vieja 0
+```
+
+### Falta (el switch — hacer con calma, sin lote corriendo)
+
+- **Fase 5** · `portal` lee `analisis_preguntas_v2` en vez de `analisis_preguntas`
+  ([ColegioDashboard.jsx:1310](src/pages/ColegioDashboard.jsx:1310)).
+- **Fase 6** · `plataforma-interna`: `guardar` llama `refrescar_stats_colegio` por cada colegio
+  del lote + `refrescar_stats_nacional`, vía worker con estado y reintento — **nunca
+  fire-and-forget**. Y `accion: 'borrar'` debe refrescar también.
+- **Fase 7** · retirar `analisis_preguntas`, `calcular_analisis_preguntas` y el backup.
+
+### Rollback
+
+Nada que revertir mientras no se toque el switch. Si se quisiera deshacer:
+`drop view analisis_preguntas_v2; drop table stats_pregunta_nacional, stats_pregunta_colegio,
+preguntas_prueba; drop function refrescar_stats_colegio, refrescar_stats_nacional,
+poblar_preguntas_prueba;`
+
+### Pendiente de decidir antes de la fase 5
+
+`analisis_preguntas_v2` **deriva** `pct_nacional` en vez de leerlo congelado. Es más correcto
+—nunca queda viejo— pero un colegio puede ver ese número moverse entre visitas sin haber hecho
+nada. Hoy coinciden exactamente porque el recálculo global se corrió hace minutos. Si se
+prefiere estabilidad, hay que congelarlo **por corte de fecha**, no por accidente de cuándo
+corrió el último recálculo.
 
 ---
 
