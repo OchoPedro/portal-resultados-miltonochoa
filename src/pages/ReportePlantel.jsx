@@ -37,19 +37,6 @@ const REGIONES_DEPTS = {
 const DEPTO_REGION = {}
 Object.entries(REGIONES_DEPTS).forEach(([r, ds]) => ds.forEach(d => { DEPTO_REGION[d] = r }))
 
-// Paginación completa (los promedios de depto/región agregan miles de filas).
-async function fetchTodasLasFilas(factory, tam = 1000) {
-  let all = [], offset = 0
-  while (true) {
-    const { data, error } = await factory(offset, tam)
-    if (error) throw error
-    const rows = data || []
-    all = all.concat(rows)
-    if (rows.length < tam) break
-    offset += tam
-  }
-  return all
-}
 
 // ── helpers visuales (estilo portal, inline) ──────────────────────────────────
 const thBase = {
@@ -126,82 +113,29 @@ export default function ReportePlantel({ codigo, nombre, anioRef, onClose }) {
       if (cancelado) return
       setData(rows || [])
 
-      // 2. Promedios departamento (para los años y departamento del plantel)
+      // 2 y 3. Promedios de referencia (departamento y región) — se agregan EN LA BASE.
+      // Antes el navegador se descargaba todas las filas del departamento y de la región para
+      // promediarlas aquí: para la Andina son 34.216 filas en 35 peticiones secuenciales
+      // (páginas de 1000 con await en cada vuelta), y todo eso para pintar 5 filas por bloque.
+      // La RPC devuelve los promedios ya calculados: 1 petición. Mismos números, verificado
+      // contra el cálculo anterior con coincidencia exacta a 6 decimales.
       if (rows?.length) {
         const depto = rows[rows.length - 1].departamento
         const anios = rows.map(r => r.anio)
-
-        const dRows = await fetchTodasLasFilas((offset, tam) =>
-          supabase.from('ranking_colegios')
-            .select('anio,lectura_critica,matematicas,ciencias_sociales,ciencias_naturales,ingles,ponderado,puntaje_global')
-            .eq('departamento', depto).neq('codigo', codigo).in('anio', anios)
-            .range(offset, offset + tam - 1)
-        ).catch(() => [])
-        if (cancelado) return
-
-        const byYear = {}
-        dRows.forEach(r => {
-          if (!byYear[r.anio]) byYear[r.anio] = { n: 0, lc:0, mat:0, cs:0, cn:0, ing:0, pond:0, glob:0, nLc:0, nMat:0, nCs:0, nCn:0, nIng:0, nPond:0, nGlob:0 }
-          const y = byYear[r.anio]; y.n++
-          const sumar = (campo, cont, valor) => {
-            if (valor === null || valor === undefined || valor === '') return
-            const n = parseFloat(valor); if (isNaN(n)) return
-            y[campo] += n; y[cont]++
-          }
-          sumar('lc','nLc',r.lectura_critica); sumar('mat','nMat',r.matematicas)
-          sumar('cs','nCs',r.ciencias_sociales); sumar('cn','nCn',r.ciencias_naturales)
-          sumar('ing','nIng',r.ingles); sumar('pond','nPond',r.ponderado); sumar('glob','nGlob',r.puntaje_global)
-        })
-        setDept(Object.entries(byYear).map(([anio, v]) => ({
-          anio: parseInt(anio),
-          lectura_critica:   v.nLc   ? v.lc/v.nLc     : null,
-          matematicas:       v.nMat  ? v.mat/v.nMat   : null,
-          ciencias_sociales: v.nCs   ? v.cs/v.nCs     : null,
-          ciencias_naturales:v.nCn   ? v.cn/v.nCn     : null,
-          ingles:            v.nIng  ? v.ing/v.nIng   : null,
-          ponderado:         v.nPond ? v.pond/v.nPond : null,
-          puntaje_global:    v.nGlob ? v.glob/v.nGlob : null,
-          total_colegios:    v.n,
-        })))
-
-        // 3. Promedios región
         const region = DEPTO_REGION[depto]
         const regionDepts = region ? REGIONES_DEPTS[region] : []
-        if (regionDepts.length) {
-          const rRows = await fetchTodasLasFilas((offset, tam) =>
-            supabase.from('ranking_colegios')
-              .select('anio,lectura_critica,matematicas,ciencias_sociales,ciencias_naturales,ingles,ponderado,puntaje_global')
-              .in('departamento', regionDepts).neq('codigo', codigo).in('anio', anios)
-              .range(offset, offset + tam - 1)
-          ).catch(() => [])
-          if (cancelado) return
 
-          const byYearR = {}
-          rRows.forEach(r => {
-            if (!byYearR[r.anio]) byYearR[r.anio] = { n:0, lc:0, mat:0, cs:0, cn:0, ing:0, pond:0, glob:0, nLc:0, nMat:0, nCs:0, nCn:0, nIng:0, nPond:0, nGlob:0 }
-            const y = byYearR[r.anio]; y.n++
-            const sumar = (campo, cont, valor) => {
-              if (valor === null || valor === undefined || valor === '') return
-              const n = parseFloat(valor); if (isNaN(n)) return
-              y[campo] += n; y[cont]++
-            }
-            sumar('lc','nLc',r.lectura_critica); sumar('mat','nMat',r.matematicas)
-            sumar('cs','nCs',r.ciencias_sociales); sumar('cn','nCn',r.ciencias_naturales)
-            sumar('ing','nIng',r.ingles); sumar('pond','nPond',r.ponderado); sumar('glob','nGlob',r.puntaje_global)
-          })
-          setRegion(Object.entries(byYearR).map(([anio, v]) => ({
-            anio: parseInt(anio),
-            lectura_critica:    v.nLc   ? v.lc/v.nLc     : null,
-            matematicas:        v.nMat  ? v.mat/v.nMat   : null,
-            ciencias_sociales:  v.nCs   ? v.cs/v.nCs     : null,
-            ciencias_naturales: v.nCn   ? v.cn/v.nCn     : null,
-            ingles:             v.nIng  ? v.ing/v.nIng   : null,
-            ponderado:          v.nPond ? v.pond/v.nPond : null,
-            puntaje_global:     v.nGlob ? v.glob/v.nGlob : null,
-            total_colegios:     v.n,
-            region,
-          })))
-        }
+        const { data: refs } = await supabase.rpc('get_ranking_referencias', {
+          p_codigo: codigo,
+          p_anios: anios,
+          p_departamento: depto,
+          p_region_depts: regionDepts,
+        })
+        if (cancelado) return
+
+        setDept(refs?.dept || [])
+        // La región lleva además su nombre en cada fila (lo usa la pestaña Comparativo Región).
+        setRegion((refs?.region || []).map(r => ({ ...r, region })))
       }
       if (!cancelado) setLoading(false)
     })()
