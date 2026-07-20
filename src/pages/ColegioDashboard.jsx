@@ -979,7 +979,6 @@ export default function ColegioDashboard({session, onLogout}) {
   const [convMin, setConvMin] = useState(0)
   const [convMax, setConvMax] = useState(5)
   const [convAprobacion, setConvAprobacion] = useState(3.5)
-  const [oportunidades, setOportunidades] = useState([])
   const [detallePreguntas, setDetallePreguntas] = useState([])
   const [allPruebasPromedio, setAllPruebasPromedio] = useState([])
 
@@ -1227,7 +1226,6 @@ export default function ColegioDashboard({session, onLogout}) {
         setNotasComp([])
         setNotasCompN([])
         setCompNGestion([])
-        setOportunidades([])
         setDetallePreguntas([])
         setLoading(false)
         return
@@ -1306,14 +1304,6 @@ export default function ColegioDashboard({session, onLogout}) {
       setCompNGestion(cgnData || [])
       const firstMatN = cgnData?.length ? cgnData[0].materia : 'Todas'
       setCompNAsigFilter(firstMatN)
-
-      // Oportunidades
-      const { data: opor } = await supabase
-        .from('analisis_preguntas').select('id, nro_pregunta, sesion, area, asignatura, competencia, pct_colegio, pct_nacional, oportunidad_mejora')
-        .eq('colegio_id', cid).eq('prueba_id', pid)
-        .eq('oportunidad_mejora', true).order('pct_colegio')
-      if (isCancelled()) return
-      setOportunidades(opor || [])
 
       // Detalle Prueba — todas las preguntas
       const { data: detalle } = await supabase
