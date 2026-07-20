@@ -10,16 +10,8 @@ import {
   PolarAngleAxis, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, ReferenceLine,
 } from 'recharts'
+import { REGIONES_DEPTS, DEPTO_REGION as DEPTO_REGION_MAP } from '../lib/regiones'
 
-const REGIONES_DEPTS = {
-  'Andina':    ['ANTIOQUIA','BOGOTÁ D.C.','BOYACÁ','CALDAS','CUNDINAMARCA','HUILA','NORTE SANTANDER','QUINDÍO','RISARALDA','SANTANDER','TOLIMA'],
-  'Caribe':    ['ATLÁNTICO','BOLÍVAR','CESAR','CÓRDOBA','LA GUAJIRA','MAGDALENA','SUCRE','SAN ANDRÉS'],
-  'Pacífica':  ['CAUCA','CHOCÓ','NARIÑO','VALLE DEL CAUCA'],
-  'Orinoquía': ['ARAUCA','CASANARE','META','VICHADA'],
-  'Amazonía':  ['AMAZONAS','CAQUETÁ','GUAINÍA','GUAVIARE','PUTUMAYO','VAUPÉS'],
-}
-const DEPTO_REGION_MAP = {}
-Object.entries(REGIONES_DEPTS).forEach(([r, ds]) => ds.forEach(d => { DEPTO_REGION_MAP[d] = r }))
 
 const AREAS = [
   { key: 'lc',  label: 'Lectura Crítica',       short: 'L.C.' },

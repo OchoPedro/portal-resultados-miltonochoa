@@ -9,6 +9,7 @@ import { supabase } from '../lib/supabase'
 import { C, Card, Badge, useMobile } from '../components/ui'
 import ReportePlantel from './ReportePlantel'
 import ReporteAgrupado from './ReporteAgrupado'
+import { REGIONES_DEPTS as REGIONES_COL, DEPTO_REGION } from '../lib/regiones'
 
 const POR_PAGINA = 100
 
@@ -19,15 +20,6 @@ const DEPARTAMENTOS_COL = [
   'NORTE SANTANDER','PUTUMAYO','QUINDÍO','RISARALDA','SAN ANDRÉS','SANTANDER',
   'SUCRE','TOLIMA','VALLE DEL CAUCA','VAUPÉS','VICHADA',
 ]
-const REGIONES_COL = {
-  'Andina':    ['ANTIOQUIA','BOGOTÁ D.C.','BOYACÁ','CALDAS','CUNDINAMARCA','HUILA','NORTE SANTANDER','QUINDÍO','RISARALDA','SANTANDER','TOLIMA'],
-  'Caribe':    ['ATLÁNTICO','BOLÍVAR','CESAR','CÓRDOBA','LA GUAJIRA','MAGDALENA','SUCRE','SAN ANDRÉS'],
-  'Pacífica':  ['CAUCA','CHOCÓ','NARIÑO','VALLE DEL CAUCA'],
-  'Orinoquía': ['ARAUCA','CASANARE','META','VICHADA'],
-  'Amazonía':  ['AMAZONAS','CAQUETÁ','GUAINÍA','GUAVIARE','PUTUMAYO','VAUPÉS'],
-}
-const DEPTO_REGION = {}
-Object.entries(REGIONES_COL).forEach(([r, ds]) => ds.forEach(d => { DEPTO_REGION[d] = r }))
 
 // Paginación completa (Colombia tiene >12.000 colegios/año; un solo .limit corta y sesga).
 async function fetchTodasLasFilas(factory, tam = 1000) {

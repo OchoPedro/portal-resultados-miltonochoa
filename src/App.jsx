@@ -1,5 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
-import { setSupabaseToken, clearSupabaseToken } from './lib/supabase'
+import { setSupabaseToken, clearSupabaseToken, supabase } from './lib/supabase'
+import { verificarContraBD } from './lib/regiones'
 import Login from './pages/Login'
 const EstudianteDashboard = lazy(() => import('./pages/EstudianteDashboard'))
 const ColegioDashboard    = lazy(() => import('./pages/ColegioDashboard'))
@@ -7,6 +8,10 @@ const ColegioDashboard    = lazy(() => import('./pages/ColegioDashboard'))
 export default function App() {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
+
+  // Avisa en consola si el mapa de regiones del front y la tabla `regiones` divergen.
+  // Solo corre en desarrollo; en producción no hace nada.
+  useEffect(() => { verificarContraBD(supabase) }, [])
 
   // Restaurar sesión desde la cookie httpOnly via /api/me
   useEffect(() => {

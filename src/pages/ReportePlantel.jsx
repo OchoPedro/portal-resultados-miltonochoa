@@ -12,6 +12,7 @@ import {
   PolarAngleAxis, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, ReferenceLine,
 } from 'recharts'
+import { REGIONES_DEPTS, DEPTO_REGION } from '../lib/regiones'
 
 const AREAS = [
   { key: 'lectura_critica',    label: 'Lectura Crítica',        short: 'L.C.' },
@@ -27,15 +28,6 @@ const AÑO_COLORS = {
   2023: '#FBBF24', 2024: '#F87171', 2025: '#2D9B6F',
 }
 
-const REGIONES_DEPTS = {
-  'Andina':    ['ANTIOQUIA','BOGOTÁ D.C.','BOYACÁ','CALDAS','CUNDINAMARCA','HUILA','NORTE SANTANDER','QUINDÍO','RISARALDA','SANTANDER','TOLIMA'],
-  'Caribe':    ['ATLÁNTICO','BOLÍVAR','CESAR','CÓRDOBA','LA GUAJIRA','MAGDALENA','SUCRE','SAN ANDRÉS'],
-  'Pacífica':  ['CAUCA','CHOCÓ','NARIÑO','VALLE DEL CAUCA'],
-  'Orinoquía': ['ARAUCA','CASANARE','META','VICHADA'],
-  'Amazonía':  ['AMAZONAS','CAQUETÁ','GUAINÍA','GUAVIARE','PUTUMAYO','VAUPÉS'],
-}
-const DEPTO_REGION = {}
-Object.entries(REGIONES_DEPTS).forEach(([r, ds]) => ds.forEach(d => { DEPTO_REGION[d] = r }))
 
 
 // ── helpers visuales (estilo portal, inline) ──────────────────────────────────
