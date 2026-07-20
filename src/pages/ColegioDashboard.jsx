@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import RankingNacional from './RankingNacional'
 import HojaResultados from '../components/HojaResultados'
 import ResumenEstudiante from '../components/ResumenEstudiante'
+import HojaListadoNotas from '../components/HojaListadoNotas'
 import { promedioDeGrupo } from '../lib/areas'
 import { useImpresion } from '../components/useImpresion'
 import { construirPreguntas, mapaDetalle } from '../lib/preguntas'
@@ -1073,7 +1074,6 @@ export default function ColegioDashboard({session, onLogout}) {
 
   // ── Hojas de resultados imprimibles ──────────────────────────────────────
   const { imprimir, portal } = useImpresion()
-  const [preparandoLote, setPreparandoLote] = useState(false)
 
   const datosColegio = {
     nombre: session?.nombre,
@@ -1090,43 +1090,8 @@ export default function ColegioDashboard({session, onLogout}) {
       detalle={studentDetalle} prueba={selectedPrueba} colegio={datosColegio} />
   )
 
-  // Lote: una hoja por estudiante de la selección actual (grado + salón). El detalle no está
-  // cargado para todos —el modal lo pide de a uno—, así que hay que traerlo en bloque.
-  const imprimirLote = async () => {
-    if (!selectedPrueba || !students.length) return
-    setPreparandoLote(true)
-    try {
-      const ids = students.map(s => s.estudiante_id)
-      const detallePorId = {}
-      // Se pide por tandas: una lista `in()` con cientos de UUID desborda la URL del REST.
-      for (let i = 0; i < ids.length; i += 100) {
-        const { data, error } = await supabase
-          .from('resultados_estudiante')
-          .select('estudiante_id, detalle')
-          .eq('prueba_id', selectedPrueba.id)
-          .eq('colegio_id', session.id)
-          .in('estudiante_id', ids.slice(i, i + 100))
-        if (error) throw error
-        ;(data || []).forEach(d => { detallePorId[d.estudiante_id] = d.detalle || [] })
-      }
-      imprimir(
-        <>
-          {students.map(s => (
-            <HojaResultados key={s.estudiante_id} estudiante={datosEstudiante(s)} resultado={s}
-              detalle={detallePorId[s.estudiante_id] || []} prueba={selectedPrueba}
-              colegio={datosColegio} />
-          ))}
-        </>
-      )
-    } catch (e) {
-      alert('No se pudieron cargar las respuestas del grupo: ' + (e?.message || e))
-    } finally {
-      setPreparandoLote(false)
-    }
-  }
-
   // Resumen gráfico en lote: una página por estudiante del SALÓN seleccionado.
-  // A diferencia de imprimirLote no consulta nada: el resumen solo usa los puntajes por
+  // No consulta nada: el resumen solo usa los puntajes por
   // asignatura, que ya vienen en `students`. El detalle pregunta-a-pregunta —lo único que
   // obliga a ir a la base— aquí no se usa.
   //
@@ -3616,6 +3581,39 @@ export default function ColegioDashboard({session, onLogout}) {
           }))
           const areaHdr = {mat:'Mat.', cn:'Cs.Nat.', soc:'Soc.Ciu.', lc:'L.C.', ing:'Ing.'}
 
+          // Impresión del listado: se arma con `ranked`, que es EXACTAMENTE el array que pinta
+          // la tabla — mismo orden de la columna que el usuario haya elegido, mismos filtros de
+          // área/asignatura, mismo alcance de percentil. Así el PDF es lo que se ve en pantalla.
+          // No necesita consultar nada: a diferencia de las hojas de respuestas, aquí no hace
+          // falta el `detalle` de cada estudiante.
+          const num = v => v != null ? (Math.round(v*100)/100).toFixed(2) : null
+          const imprimirListado = () => imprimir(
+            <HojaListadoNotas
+              colegio={datosColegio} prueba={selectedPrueba}
+              grado={selectedGrado && selectedGrado !== 'Todos' ? selectedGrado : null}
+              salon={selectedSalon !== 'Todos' ? selectedSalon : null}
+              pctScopeLabel={{plantel:'plantel', municipio:'municipio', departamento:'departamento',
+                region:'región', nacional:'nacional'}[pctScope]}
+              columnas={visibleAreas.map(a => ({ label:a.label, cols:a.cols }))}
+              showAreaCol={showAreaCol} areaHdr={areaHdr[listadoArea]}
+              filas={ranked.map((s, i) => {
+                const av = showAreaCol ? areaVal(s, listadoArea) : null
+                const notas = {}
+                for (const a of visibleAreas) for (const [col] of a.cols) {
+                  const v = s[col]
+                  notas[col] = { texto: num(v), color: v != null ? semaforoColor(v, a.area) : '#94A3B8' }
+                }
+                return {
+                  n: i + 1, nombre: s.estudiantes?.nombre || '—', notas,
+                  area: showAreaCol ? { texto: num(av), color: av != null ? semaforoColor(av, listadoArea) : '#94A3B8' } : null,
+                  def:  { texto: num(s._def), color: s._def != null ? semaforoColor(s._def, '_') : '#94A3B8' },
+                  global: s._global, pct: s._pct,
+                  pctColor: s._pct >= 75 ? '#16A34A' : s._pct >= 50 ? '#D97706' : '#DC2626',
+                }
+              })}
+            />
+          )
+
           return students.length === 0 ? <EmptyState/> : (
             <Card>
               <div style={{display:'flex', alignItems:'center', justifyContent:'flex-end',
@@ -3654,23 +3652,23 @@ export default function ColegioDashboard({session, onLogout}) {
 
                 <span style={{flex:1}}/>
                 <button onClick={imprimirResumenLote}
-                  disabled={preparandoLote || !students.length || selectedSalon === 'Todos'}
+                  disabled={!students.length || selectedSalon === 'Todos'}
                   title={selectedSalon === 'Todos'
                     ? 'Elige un salón: el resumen compara a cada estudiante contra el promedio de su salón'
                     : 'Una página por estudiante del salón, con gráficas por asignatura y por área'}
                   style={{padding:'6px 14px', background:C.white,
-                    color: (preparandoLote || !students.length || selectedSalon === 'Todos') ? C.grayLt : C.navy,
-                    border:`1px solid ${(preparandoLote || !students.length || selectedSalon === 'Todos') ? C.grayLt : C.navy}`,
+                    color: (!students.length || selectedSalon === 'Todos') ? C.grayLt : C.navy,
+                    border:`1px solid ${(!students.length || selectedSalon === 'Todos') ? C.grayLt : C.navy}`,
                     borderRadius:6, fontFamily:'Inter', fontSize:12, fontWeight:600,
-                    cursor:(preparandoLote || !students.length || selectedSalon === 'Todos') ? 'default' : 'pointer'}}>
+                    cursor:(!students.length || selectedSalon === 'Todos') ? 'default' : 'pointer'}}>
                   {selectedSalon === 'Todos' ? '📊 Resumen gráfico (elige salón)' : `📊 Resumen gráfico (${students.length})`}
                 </button>
-                <button onClick={imprimirLote} disabled={preparandoLote || !students.length}
-                  title="Una hoja por estudiante, con la selección de grado y salón actual"
-                  style={{padding:'6px 14px', background: (preparandoLote || !students.length) ? C.grayLt : C.navy,
+                <button onClick={imprimirListado} disabled={!students.length}
+                  title="El listado tal como se ve aquí: mismo orden, filtros y percentil"
+                  style={{padding:'6px 14px', background: !students.length ? C.grayLt : C.navy,
                     color:C.white, border:'none', borderRadius:6, fontFamily:'Inter', fontSize:12,
-                    fontWeight:600, cursor:(preparandoLote || !students.length) ? 'default' : 'pointer'}}>
-                  {preparandoLote ? 'Preparando…' : `🖨️ Descargar PDF (${students.length})`}
+                    fontWeight:600, cursor: !students.length ? 'default' : 'pointer'}}>
+                  {`🖨️ Descargar PDF (${students.length})`}
                 </button>
               </div>
               <div style={{overflowX:'auto', overflowY:'auto', maxHeight:560}}>

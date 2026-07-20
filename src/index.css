@@ -64,6 +64,15 @@ button { cursor: pointer; }
   .hoja-resumen { break-inside: avoid; page-break-inside: avoid; }
   .hoja-resumen thead { display: table-row-group; }
 
+  /* El listado de notas SÍ fluye a varias páginas (un salón grande no cabe en una). El
+     encabezado de dos filas y la leyenda se repiten en cada una: sin eso, a partir de la
+     página 2 quedan columnas de números sin saber a qué asignatura pertenecen. */
+  .hoja-listado { break-after: page; page-break-after: always; }
+  .hoja-listado:last-child { break-after: auto; page-break-after: auto; }
+  .hoja-listado thead { display: table-header-group; }
+  .hoja-listado tfoot { display: table-footer-group; }
+  .hoja-listado tr { break-inside: avoid; page-break-inside: avoid; }
+
   /* Sin esto el navegador descarta los fondos y se pierde el verde/rojo que
      distingue acierto de error: la hoja saldría en blanco y negro sin sentido. */
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
