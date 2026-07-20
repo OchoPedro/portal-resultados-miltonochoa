@@ -2571,7 +2571,7 @@ export default function ColegioDashboard({session, onLogout}) {
 
                 <div style={{marginTop:16, padding:'10px 14px', background:C.bg, borderRadius:8,
                   fontSize:11, color:C.gray, fontFamily:'Inter', lineHeight:1.6}}>
-                  <strong style={{color:C.navy}}>Nota:</strong> Los promedios de Colombia, {regionNombre}, {dptoNombre} y {ciudadNombre}
+                  <strong style={{color:C.navy}}>Nota:</strong> Los promedios de Colombia, {regionNombre}, {dptoNombre} y {ciudadNombre}{' '}
                   se calculan como el promedio de los colegios registrados con esta misma prueba.
                   Los valores se actualizan a medida que más colegios carguen resultados.
                 </div>
