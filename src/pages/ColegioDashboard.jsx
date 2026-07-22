@@ -579,8 +579,9 @@ function PlantelMencion({ colegioId, pruebas, colegioNombre }) {
     if (!filtroPrueba) return
     const load = async () => {
       setLoading(true)
+      // Sin `detalle`/`respuestas`: esta sección solo compara puntajes y datos del estudiante.
       const { data } = await supabase.from('resultados_estudiante')
-        .select('*, estudiantes(nombre, grado, salon)')
+        .select('id, estudiante_id, prueba_id, colegio_id, correctas, total, desempeno_pct, puntaje_global, mat_cuantitativo, mat_especifico, cn_quimica, cn_fisica, cn_biologia, cn_cts, sociales, ciudadanas, lectura_critica, ingles, estudiantes(nombre, grado, salon)')
         .eq('colegio_id', colegioId).eq('prueba_id', filtroPrueba)
         .order('puntaje_global', {ascending: false})
       setTodosResultados(data || [])
@@ -960,6 +961,9 @@ export default function ColegioDashboard({session, onLogout}) {
   const [compNAsigFilter, setCompNAsigFilter] = useState('Todas')
   const [equilibrioMateria, setEquilibrioMateria] = useState('')
   const [consolidadoArea, setConsolidadoArea] = useState('Todas')
+  // `detalle` de todos los estudiantes SOLO se baja al abrir Consolidado de Respuestas
+  // (34 KB/fila — venía embebido en la carga principal del dashboard). map estudiante_id → detalle.
+  const [consolidadoDetalles, setConsolidadoDetalles] = useState(null)
   const [distribModal, setDistribModal] = useState(null)   // {q, data, loading}
 
   const [desviacionView, setDesviacionView] = useState('bars')
@@ -1034,6 +1038,22 @@ export default function ColegioDashboard({session, onLogout}) {
     loadForPrueba(selectedPrueba, () => cancelled)
     return () => { cancelled = true }
   }, [selectedPrueba])
+
+  // Detalles de respuestas para Consolidado: se bajan al abrir la pestaña, una vez por prueba.
+  useEffect(() => {
+    if (tab !== 'consolidado' || consolidadoDetalles || !selectedPrueba?.id) return
+    let cancelled = false
+    supabase.from('resultados_estudiante')
+      .select('estudiante_id, detalle')
+      .eq('colegio_id', session.id).eq('prueba_id', selectedPrueba.id)
+      .then(({ data }) => {
+        if (cancelled) return
+        const map = {}
+        ;(data || []).forEach(r => { map[r.estudiante_id] = r.detalle })
+        setConsolidadoDetalles(map)
+      })
+    return () => { cancelled = true }
+  }, [tab, selectedPrueba?.id, consolidadoDetalles])
 
   // Percentiles geográficos (municipio/departamento/región/nacional) para Listado de Notas.
   // Se cargan una sola vez por prueba+grado (con los 4 alcances ya calculados), no en cada
@@ -1211,14 +1231,17 @@ export default function ColegioDashboard({session, onLogout}) {
       const cid = session.id
       setPrueba(pruebaSelec)
 
-      // Resultados estudiantes
+      // Resultados estudiantes. SIN `detalle` (34 KB/fila — un colegio de 300 eran ~10 MB
+      // por carga): solo lo usa Consolidado de Respuestas y esa pestaña lo carga aparte al
+      // abrirse. `respuestas`/`puntaje_irt`/`motor_version` tampoco se usan aquí.
       const { data: res } = await supabase
         .from('resultados_estudiante')
-        .select('*, estudiantes(nombre, salon, grado, codigo, usuario)')
+        .select('id, estudiante_id, prueba_id, colegio_id, correctas, total, desempeno_pct, puntaje_global, mat_cuantitativo, mat_especifico, cn_quimica, cn_fisica, cn_biologia, cn_cts, sociales, ciudadanas, lectura_critica, ingles, cargado_via, created_at, revisada, estudiantes(nombre, salon, grado, codigo, usuario)')
         .eq('colegio_id', cid).eq('prueba_id', pid)
         .order('puntaje_global', {ascending: false})
       if (isCancelled()) return
       setAllStudents(res || [])
+      setConsolidadoDetalles(null)  // otra prueba = otros detalles; se recargan al abrir la pestaña
       setSelectedGrado('')          // exige elegir grado antes de mostrar resultados
       setSelectedSalon('Todos')
 
@@ -4603,6 +4626,10 @@ export default function ColegioDashboard({session, onLogout}) {
           if (!students.length) return (
             <Card><EmptyState msg="No hay resultados cargados para esta prueba."/></Card>
           )
+          // Los detalles llegan por su propio fetch al abrir la pestaña (ver useEffect).
+          if (!consolidadoDetalles) return (
+            <Card><EmptyState msg="Cargando respuestas…"/></Card>
+          )
 
           // Sesión y Nro por-sesión desde la estructura de la prueba. La posición global
           // (fila no vacía, 1..N) coincide con detalle.pregunta (i+1 en la calificación),
@@ -4617,8 +4644,9 @@ export default function ColegioDashboard({session, onLogout}) {
           const OPTS = ['A','B','C','D','E','F','G','H']
           const byQ = {}
           students.forEach(s => {
-            if (!s.detalle || !Array.isArray(s.detalle)) return
-            s.detalle.forEach(d => {
+            const det = consolidadoDetalles[s.estudiante_id]
+            if (!det || !Array.isArray(det)) return
+            det.forEach(d => {
               const nro = d.pregunta
               if (!byQ[nro]) {
                 byQ[nro] = {
