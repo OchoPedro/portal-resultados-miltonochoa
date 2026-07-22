@@ -1,5 +1,17 @@
 # Plan: referentes vivos que escalan a 5M de estudiantes
 
+## ✅ EJECUTADO COMPLETO (21 jul 2026, misma noche)
+
+Verificación dorada: las 7 RPCs comparadas contra su salida anterior con claims forjados —
+tablero 407/407, percentil_geo 13.110/13.110 estudiantes, percentil_est 300/300,
+promedios 407/407, competencias 407/407, componentes 407/407, distribución 32 + 395.706
+conteos set-based. **0 diferencias en todo.** Medido después: tablero 9 ms, percentiles
+16 ms, competencias 34 ms, componentes 43 ms, distribución 10 ms (antes 0.1–1.5 s c/u).
+Backfill: 407 pares, 0 errores. Cola probada end-to-end. Grants cerrados (la vista v2
+bypaseaba RLS con grant a authenticated — revocado). Commits: portal `1653488`,
+plataforma-interna `e25da4b` + `457ef29` (omr-pendientes y AdminAnalisis, hallados por grep).
+Pendiente solo: fase 7 (retirar lo viejo tras soak) e IRT (decisión aparte).
+
 **Escrito:** 21 jul 2026 · **Decisión del usuario:** el referente territorial (municipio /
 departamento / región / nacional) se queda **VIVO** — se compara contra toda la población
 calificada, no contra un corte congelado. Con la muestra **visible** en pantalla

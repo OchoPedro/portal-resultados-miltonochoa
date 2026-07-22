@@ -34,12 +34,15 @@ dif_materia 0 · dif_rta 0 · solo_en_nueva 0 · solo_en_vieja 0
 
 ### Falta (el switch — hacer con calma, sin lote corriendo)
 
-- **Fase 5** · `portal` lee `analisis_preguntas_v2` en vez de `analisis_preguntas`
-  ([ColegioDashboard.jsx:1310](src/pages/ColegioDashboard.jsx:1310)).
-- **Fase 6** · `plataforma-interna`: `guardar` llama `refrescar_stats_colegio` por cada colegio
-  del lote + `refrescar_stats_nacional`, vía worker con estado y reintento — **nunca
-  fire-and-forget**. Y `accion: 'borrar'` debe refrescar también.
-- **Fase 7** · retirar `analisis_preguntas`, `calcular_analisis_preguntas` y el backup.
+- **Fase 5 · ✅ HECHA (21 jul 2026).** El portal lee la RPC `get_analisis_preguntas` (v2)
+  y AdminAnalisis de plataforma-interna también. Ver `PLAN-referentes-vivos-escala.md`.
+- **Fase 6 · ✅ HECHA (21 jul 2026).** Cola `stats_pendientes` + `procesar_stats_pendientes`
+  con estado y reintento (drenada por el cron del omr-worker cada minuto). Encolan: upsert
+  de resultados, borrar, omr-worker y omr-pendientes. AdminResultados llama el drenado
+  ESPERADO con error visible. El mismo movimiento extendió el patrón a percentiles, tablero,
+  promedios, competencias, componentes y distribución (referentes vivos a escala).
+- **Fase 7** · retirar `analisis_preguntas`, `calcular_analisis_preguntas`, la acción
+  'analisis_preguntas' del API y el backup — tras unos días de soak con lo nuevo.
 
 ### Rollback
 
