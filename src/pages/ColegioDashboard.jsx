@@ -980,6 +980,8 @@ export default function ColegioDashboard({session, onLogout}) {
   const [convMax, setConvMax] = useState(5)
   const [convAprobacion, setConvAprobacion] = useState(3.5)
   const [detallePreguntas, setDetallePreguntas] = useState([])
+  // Muestra de los referentes (nacional/región/depto/municipio) + fecha — visible en pantalla
+  const [muestraRef, setMuestraRef] = useState(null)
   const [allPruebasPromedio, setAllPruebasPromedio] = useState([])
 
   const mountedRef = useRef(true)
@@ -1305,14 +1307,22 @@ export default function ColegioDashboard({session, onLogout}) {
       const firstMatN = cgnData?.length ? cgnData[0].materia : 'Todas'
       setCompNAsigFilter(firstMatN)
 
-      // Detalle Prueba — todas las preguntas
+      // Detalle Prueba — todas las preguntas. Fase 5 (21 jul 2026): se lee la RPC que junta
+      // preguntas_prueba + stats por colegio + stats nacional (agregado al escribir), en vez
+      // de la tabla analisis_preguntas que se reescribía entera en cada guardado. Mismas
+      // columnas, mismos valores (verificado 0 diferencias); el pct_nacional ahora es el
+      // referente VIVO — la muestra que lo sostiene se ve en pantalla (muestraRef).
       const { data: detalle } = await supabase
-        .from('analisis_preguntas')
-        .select('id, sesion, nro_pregunta, materia, estandar, competencia, componente, tarea, respuesta_correcta, pct_nacional, pct_colegio, dificultad, oportunidad_mejora')
-        .eq('colegio_id', cid).eq('prueba_id', pid)
-        .order('sesion').order('nro_pregunta')
+        .rpc('get_analisis_preguntas', { p_prueba_id: pid, p_colegio_id: cid })
       if (isCancelled()) return
       setDetallePreguntas(detalle || [])
+
+      // Tamaño de la muestra de cada referente + fecha de actualización (decisión del
+      // 21 jul 2026: el referente es vivo y la muestra se muestra, no se esconde).
+      const { data: muestra } = await supabase
+        .rpc('get_muestra_referente', { p_prueba_id: pid, p_colegio_id: cid })
+      if (isCancelled()) return
+      setMuestraRef(muestra || null)
 
     } catch(e) {
       console.error(e)
@@ -2020,6 +2030,15 @@ export default function ColegioDashboard({session, onLogout}) {
           <div style={{display:'grid', gap:16}}>
             <Card>
               <CardTitle sub="Comparativo de promedios por área">Tablero de Gestión</CardTitle>
+              {/* El referente es VIVO (se compara contra toda la población calificada). La
+                  muestra visible es la decisión del 21 jul 2026: si el número crece entre
+                  visitas, el colegio ve por qué — el referente se volvió más representativo. */}
+              {muestraRef?.nacional > 0 && (
+                <div style={{fontSize:11, color:C.gray, fontFamily:'Inter', marginBottom:10}}>
+                  Referente nacional: <strong>{Number(muestraRef.nacional).toLocaleString('es-CO')}</strong> estudiantes evaluados
+                  {muestraRef.actualizado && <> · actualizado {new Date(muestraRef.actualizado).toLocaleDateString('es-CO', {day:'numeric', month:'long', year:'numeric'})}</>}
+                </div>
+              )}
               {tableroComp.length === 0 ? (
                 <div style={{textAlign:'center', padding:40, color:C.gray, fontFamily:'Inter'}}>
                   No hay datos de comparativos cargados.
@@ -3647,6 +3666,13 @@ export default function ColegioDashboard({session, onLogout}) {
                   <option value="region">Región</option>
                   <option value="nacional">Nacional</option>
                 </select>
+                {/* La muestra del referente elegido, visible: el percentil es contra población viva */}
+                {muestraRef && pctScope !== 'plantel' && Number(muestraRef[pctScope]) > 0 && (
+                  <span style={{fontSize:11, color:C.gray, fontFamily:'Inter', whiteSpace:'nowrap'}}>
+                    {Number(muestraRef[pctScope]).toLocaleString('es-CO')} estudiantes
+                    {muestraRef.actualizado && <> · act. {new Date(muestraRef.actualizado).toLocaleDateString('es-CO', {day:'numeric', month:'short'})}</>}
+                  </span>
+                )}
 
                 <span style={{flex:1}}/>
                 <button onClick={imprimirResumenLote}
