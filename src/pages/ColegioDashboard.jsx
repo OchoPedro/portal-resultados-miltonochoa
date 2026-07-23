@@ -23,6 +23,19 @@ import {
 // ── HELPERS ──────────────────────────────────────────────────
 const avgArr = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0
 
+// Rótulo junto al nombre de quien tiene una hoja a media sesión. Aclara por qué su nota (baja
+// por definición, media prueba) no mueve el promedio del plantel: los promedios ya lo excluyen.
+// La columna `sesion_incompleta` la calcula la BD (ver migración add_sesion_incompleta_...).
+const MediaSesionTag = () => (
+  <span
+    title="Le falta una sesión completa. Su nota se muestra, pero NO cuenta en los promedios del colegio."
+    style={{marginLeft:6, padding:'0px 5px', borderRadius:20, fontSize:9, fontWeight:600,
+      color:C.amber, background:C.amber+'18', border:`1px solid ${C.amber}40`,
+      whiteSpace:'nowrap', verticalAlign:'middle'}}>
+    ½ sesión
+  </span>
+)
+
 const toTitleCase = str => str
   ? str.toLowerCase().replace(/(?:^|\s)\S/g, c => c.toUpperCase())
   : str
@@ -3382,6 +3395,7 @@ export default function ColegioDashboard({session, onLogout}) {
                         color:i===0?'#F59E0B':i===1?C.gray:i===2?'#CD7F32':C.grayLt}}>{i+1}</td>
                       <td style={{padding:'8px 10px', fontSize:12, color:C.text, fontWeight:500}}>
                         {s.estudiantes?.nombre?.split(' ').slice(0,3).join(' ')}
+                        {s.sesion_incompleta && <MediaSesionTag/>}
                       </td>
                       <td style={{padding:'8px 10px'}}>
                         <span style={{fontSize:15, fontWeight:700, color:C.navy,
@@ -3803,6 +3817,7 @@ export default function ColegioDashboard({session, onLogout}) {
                             color:C.dark, fontWeight:500, whiteSpace:'nowrap', overflow:'hidden',
                             textOverflow:'ellipsis'}}>
                             {s.estudiantes?.nombre}
+                            {s.sesion_incompleta && <MediaSesionTag/>}
                           </td>
                           {visibleAreas.flatMap(a => a.cols.map(([col]) => {
                             const {style, text} = notaTd(s[col], a.area)
