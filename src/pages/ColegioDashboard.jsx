@@ -1005,6 +1005,12 @@ export default function ColegioDashboard({session, onLogout}) {
     if (selectedSalon !== 'Todos' && String(s.estudiantes?.salon) !== selectedSalon) return false
     return true
   })
+  // Solo hojas COMPLETAS para promediar (decisión 22 jul 2026): a quien le falta una sesión
+  // entera (`sesion_incompleta`, columna generada en la BD) se le muestra su nota y cuenta en
+  // los listados, pero media prueba promediada como entera hundía 20+ puntos el promedio del
+  // plantel. El mismo criterio rige en las RPCs/stats del lado servidor — si se cambia aquí,
+  // cambiarlo allá también o el tablero contradirá al ranking.
+  const promediables = students.filter(s => !s.sesion_incompleta)
 
   // Derived filter options from loaded data
   const gradosDisponibles = useMemo(() =>
@@ -1120,7 +1126,9 @@ export default function ColegioDashboard({session, onLogout}) {
   // "Todos los salones" el número diría "promedio del grado" y la etiqueta mentiría.
   const imprimirResumenLote = () => {
     if (!selectedPrueba || !students.length) return
-    const promSalon = promedioDeGrupo(students)
+    // El comparativo "promedio del salón" excluye hojas a media sesión (mismo criterio que
+    // el tablero); los estudiantes con media sesión SÍ reciben su hoja impresa.
+    const promSalon = promedioDeGrupo(students.filter(s => !s.sesion_incompleta))
     const ordenados = [...students].sort((a, b) =>
       (a.estudiantes?.nombre || '').localeCompare(b.estudiantes?.nombre || ''))
     imprimir(
@@ -1157,7 +1165,7 @@ export default function ColegioDashboard({session, onLogout}) {
       // Se consulta ANTES de elegir el default para no aterrizar en una prueba vacía.
       const { data: todosRes } = await supabase
         .from('resultados_estudiante')
-        .select('prueba_id, puntaje_global, mat_cuantitativo, mat_especifico, cn_quimica, cn_fisica, cn_biologia, cn_cts, sociales, ciudadanas, lectura_critica, ingles')
+        .select('prueba_id, puntaje_global, mat_cuantitativo, mat_especifico, cn_quimica, cn_fisica, cn_biologia, cn_cts, sociales, ciudadanas, lectura_critica, ingles, sesion_incompleta')
         .eq('colegio_id', session.id)
       if (!mountedRef.current) return
       const idsConResultados = new Set((todosRes || []).map(r => r.prueba_id))
@@ -1177,7 +1185,9 @@ export default function ColegioDashboard({session, onLogout}) {
         })
         const avgNull = arr => { const f = arr.filter(v => v != null && !isNaN(v)); return f.length ? f.reduce((a,b)=>a+b,0)/f.length : null }
         const promedios = [...pruebasData].reverse().map(p => {
-          const arr = byPrueba[p.id] || []
+          // Histórico: mismo criterio que el tablero — las hojas a media sesión no promedian
+          // (y `n` refleja la muestra real del promedio).
+          const arr = (byPrueba[p.id] || []).filter(r => !r.sesion_incompleta)
           if (!arr.length) return null
           return {
             label: p.codigo || p.nombre,
@@ -1236,7 +1246,7 @@ export default function ColegioDashboard({session, onLogout}) {
       // abrirse. `respuestas`/`puntaje_irt`/`motor_version` tampoco se usan aquí.
       const { data: res } = await supabase
         .from('resultados_estudiante')
-        .select('id, estudiante_id, prueba_id, colegio_id, correctas, total, desempeno_pct, puntaje_global, mat_cuantitativo, mat_especifico, cn_quimica, cn_fisica, cn_biologia, cn_cts, sociales, ciudadanas, lectura_critica, ingles, cargado_via, created_at, revisada, estudiantes(nombre, salon, grado, codigo, usuario)')
+        .select('id, estudiante_id, prueba_id, colegio_id, correctas, total, desempeno_pct, puntaje_global, mat_cuantitativo, mat_especifico, cn_quimica, cn_fisica, cn_biologia, cn_cts, sociales, ciudadanas, lectura_critica, ingles, cargado_via, created_at, revisada, sesion_incompleta, estudiantes(nombre, salon, grado, codigo, usuario)')
         .eq('colegio_id', cid).eq('prueba_id', pid)
         .order('puntaje_global', {ascending: false})
       if (isCancelled()) return
@@ -1267,11 +1277,12 @@ export default function ColegioDashboard({session, onLogout}) {
       }
 
       if (isCancelled()) return
-      // Competencias
+      // Competencias (gráfica de PROMEDIO por competencia → sin hojas a media sesión: la
+      // sesión ausente les pone 0 en esas competencias y arrastraba el promedio del plantel).
       const { data: comps } = await supabase
         .from('notas_competencia')
         .select('competencia, nota')
-        .in('estudiante_id', (res||[]).map(r => r.estudiante_id))
+        .in('estudiante_id', (res||[]).filter(r => !r.sesion_incompleta).map(r => r.estudiante_id))
         .eq('prueba_id', pid)
       if (comps) {
         const grouped = {}
@@ -1355,35 +1366,37 @@ export default function ColegioDashboard({session, onLogout}) {
   }
 
   // ── COMPUTED DATA ─────────────────────────────────────────
-  const globals = students.map(s => s.puntaje_global).filter(v => v != null && !isNaN(v))
+  // Gráficas y promedios del plantel: SOLO `promediables` (sin hojas a media sesión).
+  // La tabla de estudiantes y los conteos siguen usando `students` completo.
+  const globals = promediables.map(s => s.puntaje_global).filter(v => v != null && !isNaN(v))
   const promGlobal = globals.length ? Math.round(avgArr(globals)) : 0
   const maxStudent = students[0]
   const minStudent = students[students.length-1]
 
   // Áreas para radar
   const radarData = [
-    {area:'Matemáticas',    plantel: Math.round(avgArr(students.map(s=>s.mat_cuantitativo != null && s.mat_especifico != null ? (s.mat_cuantitativo*2+s.mat_especifico)/3 : null).filter(v => v != null && !isNaN(v))))},
-    {area:'Cs. Naturales',  plantel: Math.round(avgArr(students.map(s=>s.cn_quimica != null && s.cn_fisica != null && s.cn_biologia != null && s.cn_cts != null ? (s.cn_quimica*0.9+s.cn_fisica*0.9+s.cn_biologia*0.9+s.cn_cts*0.3)/3 : null).filter(v => v != null && !isNaN(v))))},
-    {area:'Soc. y Ciudad.', plantel: Math.round(avgArr(students.map(s=>s.sociales != null && s.ciudadanas != null ? (s.sociales*1.2+s.ciudadanas*1.8)/3 : null).filter(v => v != null && !isNaN(v))))},
-    {area:'Lect. Crítica',  plantel: Math.round(avgArr(students.map(s=>s.lectura_critica).filter(v => v != null && !isNaN(v))))},
-    {area:'Inglés',         plantel: Math.round(avgArr(students.map(s=>s.ingles).filter(v => v != null && !isNaN(v))))},
+    {area:'Matemáticas',    plantel: Math.round(avgArr(promediables.map(s=>s.mat_cuantitativo != null && s.mat_especifico != null ? (s.mat_cuantitativo*2+s.mat_especifico)/3 : null).filter(v => v != null && !isNaN(v))))},
+    {area:'Cs. Naturales',  plantel: Math.round(avgArr(promediables.map(s=>s.cn_quimica != null && s.cn_fisica != null && s.cn_biologia != null && s.cn_cts != null ? (s.cn_quimica*0.9+s.cn_fisica*0.9+s.cn_biologia*0.9+s.cn_cts*0.3)/3 : null).filter(v => v != null && !isNaN(v))))},
+    {area:'Soc. y Ciudad.', plantel: Math.round(avgArr(promediables.map(s=>s.sociales != null && s.ciudadanas != null ? (s.sociales*1.2+s.ciudadanas*1.8)/3 : null).filter(v => v != null && !isNaN(v))))},
+    {area:'Lect. Crítica',  plantel: Math.round(avgArr(promediables.map(s=>s.lectura_critica).filter(v => v != null && !isNaN(v))))},
+    {area:'Inglés',         plantel: Math.round(avgArr(promediables.map(s=>s.ingles).filter(v => v != null && !isNaN(v))))},
   ]
 
   // Promedios por área para barras
   const areaData = [
-    {area:'Mat. Cuant.', plan: Math.round(avgArr(students.map(s=>s.mat_cuantitativo).filter(v => v != null && !isNaN(v))))},
-    {area:'Mat. Espec.', plan: Math.round(avgArr(students.map(s=>s.mat_especifico).filter(v => v != null && !isNaN(v))))},
-    {area:'Química',     plan: Math.round(avgArr(students.map(s=>s.cn_quimica).filter(v => v != null && !isNaN(v))))},
-    {area:'Física',      plan: Math.round(avgArr(students.map(s=>s.cn_fisica).filter(v => v != null && !isNaN(v))))},
-    {area:'Biología',    plan: Math.round(avgArr(students.map(s=>s.cn_biologia).filter(v => v != null && !isNaN(v))))},
-    {area:'CTS',         plan: Math.round(avgArr(students.map(s=>s.cn_cts).filter(v => v != null && !isNaN(v))))},
-    {area:'Sociales',    plan: Math.round(avgArr(students.map(s=>s.sociales).filter(v => v != null && !isNaN(v))))},
-    {area:'Ciudadanas',  plan: Math.round(avgArr(students.map(s=>s.ciudadanas).filter(v => v != null && !isNaN(v))))},
-    {area:'Lect. Crít.', plan: Math.round(avgArr(students.map(s=>s.lectura_critica).filter(v => v != null && !isNaN(v))))},
-    {area:'Inglés',      plan: Math.round(avgArr(students.map(s=>s.ingles).filter(v => v != null && !isNaN(v))))},
+    {area:'Mat. Cuant.', plan: Math.round(avgArr(promediables.map(s=>s.mat_cuantitativo).filter(v => v != null && !isNaN(v))))},
+    {area:'Mat. Espec.', plan: Math.round(avgArr(promediables.map(s=>s.mat_especifico).filter(v => v != null && !isNaN(v))))},
+    {area:'Química',     plan: Math.round(avgArr(promediables.map(s=>s.cn_quimica).filter(v => v != null && !isNaN(v))))},
+    {area:'Física',      plan: Math.round(avgArr(promediables.map(s=>s.cn_fisica).filter(v => v != null && !isNaN(v))))},
+    {area:'Biología',    plan: Math.round(avgArr(promediables.map(s=>s.cn_biologia).filter(v => v != null && !isNaN(v))))},
+    {area:'CTS',         plan: Math.round(avgArr(promediables.map(s=>s.cn_cts).filter(v => v != null && !isNaN(v))))},
+    {area:'Sociales',    plan: Math.round(avgArr(promediables.map(s=>s.sociales).filter(v => v != null && !isNaN(v))))},
+    {area:'Ciudadanas',  plan: Math.round(avgArr(promediables.map(s=>s.ciudadanas).filter(v => v != null && !isNaN(v))))},
+    {area:'Lect. Crít.', plan: Math.round(avgArr(promediables.map(s=>s.lectura_critica).filter(v => v != null && !isNaN(v))))},
+    {area:'Inglés',      plan: Math.round(avgArr(promediables.map(s=>s.ingles).filter(v => v != null && !isNaN(v))))},
   ]
 
-  // Distribución puntajes
+  // Distribución puntajes (misma población que el promedio: media sesión distorsionaría el tramo bajo)
   const distData = [
     {rango:'< 380',   cant:globals.filter(g=>g<380).length,              color:C.red},
     {rango:'380–399', cant:globals.filter(g=>g>=380&&g<400).length,      color:'#F59E0B'},
@@ -1394,16 +1407,16 @@ export default function ColegioDashboard({session, onLogout}) {
 
   // Niveles por asignatura (con umbrales específicos por área)
   const nivelesAsig = [
-    {asig:'Genéricos',     akey:'mat', vals: students.map(s=>s.mat_cuantitativo)},
-    {asig:'No Genéricos',  akey:'mat', vals: students.map(s=>s.mat_especifico)},
-    {asig:'Química',       akey:'cn',  vals: students.map(s=>s.cn_quimica)},
-    {asig:'Física',        akey:'cn',  vals: students.map(s=>s.cn_fisica)},
-    {asig:'Biología',      akey:'cn',  vals: students.map(s=>s.cn_biologia)},
-    {asig:'CTS',           akey:'cn',  vals: students.map(s=>s.cn_cts)},
-    {asig:'Sociales',      akey:'soc', vals: students.map(s=>s.sociales)},
-    {asig:'Ciudadanas',    akey:'soc', vals: students.map(s=>s.ciudadanas)},
-    {asig:'Lect. Crítica', akey:'lc',  vals: students.map(s=>s.lectura_critica)},
-    {asig:'Inglés',        akey:'ing', vals: students.map(s=>s.ingles)},
+    {asig:'Genéricos',     akey:'mat', vals: promediables.map(s=>s.mat_cuantitativo)},
+    {asig:'No Genéricos',  akey:'mat', vals: promediables.map(s=>s.mat_especifico)},
+    {asig:'Química',       akey:'cn',  vals: promediables.map(s=>s.cn_quimica)},
+    {asig:'Física',        akey:'cn',  vals: promediables.map(s=>s.cn_fisica)},
+    {asig:'Biología',      akey:'cn',  vals: promediables.map(s=>s.cn_biologia)},
+    {asig:'CTS',           akey:'cn',  vals: promediables.map(s=>s.cn_cts)},
+    {asig:'Sociales',      akey:'soc', vals: promediables.map(s=>s.sociales)},
+    {asig:'Ciudadanas',    akey:'soc', vals: promediables.map(s=>s.ciudadanas)},
+    {asig:'Lect. Crítica', akey:'lc',  vals: promediables.map(s=>s.lectura_critica)},
+    {asig:'Inglés',        akey:'ing', vals: promediables.map(s=>s.ingles)},
   ].map(({asig, akey, vals}) => {
     const v = vals.filter(x => x != null)
     const [t1,t2,t3] = SEMAFORO_T[akey]
@@ -1421,19 +1434,19 @@ export default function ColegioDashboard({session, onLogout}) {
     }
   })
 
-  // Desviación por asignatura — box plot + tabla
+  // Desviación por asignatura — box plot + tabla (misma población que los promedios)
   const desvAsigData = [
-    {asig:'Genéricos',     akey:'mat', vals: students.map(s=>s.mat_cuantitativo)},
-    {asig:'No Genéricos',  akey:'mat', vals: students.map(s=>s.mat_especifico)},
-    {asig:'Química',       akey:'cn',  vals: students.map(s=>s.cn_quimica)},
-    {asig:'Física',        akey:'cn',  vals: students.map(s=>s.cn_fisica)},
-    {asig:'Biología',      akey:'cn',  vals: students.map(s=>s.cn_biologia)},
-    {asig:'CTS',           akey:'cn',  vals: students.map(s=>s.cn_cts)},
-    {asig:'Sociales',      akey:'soc', vals: students.map(s=>s.sociales)},
-    {asig:'Ciudadanas',    akey:'soc', vals: students.map(s=>s.ciudadanas)},
-    {asig:'Lect. Crítica', akey:'lc',  vals: students.map(s=>s.lectura_critica)},
-    {asig:'Inglés',        akey:'ing', vals: students.map(s=>s.ingles)},
-    {asig:'Definitiva',    akey:'_',   vals: students.map(s => {
+    {asig:'Genéricos',     akey:'mat', vals: promediables.map(s=>s.mat_cuantitativo)},
+    {asig:'No Genéricos',  akey:'mat', vals: promediables.map(s=>s.mat_especifico)},
+    {asig:'Química',       akey:'cn',  vals: promediables.map(s=>s.cn_quimica)},
+    {asig:'Física',        akey:'cn',  vals: promediables.map(s=>s.cn_fisica)},
+    {asig:'Biología',      akey:'cn',  vals: promediables.map(s=>s.cn_biologia)},
+    {asig:'CTS',           akey:'cn',  vals: promediables.map(s=>s.cn_cts)},
+    {asig:'Sociales',      akey:'soc', vals: promediables.map(s=>s.sociales)},
+    {asig:'Ciudadanas',    akey:'soc', vals: promediables.map(s=>s.ciudadanas)},
+    {asig:'Lect. Crítica', akey:'lc',  vals: promediables.map(s=>s.lectura_critica)},
+    {asig:'Inglés',        akey:'ing', vals: promediables.map(s=>s.ingles)},
+    {asig:'Definitiva',    akey:'_',   vals: promediables.map(s => {
       const gen=s.mat_cuantitativo, nogen=s.mat_especifico
       const q=s.cn_quimica, f=s.cn_fisica, b=s.cn_biologia, cts=s.cn_cts
       const soc=s.sociales, ciu=s.ciudadanas, lc=s.lectura_critica, ing=s.ingles
@@ -1444,21 +1457,21 @@ export default function ColegioDashboard({session, onLogout}) {
 
   // Desviación por área
   const desvAreaData = [
-    {area:'Matemáticas',          akey:'mat', vals: students.map(s => {
+    {area:'Matemáticas',          akey:'mat', vals: promediables.map(s => {
       if (s.mat_cuantitativo == null || s.mat_especifico == null) return null
       return (s.mat_cuantitativo*2 + s.mat_especifico) / 3
     })},
-    {area:'Ciencias Naturales',   akey:'cn',  vals: students.map(s => {
+    {area:'Ciencias Naturales',   akey:'cn',  vals: promediables.map(s => {
       if ([s.cn_quimica,s.cn_fisica,s.cn_biologia,s.cn_cts].some(x=>x==null)) return null
       return (s.cn_quimica*0.9 + s.cn_fisica*0.9 + s.cn_biologia*0.9 + s.cn_cts*0.3) / 3
     })},
-    {area:'Soc. y Ciudadanas',    akey:'soc', vals: students.map(s => {
+    {area:'Soc. y Ciudadanas',    akey:'soc', vals: promediables.map(s => {
       if (s.sociales == null || s.ciudadanas == null) return null
       return (s.sociales*1.2 + s.ciudadanas*1.8) / 3
     })},
-    {area:'Lectura Crítica',      akey:'lc',  vals: students.map(s => s.lectura_critica)},
-    {area:'Inglés',               akey:'ing', vals: students.map(s => s.ingles)},
-    {area:'Definitiva',           akey:'_',   vals: students.map(s => {
+    {area:'Lectura Crítica',      akey:'lc',  vals: promediables.map(s => s.lectura_critica)},
+    {area:'Inglés',               akey:'ing', vals: promediables.map(s => s.ingles)},
+    {area:'Definitiva',           akey:'_',   vals: promediables.map(s => {
       const gen=s.mat_cuantitativo, nogen=s.mat_especifico
       const q=s.cn_quimica, f=s.cn_fisica, b=s.cn_biologia, cts=s.cn_cts
       const soc=s.sociales, ciu=s.ciudadanas, lc=s.lectura_critica, ing=s.ingles
@@ -1469,7 +1482,7 @@ export default function ColegioDashboard({session, onLogout}) {
 
   // Desviación por materia
   const desvData = areaData.map(a => {
-    const vals = students.map(s => {
+    const vals = promediables.map(s => {
       if (a.area==='Mat. Cuant.') return s.mat_cuantitativo
       if (a.area==='Mat. Espec.') return s.mat_especifico
       if (a.area==='Química')     return s.cn_quimica
